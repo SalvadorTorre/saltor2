@@ -1,0 +1,97 @@
+.calendar-shell {
+  min-height: 100vh;
+}
+
+.hero-card,
+.calendar-card {
+  border: 1px solid var(--app-border);
+  border-radius: 24px;
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.hero-card {
+  padding: 2rem;
+}
+
+.hero-card h1 {
+  margin: 0.75rem 0 1rem;
+  font-size: clamp(2rem, 3vw, 3.25rem);
+  line-height: 1.05;
+}
+
+.hero-card p {
+  margin-bottom: 1.5rem;
+  color: var(--app-muted);
+  font-size: 1rem;
+}
+
+.hero-card__eyebrow,
+.calendar-card__eyebrow {
+  display: inline-block;
+  color: var(--app-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.hero-card__actions {
+  margin-bottom: 1.5rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.metric-card {
+  padding: 1rem;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #f7fbff, #eef6fb);
+  border: 1px solid #dbe7ef;
+}
+
+.metric-card__value {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--app-primary);
+}
+
+.metric-card__label {
+  color: var(--app-muted);
+  font-size: 0.9rem;
+}
+
+.calendar-card {
+  padding: 1.5rem;
+}
+
+.calendar-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.calendar-card__header h2 {
+  margin: 0.45rem 0 0;
+  font-size: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .hero-card,
+  .calendar-card {
+    padding: 1.25rem;
+    border-radius: 18px;
+  }
+
+  .calendar-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

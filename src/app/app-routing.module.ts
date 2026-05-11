@@ -1,7 +1,22 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 
-const routes: Routes = [];
+const routes: Routes = [
+  {
+    path: '',
+    redirectTo: 'calendar',
+    pathMatch: 'full'
+  },
+  {
+    path: 'calendar',
+    loadChildren: () =>
+      import('./features/calendar/calendar.module').then((m) => m.CalendarModule)
+  },
+  {
+    path: '**',
+    redirectTo: 'calendar'
+  }
+];
 
 @NgModule({
   imports: [RouterModule.forRoot(routes)],
