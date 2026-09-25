@@ -1,0 +1,278 @@
+<section class="dashboard-content user-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Configuracion</p>
+      <h2>Gestion de Usuarios</h2>
+      <p class="company-header__copy">Agrega, edita y modifica usuarios del sistema con empresa, sucursal y permisos.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Modulo Usuarios</div>
+      <button class="primary-action" type="button" (click)="startCreateUser()">+ Nuevo usuario</button>
+    </div>
+  </div>
+
+  <div class="company-kpi-grid">
+    <article class="company-kpi-card company-kpi-card--accent">
+      <span>Total usuarios</span>
+      <strong>{{ data.users.length }}</strong>
+      <p>Control general de accesos al sistema</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--success">
+      <span>Usuarios activos</span>
+      <strong>{{ activeUserCount }}</strong>
+      <p>Con acceso habilitado actualmente</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--danger">
+      <span>Usuarios inactivos</span>
+      <strong>{{ inactiveUserCount }}</strong>
+      <p>Requieren revision o reactivacion</p>
+    </article>
+  </div>
+
+  <div class="company-grid user-grid">
+    <section class="panel company-list-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Usuarios registrados</h3>
+          <p>{{ isLoadingUsers ? 'Cargando usuarios desde Supabase...' : 'Selecciona un usuario para editarlo o usa el boton superior para agregar uno nuevo.' }}</p>
+        </div>
+      </div>
+
+      <div class="company-list">
+        <button
+          *ngFor="let user of data.users"
+          class="company-row"
+          type="button"
+          [class.company-row--active]="isSelectedUser(user)"
+          (click)="selectUser(user)">
+          <div class="company-row__badge">{{ user.avatar }}</div>
+          <div class="company-row__body">
+            <div class="company-row__top">
+              <strong>{{ user.fullName }}</strong>
+              <span class="company-status-pill" [class.company-status-pill--inactive]="user.status === 'Inactivo'">
+                {{ user.status }}
+              </span>
+            </div>
+            <p>{{ user.role }}</p>
+            <div class="company-row__meta">
+              <span>{{ getCompanyName(user.companyId) }}</span>
+              <span>{{ user.branch }}</span>
+              <span>{{ user.email }}</span>
+            </div>
+            <div class="company-row__actions" (click)="$event.stopPropagation()">
+              <button class="company-options__trigger" type="button" (click)="toggleUserOptions(user.id, $event)">
+                Opciones
+              </button>
+              <div class="company-options__menu" *ngIf="openUserOptionsId === user.id">
+                <button class="company-options__item" type="button" (click)="selectUser(user)">Editar</button>
+                <button class="company-options__item company-options__item--danger" type="button" (click)="deleteUser(user)">Eliminar</button>
+              </div>
+            </div>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel company-form-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>{{ userEditorMode === 'create' ? 'Agregar usuario' : 'Editar usuario' }}</h3>
+          <p>{{ userMessage }}</p>
+        </div>
+        <div class="company-form__chip">{{ userEditorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}</div>
+      </div>
+
+      <form class="company-form user-form" (ngSubmit)="saveUser()" novalidate>
+        <div class="company-form__hero">
+          <div class="company-form__logo">{{ userEditorMode === 'create' ? 'USR' : (selectedUser?.avatar || 'USR') }}</div>
+          <div>
+            <strong>{{ userForm.firstName || userForm.lastName ? (userForm.firstName + ' ' + userForm.lastName) : 'Nuevo usuario' }}</strong>
+            <p>Prepara la informacion personal, empresa asignada y permisos del sistema.</p>
+          </div>
+        </div>
+
+        <div class="user-step-card">
+          <div class="user-step-card__header">
+            <div class="user-step-card__badge">1</div>
+            <h3>Informacion Personal</h3>
+          </div>
+
+          <div class="user-step-card__grid">
+            <label class="field field--icon">
+              <span>ID de Usuario</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">#</span>
+                <input type="text" name="userUsername" [(ngModel)]="userForm.username" placeholder="JPEREZ" />
+              </div>
+            </label>
+
+            <label class="field field--icon">
+              <span>Nombre</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">o</span>
+                <input type="text" name="firstName" [(ngModel)]="userForm.firstName" placeholder="Juan" />
+              </div>
+            </label>
+
+            <label class="field field--icon">
+              <span>Apellido</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">o</span>
+                <input type="text" name="lastName" [(ngModel)]="userForm.lastName" placeholder="Perez" />
+              </div>
+            </label>
+
+            <label class="field field--icon">
+              <span>Correo Electronico</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">@</span>
+                <input type="email" name="userEmail" [(ngModel)]="userForm.email" placeholder="juan.perez@empresa.com" />
+              </div>
+            </label>
+
+            <label class="field field--icon">
+              <span>Telefono</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">+</span>
+                <input type="text" name="userPhone" [(ngModel)]="userForm.phone" placeholder="+52 123 456 7890" />
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="user-step-card">
+          <div class="user-step-card__header">
+            <div class="user-step-card__badge">2</div>
+            <h3>Clave de Acceso</h3>
+          </div>
+
+          <div class="user-step-card__grid">
+            <label class="field field--icon">
+              <span>Clave</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">*</span>
+                <input type="password" name="userPassword" [(ngModel)]="userForm.password" [placeholder]="userEditorMode === 'create' ? 'Minimo 6 caracteres' : 'La clave se administra en el acceso'" />
+              </div>
+              <small>La clave se guarda de forma protegida en Supabase Auth.</small>
+            </label>
+          </div>
+        </div>
+
+        <div class="user-step-card">
+          <div class="user-step-card__header">
+            <div class="user-step-card__badge">3</div>
+            <h3>Asignacion de Empresa y Sucursal</h3>
+          </div>
+
+          <div class="user-step-card__grid">
+            <label class="field field--icon">
+              <span>Empresa</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">#</span>
+                <select name="userCompany" [(ngModel)]="userForm.companyId" (ngModelChange)="onUserCompanyChange()">
+                  <option [ngValue]="null">Seleccione una empresa</option>
+                  <option *ngFor="let company of data.companies" [ngValue]="company.id">{{ company.tradeName }}</option>
+                </select>
+              </div>
+            </label>
+
+            <label class="field field--icon">
+              <span>Sucursal</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">*</span>
+                <select name="userBranch" [(ngModel)]="userForm.branch" [disabled]="!userForm.companyId || isLoadingBranches">
+                  <option value="">{{ !userForm.companyId ? 'Primero seleccione una empresa' : (isLoadingBranches ? 'Cargando sucursales...' : 'Seleccione una sucursal') }}</option>
+                  <option *ngFor="let branch of availableBranches" [value]="branch">{{ branch }}</option>
+                </select>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="user-step-card">
+          <div class="user-step-card__header">
+            <div class="user-step-card__badge">4</div>
+            <h3>Tipo de Usuario</h3>
+          </div>
+
+          <div class="user-step-card__grid">
+            <label class="field field--icon">
+              <span>Rol y Permisos</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">*</span>
+                <select name="userRole" [(ngModel)]="userForm.role">
+                  <option value="">Seleccione el tipo de usuario</option>
+                  <option *ngFor="let role of userRoleOptions" [value]="role">{{ role }}</option>
+                </select>
+              </div>
+              <small>El tipo de usuario determinara los permisos y accesos dentro del sistema</small>
+            </label>
+
+            <label class="field">
+              <span>Estado</span>
+              <select name="userStatus" [(ngModel)]="userForm.status">
+                <option value="Activo">Activo</option>
+                <option value="Inactivo">Inactivo</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="company-form__actions">
+          <button class="secondary-action" type="button" (click)="resetUserForm()">Cancelar</button>
+          <button class="primary-action" type="submit" [disabled]="isSavingUser || !canSaveUser">
+            {{ isSavingUser ? 'Guardando...' : (userEditorMode === 'create' ? 'Guardar usuario' : 'Actualizar usuario') }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel company-detail-panel" *ngIf="selectedUser as selected">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Resumen de usuario</h3>
+          <p>Acciones rapidas para modificar el registro seleccionado.</p>
+        </div>
+      </div>
+
+      <div class="company-detail-card">
+        <div class="company-detail-card__top">
+          <div class="company-detail-card__avatar">{{ selected.avatar }}</div>
+          <div>
+            <strong>{{ selected.fullName }}</strong>
+            <p>{{ selected.role }}</p>
+          </div>
+        </div>
+
+        <div class="company-detail-card__stats">
+          <div>
+            <span>Empresa</span>
+            <strong>{{ getCompanyName(selected.companyId) }}</strong>
+          </div>
+          <div>
+            <span>Sucursal</span>
+            <strong>{{ selected.branch }}</strong>
+          </div>
+          <div>
+            <span>Ultima actualizacion</span>
+            <strong>{{ selected.lastUpdate || 'Sin registro' }}</strong>
+          </div>
+        </div>
+
+        <div class="company-detail-card__info">
+          <p><strong>Correo:</strong> {{ selected.email }}</p>
+          <p><strong>Telefono:</strong> {{ selected.phone || 'Sin telefono' }}</p>
+          <p><strong>Estado:</strong> {{ selected.status }}</p>
+          <p><strong>Rol:</strong> {{ selected.role }}</p>
+        </div>
+
+        <div class="company-detail-card__actions">
+          <button class="secondary-action" type="button" (click)="selectUser(selected)">Modificar datos</button>
+          <button class="ghost-action" type="button" (click)="toggleSelectedUserStatus()">
+            {{ selected.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario' }}
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>

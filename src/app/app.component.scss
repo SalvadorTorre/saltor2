@@ -2,3 +2,25 @@
   display: block;
   min-height: 100vh;
 }
+
+.session-loading {
+  align-items: center;
+  background: #f4f7fb;
+  color: #102a56;
+  display: flex;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.topbar__logout {
+  background: #edf3ff;
+  border: 1px solid #cbdafd;
+  border-radius: 7px;
+  color: #1749aa;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+}

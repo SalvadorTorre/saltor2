@@ -1,0 +1,282 @@
+<section class="dashboard-content ncf-content">
+  <div class="ncf-shell">
+    <header class="ecf-hero">
+      <div>
+        <small>GESTIÓN FISCAL</small>
+        <h2>Gestión de e-CF</h2>
+        <p>Configura y controla secuencias electrónicas por empresa para facturación DGII.</p>
+      </div>
+      <button class="ecf-hero__new" type="button" (click)="startCreateNcfSequence()">+ Nuevo e-NCF</button>
+    </header>
+
+    <div class="ncf-stats-grid ecf-stats-grid">
+      <article *ngFor="let stat of ncfStats" class="ncf-stat-card" [class]="'ncf-stat-card ncf-stat-card--' + stat.tone">
+        <div class="ncf-stat-card__icon"></div>
+        <div>
+          <strong>{{ stat.value }}</strong>
+          <span>{{ stat.label }}</span>
+        </div>
+      </article>
+    </div>
+
+    <!-- <div class="ncf-section">
+      <div class="ncf-toolbar">
+        <label class="ncf-search">
+          <span>Q</span>
+          <input type="text" [(ngModel)]="ncfSearch" placeholder="Buscar por RNC o razon social..." />
+        </label>
+        <button class="ncf-primary-button" type="button" (click)="startCreateNcfCompany()">+ Nueva Empresa</button>
+      </div>
+
+      <div class="ncf-layout">
+        <section class="ncf-table-panel">
+          <div class="ncf-table">
+            <div class="ncf-table__row ncf-table__row--head">
+              <span>RNC</span>
+              <span>Razon Social</span>
+              <span>Nombre Comercial</span>
+              <span>Telefono</span>
+              <span>Fecha Registro</span>
+              <span>Estado</span>
+              <span>Acciones</span>
+            </div>
+
+            <div *ngFor="let company of filteredNcfCompanies" class="ncf-table__row" [class.ncf-table__row--active]="isSelectedNcfCompany(company)" (click)="selectNcfCompany(company)">
+              <span>{{ company.rnc }}</span>
+              <strong>{{ company.legalName }}</strong>
+              <span>{{ company.tradeName }}</span>
+              <span>{{ company.phone }}</span>
+              <span>{{ company.createdAt }}</span>
+              <span class="ncf-status-pill">{{ company.status }}</span>
+              <div class="ncf-actions-dropdown" (click)="$event.stopPropagation()">
+                <button
+                  type="button"
+                  class="ncf-actions-dropdown__trigger"
+                  [class.ncf-actions-dropdown__trigger--open]="openNcfCompanyActionsId === company.id"
+                  (click)="toggleNcfCompanyActions(company.id)">
+                  <span>Acciones</span>
+                  <span class="ncf-actions-dropdown__arrow">v</span>
+                </button>
+
+                <div *ngIf="openNcfCompanyActionsId === company.id" class="ncf-actions-dropdown__menu">
+                  <button type="button" (click)="viewNcfCompanySequences(company)">Secuencias</button>
+                  <button type="button" (click)="selectNcfCompany(company)">Editar</button>
+                  <button type="button" [disabled]="!canDeleteNcfCompany(company)" (click)="deleteNcfCompany(company)">Eliminar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="ncf-footnote">{{ isLoadingNcf ? 'Cargando empresas NCF desde Supabase...' : ('Mostrando ' + filteredNcfCompanies.length + ' de ' + data.ncfCompanies.length + ' empresas') }}</p>
+        </section>
+
+        <section class="panel company-form-panel">
+          <div class="panel__header company-panel-header">
+            <div>
+              <h3>{{ ncfCompanyEditorMode === 'create' ? 'Registrar empresa NCF' : 'Editar empresa NCF' }}</h3>
+              <p>{{ ncfCompanyMessage }}</p>
+            </div>
+            <div class="company-form__chip">{{ ncfCompanyEditorMode === 'create' ? 'Nueva empresa' : 'Modo edicion' }}</div>
+          </div>
+
+          <form class="company-form" (ngSubmit)="saveNcfCompany()">
+            <div class="company-form__hero">
+              <div class="company-form__logo">NCF</div>
+              <div>
+                <strong>{{ ncfCompanyForm.tradeName || 'Nueva empresa' }}</strong>
+                <p>Datos de la empresa autorizada para comprobantes fiscales.</p>
+              </div>
+            </div>
+
+            <div class="company-form__grid">
+              <label class="field">
+                <span>RNC</span>
+                <input type="text" name="ncfCompanyRnc" [(ngModel)]="ncfCompanyForm.rnc" placeholder="101234567" />
+              </label>
+
+              <label class="field">
+                <span>Razon social</span>
+                <input type="text" name="ncfCompanyLegalName" [(ngModel)]="ncfCompanyForm.legalName" placeholder="Comercial ABC, SRL" />
+              </label>
+
+              <label class="field">
+                <span>Nombre comercial</span>
+                <input type="text" name="ncfCompanyTradeName" [(ngModel)]="ncfCompanyForm.tradeName" placeholder="ABC Store" />
+              </label>
+
+              <label class="field">
+                <span>Telefono</span>
+                <input type="text" name="ncfCompanyPhone" [(ngModel)]="ncfCompanyForm.phone" placeholder="809-555-1234" />
+              </label>
+
+              <label class="field field--full">
+                <span>Direccion</span>
+                <input type="text" name="ncfCompanyAddress" [(ngModel)]="ncfCompanyForm.address" placeholder="Av. 27 de Febrero 10, Santo Domingo" />
+              </label>
+
+              <label class="field">
+                <span>Correo electronico</span>
+                <input type="email" name="ncfCompanyEmail" [(ngModel)]="ncfCompanyForm.email" placeholder="info@empresa.com" />
+              </label>
+
+              <label class="field">
+                <span>Estado</span>
+                <select name="ncfCompanyStatus" [(ngModel)]="ncfCompanyForm.status">
+                  <option value="Activa">Activa</option>
+                  <option value="Inactiva">Inactiva</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="company-form__actions">
+              <button class="secondary-action" type="button" (click)="startCreateNcfCompany()">Limpiar</button>
+              <button class="primary-action" type="submit" [disabled]="isSavingNcfCompany">
+                {{ isSavingNcfCompany ? 'Guardando...' : (ncfCompanyEditorMode === 'create' ? 'Guardar empresa' : 'Actualizar empresa') }}
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </div> -->
+
+    <div class="ncf-section ecf-section" id="ncf-sequences-section">
+      <div class="ncf-toolbar ncf-toolbar--filters ecf-toolbar">
+        <label class="ncf-search">
+          <span>Q</span>
+          <input type="text" [(ngModel)]="ncfSequenceSearch" placeholder="Buscar por empresa o tipo" />
+        </label>
+
+        <select [(ngModel)]="ncfSequenceCompanyFilter" aria-label="Empresa">
+          <option value="all">Todas las empresas</option>
+          <option *ngFor="let company of data.companies" [value]="company.id">{{ company.legalName }}</option>
+        </select>
+
+        <select [(ngModel)]="ncfSequenceTypeFilter" aria-label="Tipo e-NCF">
+          <option value="all">Todos los tipos</option>
+          <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>
+        </select>
+
+        <button class="ecf-toolbar__search" type="button">Buscar</button>
+        <button class="ecf-toolbar__refresh" type="button" (click)="ngOnInit()" title="Actualizar">↻</button>
+      </div>
+
+      <div class="ncf-layout ncf-layout--single">
+        <section class="ncf-table-panel">
+          <div class="ncf-table">
+            <div class="ncf-table__row ncf-table__row--head ncf-table__row--sequence ecf-table-row">
+              <span>Empresa</span>
+              <span>Tipo</span>
+              <span>Rango</span>
+              <span>Cantidad</span>
+              <span>Contador</span>
+              <span>Vigencia</span>
+              <span>Alerta</span>
+              <span>Acciones</span>
+            </div>
+
+            <div *ngFor="let sequence of filteredNcfSequences" class="ncf-table__row ncf-table__row--sequence ecf-table-row" [class.ncf-table__row--active]="isSelectedNcfSequence(sequence)">
+              <div (click)="selectNcfSequence(sequence)">
+                <strong>{{ getNcfCompanyName(sequence.companyId) }}</strong>
+                <small>{{ getNcfCompanyRnc(sequence.companyId) }}</small>
+              </div>
+              <span class="ecf-type-pill" (click)="selectNcfSequence(sequence)">{{ sequence.series }} - {{ sequence.ncfType }}</span>
+              <div (click)="selectNcfSequence(sequence)">
+                <strong>{{ sequence.rangeStart.replace(sequence.series, '') }} → {{ sequence.rangeEnd.replace(sequence.series, '') }}</strong>
+              </div>
+              <strong (click)="selectNcfSequence(sequence)">{{ sequence.total | number }}</strong>
+              <span class="ecf-counter" (click)="selectNcfSequence(sequence)">{{ sequence.used | number }}</span>
+              <span (click)="selectNcfSequence(sequence)">{{ sequence.expiresAt }}</span>
+              <span class="ecf-alert" [class.ecf-alert--active]="sequence.alert">{{ sequence.alertPercent }}%</span>
+              <div class="ncf-actions">
+                <button type="button" title="Editar secuencia" aria-label="Editar secuencia" (click)="selectNcfSequence(sequence)"><img src="assets/icons/invoice-edit.svg" alt="" /></button>
+                <button class="ecf-delete-button" type="button" title="Eliminar secuencia" aria-label="Eliminar secuencia" (click)="deleteNcfSequence(sequence)"><img src="assets/icons/line-trash-red.svg" alt="" /></button>
+              </div>
+            </div>
+          </div>
+
+          <p class="ncf-footnote">{{ isLoadingNcf ? 'Cargando secuencias NCF desde Supabase...' : ('Mostrando ' + filteredNcfSequences.length + ' de ' + data.ncfSequences.length + ' secuencias') }}</p>
+        </section>
+
+        <div *ngIf="isSequenceEditorModalVisible" class="ecf-sequence-modal" role="dialog" aria-modal="true" aria-labelledby="ecfSequenceEditorTitle">
+        <section class="panel company-form-panel ecf-sequence-modal__panel">
+          <div class="panel__header company-panel-header">
+            <div>
+              <h3 id="ecfSequenceEditorTitle">{{ ncfSequenceEditorMode === 'create' ? 'Asignar secuencia NCF' : 'Editar secuencia NCF' }}</h3>
+              <p>{{ ncfSequenceMessage }}</p>
+            </div>
+            <div class="ecf-sequence-modal__header-actions"><div class="company-form__chip">{{ ncfSequenceEditorMode === 'create' ? 'Nuevo rango' : 'Modo edicion' }}</div><button type="button" class="ecf-sequence-modal__close" title="Cerrar" aria-label="Cerrar" (click)="closeNcfSequenceEditor()">×</button></div>
+          </div>
+
+          <form class="company-form" (ngSubmit)="saveNcfSequence()">
+            <div class="company-form__grid">
+              <label class="field">
+                <span>Empresa</span>
+                <ng-container *ngIf="hasSingleCompany && singleCompany as onlyCompany">
+                  <input type="hidden" name="ncfSequenceCompany" [(ngModel)]="ncfSequenceForm.companyId" />
+                  <div class="company-form__readonly">
+                    <strong>{{ onlyCompany.legalName }}</strong>
+                    <small>RNC {{ onlyCompany.rnc }} - {{ onlyCompany.tradeName }}</small>
+                  </div>
+                </ng-container>
+                <select *ngIf="!hasSingleCompany" name="ncfSequenceCompanySelect" [(ngModel)]="ncfSequenceForm.companyId">
+                  <option *ngFor="let company of data.companies" [ngValue]="company.id">{{ company.legalName }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Tipo NCF</span>
+                <select name="ncfSequenceType" [(ngModel)]="ncfSequenceForm.ncfType">
+                  <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Serie automatica</span>
+                <input type="text" name="ncfSequenceSeries" [(ngModel)]="ncfSequenceForm.series" placeholder="E31" />
+              </label>
+              <label class="field">
+                <span>Contador (usados)</span>
+                <input type="number" min="0" step="1" name="ncfSequenceUsed" [(ngModel)]="ncfSequenceForm.used" />
+              </label>
+              <label class="field">
+                <span>% Alerta (solicitar)</span>
+                <input type="number" min="0" max="100" step="1" name="ncfSequenceAlertPercent" [(ngModel)]="ncfSequenceForm.alertPercent" />
+              </label>
+              <label class="field">
+                <span>Estado</span>
+                <select name="ncfSequenceStatus" [(ngModel)]="ncfSequenceForm.status">
+                  <option value="Activa">Activa</option>
+                  <option value="Agotada">Agotada</option>
+                  <option value="Vencida">Vencida</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Rango inicial</span>
+                <input type="text" name="ncfSequenceStart" [(ngModel)]="ncfSequenceForm.rangeStart" placeholder="E3100000001" />
+              </label>
+              <label class="field">
+                <span>Rango final</span>
+                <input type="text" name="ncfSequenceEnd" [(ngModel)]="ncfSequenceForm.rangeEnd" placeholder="E3100000500" />
+              </label>
+              <label class="field">
+                <span>Fecha autorizacion</span>
+                <input type="text" name="ncfSequenceAuthorizedAt" [(ngModel)]="ncfSequenceForm.authorizedAt" placeholder="01/01/2026" />
+              </label>
+              <label class="field field--full">
+                <span>Fecha vencimiento</span>
+                <input type="text" name="ncfSequenceExpiresAt" [(ngModel)]="ncfSequenceForm.expiresAt" placeholder="30/12/2026" />
+              </label>
+            </div>
+
+            <div class="company-form__actions">
+              <button class="secondary-action" type="button" (click)="startCreateNcfSequence()">Limpiar</button>
+              <button class="primary-action" type="submit" [disabled]="isSavingNcfSequence">
+                {{ isSavingNcfSequence ? 'Guardando...' : (ncfSequenceEditorMode === 'create' ? 'Guardar secuencia' : 'Actualizar secuencia') }}
+              </button>
+            </div>
+          </form>
+        </section>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>

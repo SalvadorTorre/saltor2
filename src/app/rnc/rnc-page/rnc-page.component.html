@@ -1,0 +1,196 @@
+<section class="dashboard-content rnc-content" *ngIf="activeView === 'rnc'">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Configuracion</p>
+      <h2>Gestion de RNC</h2>
+      <p class="company-header__copy">Consulta, registra y prepara la sincronizacion de contribuyentes con tu base de datos.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Modulo RNC</div>
+      <button class="primary-action" type="button" (click)="startCreateRncRecord()">+ Nuevo RNC</button>
+    </div>
+  </div>
+
+  <div class="company-kpi-grid">
+    <article class="company-kpi-card company-kpi-card--accent">
+      <span>Total RNC registrados</span>
+      <strong>{{ rncRecords.length }}</strong>
+      <p>Base local disponible para consulta y sincronizacion</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--success">
+      <span>Activos en DGII</span>
+      <strong>{{ activeRncCount }}</strong>
+      <p>Con estatus habilitado para operar</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--warning">
+      <span>Pendientes de sincronizar</span>
+      <strong>{{ pendingSyncRncCount + syncErrorRncCount }}</strong>
+      <p>Registros que requieren actualizar base local</p>
+    </article>
+  </div>
+
+  <div class="company-grid rnc-grid">
+    <section class="panel company-list-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>RNC registrados</h3>
+          <p>{{ isLoadingRnc ? 'Cargando RNC desde Supabase...' : 'Busca por RNC o razon social y selecciona un registro para consultarlo o editarlo.' }}</p>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Buscar RNC</span>
+        <input type="text" [(ngModel)]="rncSearch" placeholder="Buscar por RNC o razon social" />
+      </label>
+
+      <div class="company-list">
+        <button
+          *ngFor="let record of filteredRncRecords"
+          class="company-row"
+          type="button"
+          [class.company-row--active]="isSelectedRncRecord(record)"
+          (click)="selectRncRecord(record)">
+          <div class="company-row__badge">{{ record.rnc.slice(0, 2) }}</div>
+          <div class="company-row__body">
+            <div class="company-row__top">
+              <strong>{{ record.tradeName }}</strong>
+              <span class="company-status-pill" [class.company-status-pill--inactive]="record.dgiiStatus !== 'Activo'">
+                {{ record.dgiiStatus }}
+              </span>
+            </div>
+            <p>{{ record.legalName }}</p>
+            <div class="company-row__meta">
+              <span>{{ record.rnc }}</span>
+              <span>{{ record.category }}</span>
+              <span>{{ record.syncStatus }}</span>
+            </div>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel company-form-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>{{ rncEditorMode === 'create' ? 'Registrar RNC' : 'Editar RNC' }}</h3>
+          <p>{{ rncMessage }}</p>
+        </div>
+        <div class="company-form__chip">{{ rncEditorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}</div>
+      </div>
+
+      <form class="company-form" (ngSubmit)="saveRncRecord()">
+        <div class="company-form__hero">
+          <div class="company-form__logo">RNC</div>
+          <div>
+            <strong>{{ rncForm.tradeName || 'Nuevo contribuyente' }}</strong>
+            <p>Registra los datos principales del contribuyente y deja listo su proceso de consulta DGII.</p>
+          </div>
+        </div>
+
+        <div class="company-form__grid">
+          <label class="field">
+            <span>RNC</span>
+            <input type="text" name="rncRecord" [(ngModel)]="rncForm.rnc" placeholder="101234567" />
+          </label>
+
+          <label class="field">
+            <span>Razon social</span>
+            <input type="text" name="rncLegalName" [(ngModel)]="rncForm.legalName" placeholder="Comercial ABC, SRL" />
+          </label>
+
+          <label class="field">
+            <span>Nombre comercial</span>
+            <input type="text" name="rncTradeName" [(ngModel)]="rncForm.tradeName" placeholder="ABC Store" />
+          </label>
+
+          <label class="field">
+            <span>Categoria</span>
+            <input type="text" name="rncCategory" [(ngModel)]="rncForm.category" placeholder="Contribuyente Normal" />
+          </label>
+
+          <label class="field field--full">
+            <span>Direccion</span>
+            <textarea name="rncAddress" [(ngModel)]="rncForm.address" rows="3" placeholder="Direccion registrada"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Telefono</span>
+            <input type="text" name="rncPhone" [(ngModel)]="rncForm.phone" placeholder="809-555-1234" />
+          </label>
+
+          <label class="field">
+            <span>Correo electronico</span>
+            <input type="email" name="rncEmail" [(ngModel)]="rncForm.email" placeholder="info@empresa.com" />
+          </label>
+
+          <label class="field">
+            <span>Estatus DGII</span>
+            <select name="rncStatus" [(ngModel)]="rncForm.dgiiStatus">
+              <option value="Activo">Activo</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="Suspendido">Suspendido</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="company-form__actions">
+          <button class="secondary-action" type="button" (click)="startCreateRncRecord()">Limpiar</button>
+          <button class="primary-action" type="submit" [disabled]="isSavingRnc">
+            {{ isSavingRnc ? 'Guardando...' : (rncEditorMode === 'create' ? 'Guardar RNC' : 'Actualizar RNC') }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel company-detail-panel" *ngIf="selectedRncRecord as selected">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Consulta y sincronizacion</h3>
+          <p>Resumen del contribuyente seleccionado y estado de actualizacion con DGII.</p>
+        </div>
+      </div>
+
+      <div class="company-detail-card">
+        <div class="company-detail-card__top">
+          <div class="company-detail-card__avatar">{{ selected.rnc.slice(0, 2) }}</div>
+          <div>
+            <strong>{{ selected.tradeName }}</strong>
+            <p>{{ selected.legalName }}</p>
+          </div>
+        </div>
+
+        <div class="company-detail-card__stats">
+          <div>
+            <span>RNC</span>
+            <strong>{{ selected.rnc }}</strong>
+          </div>
+          <div>
+            <span>Ultima consulta</span>
+            <strong>{{ selected.lastCheck || 'Sin registro' }}</strong>
+          </div>
+          <div>
+            <span>Sincronizacion</span>
+            <strong>{{ selected.syncStatus }}</strong>
+          </div>
+        </div>
+
+        <div class="company-detail-card__info">
+          <p><strong>Categoria:</strong> {{ selected.category }}</p>
+          <p><strong>Telefono:</strong> {{ selected.phone || 'Sin telefono' }}</p>
+          <p><strong>Correo:</strong> {{ selected.email || 'Sin correo' }}</p>
+          <p><strong>Direccion:</strong> {{ selected.address || 'Sin direccion' }}</p>
+        </div>
+
+        <div class="rnc-sync-card">
+          <strong>Actualizacion con DGII</strong>
+          <p>Podemos conectar esta pantalla a un servicio que consulte DGII y actualice tu base local automaticamente por RNC.</p>
+        </div>
+
+        <div class="company-detail-card__actions">
+          <button class="secondary-action" type="button" (click)="checkRnc(selected)">Consultar RNC</button>
+          <button class="ghost-action" type="button" (click)="syncRnc(selected)">Actualizar BD con DGII</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>

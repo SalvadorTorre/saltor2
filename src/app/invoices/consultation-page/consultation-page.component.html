@@ -1,0 +1,116 @@
+<section class="dashboard-content standalone-module-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Facturación</p>
+      <h2>Consulta de Facturas</h2>
+      <p class="company-header__copy">Busca facturas guardadas y revisa su estado ante DGII.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Consulta</div>
+      <button class="secondary-action" type="button" (click)="loadInvoices()" [disabled]="isLoading">{{ isLoading ? 'Actualizando...' : 'Actualizar' }}</button>
+    </div>
+  </div>
+
+  <div class="supplier-toolbar">
+    <label class="field">
+      <span>Buscar factura</span>
+      <input type="text" [(ngModel)]="searchTerm" placeholder="Número, cliente o NCF">
+    </label>
+    <label class="field">
+      <span>Estado DGII</span>
+      <select [(ngModel)]="dgiiFilter">
+        <option>Todos</option>
+        <option>No enviado</option>
+        <option>Pendiente de configuración</option>
+        <option>Enviado</option>
+        <option>Aceptado</option>
+        <option>Rechazado</option>
+        <option>Error</option>
+      </select>
+    </label>
+  </div>
+
+  <p *ngIf="errorMessage" class="invoice-consultation-error">{{ errorMessage }}</p>
+
+  <section class="panel standalone-module-panel supplier-table-panel">
+    <div class="supplier-table-count">Mostrando {{ filteredInvoices.length }} de {{ invoices.length }} facturas</div>
+    <div class="invoice-consultation-table">
+      <div class="invoice-consultation-table__row invoice-consultation-table__row--head">
+        <span>Fecha</span><span>Factura</span><span>Cliente</span><span>NCF</span><span>Total</span><span>DGII</span><span>Opciones</span>
+      </div>
+      <div *ngFor="let invoice of filteredInvoices" class="invoice-consultation-table__row invoice-consultation-table__row--data">
+        <span>{{ invoice.date | date:'dd/MM/yyyy' }}</span>
+        <strong>{{ invoice.number }}</strong>
+        <span>{{ invoice.customer }}</span>
+        <span>{{ invoice.ncf || 'N/A' }}</span>
+        <strong>RD${{ invoice.total | number:'1.2-2' }}</strong>
+        <span class="invoice-dgii-status">{{ invoice.status === 'Anulada' ? 'Anulada' : invoice.dgiiStatus }}</span>
+        <span class="invoice-consultation-actions">
+          <button class="invoice-consultation-view invoice-consultation-view--view" type="button" title="Ver factura" aria-label="Ver factura" (click)="selectInvoice(invoice)"><img src="assets/icons/invoice-view.svg" alt="" /></button>
+          <button class="invoice-consultation-view invoice-consultation-view--edit" type="button" title="Editar factura" aria-label="Editar factura" [disabled]="!canEdit(invoice)" (click)="requestEdit(invoice)"><img src="assets/icons/invoice-edit.svg" alt="" /></button>
+          <button class="invoice-consultation-view invoice-consultation-view--print" type="button" title="Imprimir factura" aria-label="Imprimir factura" (click)="printInvoice(invoice)"><img src="assets/icons/invoice-print.svg" alt="" /></button>
+          <button class="invoice-consultation-view invoice-consultation-view--send" type="button" title="Reenviar a DGII" aria-label="Reenviar a DGII" [disabled]="!canSendToDgii(invoice)" (click)="resendToDgii(invoice)"><img src="assets/icons/invoice-send.svg" alt="" /></button>
+          <button class="invoice-consultation-view invoice-consultation-view--cancel" type="button" title="Anular factura" aria-label="Anular factura" [disabled]="invoice.status === 'Anulada' || isDgiiLocked(invoice)" (click)="cancelInvoice(invoice)"><img src="assets/icons/invoice-cancel.svg" alt="" /></button>
+        </span>
+      </div>
+      <p *ngIf="!isLoading && !filteredInvoices.length" class="invoice-consultation-empty">No hay facturas que coincidan con la consulta.</p>
+    </div>
+  </section>
+
+  <div *ngIf="isLoadingView" class="invoice-view-loading">Cargando factura...</div>
+
+  <div *ngIf="viewingInvoice" class="invoice-view-modal" (click)="closeInvoiceView()">
+    <section class="panel invoice-view-modal__panel" role="dialog" aria-modal="true" aria-labelledby="invoice-view-title" (click)="$event.stopPropagation()">
+      <div class="panel__header company-panel-header">
+        <div>
+          <p class="dashboard-header__eyebrow">Consulta de factura</p>
+          <h3 id="invoice-view-title">Factura {{ viewingInvoice.number }}</h3>
+          <p>Vista de solo lectura.</p>
+        </div>
+        <button class="secondary-action" type="button" (click)="closeInvoiceView()">Cerrar</button>
+      </div>
+
+      <div class="invoice-view-modal__summary">
+        <div><span>Fecha</span><strong>{{ viewingInvoice.invoiceDate | date:'dd/MM/yyyy' }}</strong></div>
+        <div><span>NCF</span><strong>{{ viewingInvoice.ncf || 'N/A' }}</strong></div>
+        <div><span>Condición</span><strong>{{ viewingInvoice.paymentMethod }}</strong></div>
+        <div><span>Estado</span><strong>{{ viewingInvoice.status }}</strong></div>
+      </div>
+
+      <section class="invoice-view-modal__section">
+        <h4>Datos del cliente</h4>
+        <div class="invoice-view-modal__customer">
+          <p><strong>Cliente:</strong> {{ viewingInvoice.customerName }}</p>
+          <p><strong>RNC:</strong> {{ viewingInvoice.rnc || 'Consumidor final' }}</p>
+          <p><strong>Teléfono:</strong> {{ viewingInvoice.customerPhone || 'No registrado' }}</p>
+          <p><strong>Correo:</strong> {{ viewingInvoice.customerEmail || 'No registrado' }}</p>
+          <p><strong>Dirección:</strong> {{ viewingInvoice.customerAddress || 'No registrada' }}</p>
+        </div>
+      </section>
+
+      <section class="invoice-view-modal__section">
+        <h4>Detalle de productos</h4>
+        <div class="invoice-view-modal__table">
+          <div class="invoice-view-modal__row invoice-view-modal__row--head"><span>Producto</span><span>Cant.</span><span>Precio</span><span>ITBIS</span><span>Total</span></div>
+          <div class="invoice-view-modal__row" *ngFor="let line of viewingInvoice.lines">
+            <strong>{{ line.description }}</strong><span>{{ line.quantity }}</span><span>RD${{ line.unitPrice | number:'1.2-2' }}</span><span>RD${{ line.taxAmount | number:'1.2-2' }}</span><strong>RD${{ line.lineTotal | number:'1.2-2' }}</strong>
+          </div>
+        </div>
+        <div class="invoice-view-modal__totals"><span>Subtotal: <strong>RD${{ viewingInvoice.subtotal | number:'1.2-2' }}</strong></span><span>ITBIS: <strong>RD${{ viewingInvoice.taxTotal | number:'1.2-2' }}</strong></span><span>Total: <strong>RD${{ viewingInvoice.grandTotal | number:'1.2-2' }}</strong></span></div>
+      </section>
+
+      <section class="invoice-view-modal__section invoice-view-modal__dgii">
+        <h4>Resultado de DGII</h4>
+        <div class="invoice-view-modal__customer">
+          <p><strong>Estado:</strong> {{ viewingInvoice.dgiiStatus }}</p>
+          <p><strong>Código:</strong> {{ viewingInvoice.dgiiCode || 'No disponible' }}</p>
+          <p><strong>Seguimiento:</strong> {{ viewingInvoice.dgiiTrackId || 'No disponible' }}</p>
+          <p><strong>Fecha de envío:</strong> {{ viewingInvoice.dgiiSentAt ? (viewingInvoice.dgiiSentAt | date:'dd/MM/yyyy, hh:mm a') : 'No enviada' }}</p>
+          <p><strong>Mensaje:</strong> {{ viewingInvoice.dgiiMessage || 'No hay respuesta registrada de DGII.' }}</p>
+        </div>
+        <pre>{{ dgiiResponseText }}</pre>
+      </section>
+    </section>
+  </div>
+  <p *ngIf="actionMessage" class="invoice-consultation-error">{{ actionMessage }}</p>
+</section>

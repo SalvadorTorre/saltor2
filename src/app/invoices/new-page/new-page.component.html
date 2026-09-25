@@ -1,0 +1,261 @@
+<section class="dashboard-content invoice-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <h2>Facturacion</h2>
+    </div>
+    <div class="company-header__actions" *ngIf="billingTab === 'create'">
+      <div class="dashboard-header__pill">{{ isEditingExistingInvoice ? 'Editando factura' : 'Nueva Factura' }}</div>
+      <button class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
+      <button *ngIf="!invoiceSaved" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ isSavingInvoice ? 'Guardando...' : 'Guardar' }}</button>
+      <button *ngIf="invoiceSaved" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando DGII...' : 'Enviar a DGII' }}</button>
+      <button *ngIf="invoiceSaved" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
+    </div>
+  </div>
+
+  <div class="invoice-module-tabs" role="tablist" aria-label="Opciones de facturación">
+    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'create'" [class.invoice-module-tabs__button--active]="billingTab === 'create'" class="invoice-module-tabs__button" (click)="billingTab = 'create'">Nueva factura</button>
+    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="billingTab = 'consultation'">Consulta de facturas</button>
+  </div>
+  <p class="invoice-feedback" *ngIf="invoiceMessage">{{ invoiceMessage }}</p>
+
+  <app-invoice-consultation-page *ngIf="billingTab === 'consultation'" (editRequested)="editSavedInvoice($event)" (resendRequested)="resendInvoiceToDgii($event)"></app-invoice-consultation-page>
+  <ng-container *ngIf="billingTab === 'create'">
+  <div *ngIf="isClearConfirmationVisible" class="invoice-clear-confirmation" role="dialog" aria-modal="true" aria-labelledby="clearInvoiceTitle">
+    <div class="invoice-clear-confirmation__dialog">
+      <h3 id="clearInvoiceTitle">Limpiar factura</h3>
+      <p>¿Deseas limpiar la factura? Se perderán los datos y productos actuales.</p>
+      <div class="invoice-clear-confirmation__actions">
+        <button class="secondary-action" type="button" (click)="cancelInvoiceClear()">Cancelar</button>
+        <button class="primary-action" type="button" (click)="confirmInvoiceClear()">Sí, limpiar</button>
+      </div>
+    </div>
+  </div>
+  <div *ngIf="isDgiiSendConfirmationVisible" class="dgii-process-dialog" role="dialog" aria-modal="true" aria-labelledby="dgiiSendConfirmTitle">
+    <div class="dgii-process-dialog__panel">
+      <div class="dgii-process-dialog__confirm-icon" aria-hidden="true">?</div>
+      <h3 id="dgiiSendConfirmTitle">Enviar a DGII</h3>
+      <p>¿Deseas enviar la factura {{ savedInvoice?.numero_factura }} a DGII?</p>
+      <div class="dgii-process-dialog__actions">
+        <button class="secondary-action" type="button" (click)="cancelSendInvoiceToDgii()">Cancelar</button>
+        <button class="primary-action" type="button" (click)="confirmSendInvoiceToDgii()">Sí, enviar</button>
+      </div>
+    </div>
+  </div>
+  <div *ngIf="dgiiDialog" class="dgii-process-dialog" role="dialog" aria-modal="true" aria-labelledby="dgiiProcessTitle">
+    <div class="dgii-process-dialog__panel" [class.dgii-process-dialog__panel--error]="dgiiDialog === 'error'">
+      <div *ngIf="dgiiDialog === 'processing'" class="dgii-process-dialog__spinner" aria-hidden="true"></div>
+      <div *ngIf="dgiiDialog !== 'processing'" class="dgii-process-dialog__result-icon" [class.dgii-process-dialog__result-icon--error]="dgiiDialog === 'error'" aria-hidden="true">
+        {{ dgiiDialog === 'success' ? '✓' : '!' }}
+      </div>
+      <h3 id="dgiiProcessTitle">{{ dgiiDialog === 'processing' ? 'Procesando...' : dgiiDialog === 'success' ? 'Completado' : 'Error al enviar' }}</h3>
+      <p>{{ dgiiDialogMessage }}</p>
+      <button *ngIf="dgiiDialog !== 'processing'" class="primary-action dgii-process-dialog__button" type="button" (click)="closeDgiiDialog()">OK</button>
+    </div>
+  </div>
+  <section class="panel invoice-panel">
+    <div class="invoice-layout">
+      <div class="invoice-main">
+        <div class="invoice-top">
+          <aside class="invoice-customer-data">
+            <div class="panel__header company-panel-header">
+              <div>
+                <h3>Datos del Cliente</h3>
+              </div>
+            </div>
+
+            <div class="company-form__grid invoice-customer-grid invoice-inline-labels">
+              <label class="field invoice-customer-field invoice-rnc-field field--inline">
+                <span>RNC</span>
+                <input type="text" name="invoiceRnc" [(ngModel)]="invoiceForm.rnc" (ngModelChange)="onInvoiceRncChange()" (keydown.enter)="onInvoiceRncEnter($event)" list="invoiceRncDatalist" autocomplete="off" />
+                <datalist id="invoiceRncDatalist">
+                  <ng-container *ngFor="let client of filteredRncClients">
+                    <option [value]="client.documentNumber">{{ client.fullName }}</option>
+                  </ng-container>
+                  <ng-container *ngFor="let record of filteredRncRecords">
+                    <option [value]="record.rnc">{{ record.legalName }} [DGII]</option>
+                  </ng-container>
+                </datalist>
+              </label>
+              <label class="field invoice-customer-field field--inline">
+                <span>Cliente</span>
+                <input type="text" name="invoiceCustomer" [(ngModel)]="invoiceForm.customerName" (ngModelChange)="onInvoiceCustomerNameChange()" (blur)="onInvoiceCustomerBlur()" (keydown.enter)="onInvoiceCustomerEnter($event)" list="invoiceCustomerDatalist" autocomplete="off" />
+                <datalist id="invoiceCustomerDatalist">
+                  <ng-container *ngFor="let client of filteredCustomerClients">
+                    <option [value]="client.fullName">{{ client.documentNumber }}</option>
+                    <option [value]="client.documentNumber">{{ client.fullName }}</option>
+                    <option *ngIf="client.companyName" [value]="client.companyName">{{ client.documentNumber }}</option>
+                  </ng-container>
+                </datalist>
+              </label>
+            </div>
+
+            <div class="company-form__grid invoice-customer-detail-grid invoice-inline-labels">
+              <label class="field field--inline invoice-detail-phone-field">
+                <span>Telefono</span>
+                <input type="text" name="invoiceCustomerPhone" [(ngModel)]="invoiceForm.customerPhone" (keydown.enter)="focusNextField($event)" />
+              </label>
+              <label class="field field--inline">
+                <span>Ciudad</span>
+                <input type="text" name="invoiceCustomerCity" [(ngModel)]="invoiceForm.customerCity" (keydown.enter)="focusNextField($event)" />
+              </label>
+              <label class="field field--inline">
+                <span>Correo</span>
+                <input type="email" name="invoiceCustomerEmail" [(ngModel)]="invoiceForm.customerEmail" (keydown.enter)="focusNextField($event)" />
+              </label>
+              <label class="field field--full field--inline">
+                <span>Direccion</span>
+                <input type="text" name="invoiceCustomerAddress" [(ngModel)]="invoiceForm.customerAddress" (keydown.enter)="focusNextField($event)" />
+              </label>
+            </div>
+          </aside>
+
+          <div class="invoice-form">
+            <div class="panel__header company-panel-header">
+              <div>
+                <h3>Datos de Factura</h3>
+              </div>
+            </div>
+            <div class="company-form__grid invoice-form__grid">
+              <label class="field invoice-inline-field">
+                <span>No. Factura</span>
+                <input type="text" name="invoiceNumber" [value]="invoiceForm.invoiceNumber || 'Genera al guardar'" [readonly]="true" [disabled]="true" />
+              </label>
+              <label class="field invoice-inline-field">
+                <span>Fecha</span>
+                <input type="date" name="invoiceDate" [value]="invoiceForm.invoiceDate" [readonly]="true" [disabled]="true" />
+              </label>
+              <label class="field invoice-inline-field">
+                <span>Tipo NCF</span>
+                <select name="invoiceNcfType" tabindex="-1" [(ngModel)]="invoiceForm.ncfType" (ngModelChange)="onNcfTypeChange()">
+                  <option *ngFor="let type of availableNcfTypes" [ngValue]="type">{{ type }}</option>
+                </select>
+              </label>
+              <label class="field invoice-inline-field">
+                <span>NCF</span>
+                <input type="text" name="invoiceNcf" [value]="invoiceForm.ncf || 'Genera al guardar'" [readonly]="true" [disabled]="true" />
+              </label>
+              <label class="field invoice-inline-field">
+                <span>Condicion</span>
+                <select name="invoicePayment" [(ngModel)]="invoiceForm.paymentMethod" (keydown.enter)="focusNextField($event)">
+                  <option value="Contado">Contado</option>
+                  <option value="Credito">Credito</option>
+                </select>
+              </label>
+              <label class="field invoice-inline-field">
+                <span>Forma de pago</span>
+                <select name="invoicePaymentMethod" [(ngModel)]="paymentMethodCode" (keydown.enter)="focusNextField($event)">
+                  <option *ngFor="let method of paymentMethods" [ngValue]="method.code">{{ method.code }} - {{ method.description }}</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+        <!-- <label class="field field--inline invoice-inline-labels invoice-notes-field"> -->
+          <label class="field invoice-inline-field">
+          <span>Notas</span>
+          <input type="text" name="invoiceNotes" [(ngModel)]="invoiceForm.notes" (keydown.enter)="focusNextField($event)" />
+        </label>
+        <div class="invoice-lines">
+          <div class="invoice-lines__header">
+            <strong>Detalle de productos</strong>
+          </div>
+                    
+          <div class="invoice-lines__body">
+            <div class="invoice-lines__table-wrap">
+              <section class="panel line-editor-panel">
+                <div class="line-editor-grid">
+                  <label class="line-editor-field line-editor-field--code">
+                    <span>Codigo</span>
+                    <input type="text" name="lineEditorCode" [(ngModel)]="lineEditorForm.code" (ngModelChange)="onLineEditorCodeChange()" (focus)="onLineEditorFieldFocus('code')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorCodeEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
+                    <div class="product-suggestions" *ngIf="productSuggestionField === 'code' && productSuggestions.length" role="listbox">
+                      <button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)">
+                        <span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span>
+                        <span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span>
+                      </button>
+                    </div>
+                  </label>
+                  <label class="line-editor-field line-editor-field--product">
+                    <span>Producto</span>
+                    <input type="text" name="lineEditorProduct" [(ngModel)]="lineEditorForm.productName" (ngModelChange)="onLineEditorProductChange()" (focus)="onLineEditorFieldFocus('name')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorProductEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
+                    <div class="product-suggestions" *ngIf="productSuggestionField === 'name' && productSuggestions.length" role="listbox">
+                      <button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)">
+                        <span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span>
+                        <span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span>
+                      </button>
+                    </div>
+                  </label>
+                  <label class="line-editor-field line-editor-field--num line-editor-field--quantity">
+                    <span>Cantidad</span>
+                    <input type="number" name="lineEditorQuantity" min="1" step="1" [(ngModel)]="lineEditorForm.quantity" (ngModelChange)="onLineEditorQtyChange()" (keydown.enter)="focusNextField($event)" />
+                  </label>
+                  <label class="line-editor-field line-editor-field--num line-editor-field--price">
+                    <span>Precio</span>
+                    <input type="number" name="lineEditorPrice" min="0" step="0.01" [(ngModel)]="lineEditorForm.unitPrice" (ngModelChange)="onLineEditorPriceChange()" (keydown.enter)="onEditorPriceEnter($event)" />
+                  </label>
+                  <label class="line-editor-field line-editor-field--num line-editor-field--total">
+                    <span>Total</span>
+                    <input type="text" [value]="'RD$' + (lineEditorForm.total | number:'1.2-2')" [readonly]="true" [disabled]="true" />
+                  </label>
+                </div>
+                <p class="line-editor-message" *ngIf="lineEditorMessage">{{ lineEditorMessage }}</p>
+              </section>
+              <div class="invoice-lines__table">
+                <div class="invoice-lines__row invoice-lines__row--head">
+                  <span>Codigo</span>
+                  <span>Producto</span>
+                  <span>Cant</span>
+                  <span>Precio</span>
+                  <span>Total</span>
+                  <span>Acciones</span>
+                </div>
+
+                <div class="invoice-lines__row" *ngFor="let line of invoiceLines">
+                  <span><strong>{{ getInvoiceProductCode(line.productId) }}</strong></span>
+                  <span>
+                    <strong>{{ line.description || getInvoiceProductCode(line.productId) }}</strong>
+                  </span>
+                  <span>{{ line.quantity }}</span>
+                  <span>RD${{ line.unitPrice | number:'1.2-2' }}</span>
+                  <span><strong>RD${{ line.lineTotal | number:'1.2-2' }}</strong></span>
+                  <span class="invoice-line-actions">
+                    <button class="secondary-action invoice-line-btn" type="button" title="Editar producto" aria-label="Editar producto" (click)="editInvoiceLine(line.id)">
+                      <img src="assets/icons/line-edit-red.svg" alt="" aria-hidden="true" />
+                    </button>
+                    <button class="ghost-action invoice-line-btn invoice-line-btn--remove" type="button" title="Quitar producto" aria-label="Quitar producto" (click)="removeInvoiceLine(line.id)">
+                      <img src="assets/icons/line-trash-red.svg" alt="" aria-hidden="true" />
+                    </button>
+                  </span>
+                </div>
+                <div class="invoice-lines__row invoice-lines__row--empty" *ngFor="let _ of emptyInvoiceTableRows" aria-hidden="true"></div>
+              </div>
+            </div>
+
+            <aside class="invoice-summary invoice-summary--right">
+              <div class="invoice-summary__card">
+                <div class="invoice-summary__row">
+                  <p class="invoice-summary__label">Subtotal</p>
+                  <p class="invoice-summary__amount">RD${{ invoiceSubtotal | number:'1.2-2' }}</p>
+                </div>
+                <div class="invoice-summary__row invoice-summary__row--spaced">
+                  <p class="invoice-summary__label">ITBIS</p>
+                  <p class="invoice-summary__amount">RD${{ invoiceTaxTotal | number:'1.2-2' }}</p>
+                </div>
+                <hr class="invoice-summary__divider" />
+                <div class="invoice-summary__row invoice-summary__row--total">
+                  <p class="invoice-summary__label invoice-summary__label--total">Total</p>
+                  <p class="invoice-summary__amount invoice-summary__amount--total">RD${{ invoiceGrandTotal | number:'1.2-2' }}</p>
+                </div>
+              </div>
+              <button *ngIf="!invoiceSaved" class="primary-action invoice-summary__save" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ isSavingInvoice ? 'Guardando...' : 'Guardar factura' }}</button>
+              <div *ngIf="invoiceSaved" class="invoice-summary__actions">
+                <button class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : 'Enviar a DGII' }}</button>
+                <button class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  </ng-container>
+</section>

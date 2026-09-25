@@ -1,0 +1,74 @@
+<section class="dashboard-content standalone-module-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">{{ moduleView.category }}</p>
+      <h2>{{ moduleView.title }}</h2>
+      <p class="company-header__copy">{{ moduleView.description }}</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">{{ moduleView.pill }}</div>
+    </div>
+  </div>
+
+  <div class="supplier-kpi-grid">
+    <article class="supplier-kpi-card supplier-kpi-card--accent">
+      <span>Total Facturas</span>
+      <strong>{{ totalCount }}</strong>
+      <p>Registros en el sistema</p>
+    </article>
+    <article class="supplier-kpi-card supplier-kpi-card--success">
+      <span>Pagadas</span>
+      <strong>{{ paidCount }}</strong>
+      <p>Facturas cobradas</p>
+    </article>
+    <article class="supplier-kpi-card supplier-kpi-card--warning">
+      <span>Pendientes</span>
+      <strong>{{ pendingCount }}</strong>
+      <p>Cuentas por cobrar</p>
+    </article>
+    <article class="supplier-kpi-card supplier-kpi-card--info">
+      <span>Anuladas</span>
+      <strong>{{ cancelledCount }}</strong>
+      <p>Registro anulado</p>
+    </article>
+  </div>
+
+  <div class="supplier-toolbar">
+    <label class="field">
+      <span>Buscar factura</span>
+      <input type="text" [(ngModel)]="searchTerm" placeholder="Buscar por numero o cliente..." />
+    </label>
+    <label class="field">
+      <span>Estado</span>
+      <select [(ngModel)]="statusFilter">
+        <option value="all">Todos</option>
+        <option value="Pagada">Pagada</option>
+        <option value="Pendiente">Pendiente</option>
+        <option value="Anulada">Anulada</option>
+      </select>
+    </label>
+  </div>
+
+  <section class="panel standalone-module-panel supplier-table-panel">
+    <div class="supplier-table-count">Mostrando {{ filteredTransactions.length }} de {{ transactions.length }} facturas</div>
+    <div class="transactions-table">
+      <div class="transactions-table__row transactions-table__row--head">
+        <span>Fecha</span>
+        <span>Factura</span>
+        <span>Cliente</span>
+        <span>Total</span>
+        <span>Estado</span>
+      </div>
+
+      <div *ngFor="let item of filteredTransactions" class="transactions-table__row">
+        <span>{{ item.date }}</span>
+        <strong>{{ item.invoice }}</strong>
+        <span>{{ item.client }}</span>
+        <span>{{ item.total }}</span>
+        <span class="status-pill" [class.status-pill--pending]="item.status === 'Pendiente'" [class.status-pill--cancelled]="item.status === 'Anulada'">
+          {{ item.status }}
+        </span>
+      </div>
+    </div>
+  </section>
+</section>

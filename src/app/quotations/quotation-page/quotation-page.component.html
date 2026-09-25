@@ -1,0 +1,132 @@
+<section class="quotation-page">
+  <header>
+    <div>
+      <small>COTIZACIONES</small>
+      <h1>{{ editingId ? "Editar cotización" : "Nueva cotización" }}</h1>
+    </div>
+    <div>
+      <button (click)="reset()">Limpiar</button
+      ><button class="primary" (click)="save()">Guardar</button>
+    </div>
+  </header>
+  <div class="tabs">
+    <button [class.active]="tab === 'create'" (click)="tab = 'create'">
+      Crear cotización</button
+    ><button [class.active]="tab === 'consult'" (click)="tab = 'consult'">
+      Consultar cotizaciones
+    </button>
+  </div>
+  <p *ngIf="message" class="message">{{ message }}</p>
+  <form *ngIf="tab === 'create'" (ngSubmit)="save()">
+    <!-- <section class="card grid"> -->
+      <div class="row">
+        <div class="col-2">
+          <label>RNC/Cédula
+            <input [(ngModel)]="quote.rnc" name="rnc" />
+          </label>
+        </div>
+        <div class="col-6">
+          <label>Cliente
+            <input [(ngModel)]="quote.customer" name="customer"  />
+          </label>
+        </div>
+        <div class="col-2">
+          <label>No. Cotización
+          <input [(ngModel)]="quote.number" name="number" />
+          </label>
+        </div>
+        <div class="col-2">
+          <label>Fecha
+            <input type="date" [(ngModel)]="quote.date" name="date" />
+          </label>
+        </div>
+     </div>
+          
+      <label
+        >Fecha<input type="date" [(ngModel)]="quote.date" name="date" /></label
+      ><label
+        >Válida hasta<input
+          type="date"
+          [(ngModel)]="quote.validUntil"
+          name="valid" /></label
+      ><label>Teléfono<input [(ngModel)]="quote.phone" name="phone" /></label
+      ><label>Correo<input [(ngModel)]="quote.email" name="email" /></label
+      ><label class="wide"
+        >Dirección<input [(ngModel)]="quote.address" name="address" /></label
+      ><label class="wide"
+        >Notas<textarea [(ngModel)]="quote.notes" name="notes"></textarea>
+      </label>
+    <!-- </section> -->
+    <section class="card">
+      <div class="card-title">
+        <h2>Detalle</h2>
+        <button type="button" (click)="addLine()">+ Línea</button>
+      </div>
+      <div class="line head">
+        <span>Código</span><span>Descripción</span><span>Cant.</span
+        ><span>Precio</span><span>ITBIS</span><span>Total</span><span></span>
+      </div>
+      <div class="line" *ngFor="let line of quote.lines; let i = index">
+        <input [(ngModel)]="line.code" [name]="'code' + i" /><input
+          [(ngModel)]="line.description"
+          [name]="'description' + i"
+        /><input
+          type="number"
+          min="1"
+          [(ngModel)]="line.quantity"
+          [name]="'quantity' + i"
+        /><input
+          type="number"
+          min="0"
+          [(ngModel)]="line.price"
+          [name]="'price' + i"
+        /><input
+          type="number"
+          min="0"
+          [(ngModel)]="line.itbis"
+          [name]="'tax' + i"
+        /><strong
+          >RD${{
+            line.quantity * line.price * (1 + line.itbis / 100)
+              | number: "1.2-2"
+          }}</strong
+        ><button type="button" (click)="removeLine(i)">×</button>
+      </div>
+      <div class="totals">
+        <span>Subtotal RD${{ subtotal | number: "1.2-2" }}</span
+        ><span>ITBIS RD${{ tax | number: "1.2-2" }}</span
+        ><strong>Total RD${{ total | number: "1.2-2" }}</strong>
+      </div>
+    </section>
+  </form>
+  <section *ngIf="tab === 'consult'" class="card">
+    <div class="card-title">
+      <h2>Cotizaciones</h2>
+      <input [(ngModel)]="search" placeholder="Buscar cotización o cliente" />
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Total</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let item of filtered">
+          <td>{{ item.number }}</td>
+          <td>{{ item.date | date: "dd/MM/yyyy" }}</td>
+          <td>{{ item.customer }}</td>
+          <td>RD${{ item.total | number: "1.2-2" }}</td>
+          <td>
+            <button title="Editar" (click)="edit(item)">✎</button
+            ><button title="Imprimir" (click)="print(item)">▣</button
+            ><button title="PDF" (click)="pdf(item)">PDF</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</section>

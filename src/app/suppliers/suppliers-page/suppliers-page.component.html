@@ -1,0 +1,201 @@
+<section class="dashboard-content supplier-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Mantenimiento</p>
+      <h2>Suplidores</h2>
+      <p class="company-header__copy">Administra suplidores, contactos, balances y terminos de compra desde una sola plantilla.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Modulo Suplidores</div>
+      <button class="primary-action" type="button" (click)="startCreateSupplier()">+ Nuevo suplidor</button>
+    </div>
+  </div>
+
+  <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
+    <button
+      *ngFor="let item of maintenanceLinks"
+      class="maintenance-tab"
+      type="button"
+      [class.maintenance-tab--active]="activeMaintenanceLabel === item.label"
+      (click)="selectMaintenanceItem(item)">
+      {{ item.label }}
+    </button>
+  </div>
+
+  <div class="supplier-kpi-grid">
+    <article class="supplier-kpi-card supplier-kpi-card--accent">
+      <span>Total Suplidores</span>
+      <strong>{{ totalSuppliersCount }}</strong>
+      <p>Base activa para compras</p>
+    </article>
+    <article class="supplier-kpi-card supplier-kpi-card--success">
+      <span>Activos</span>
+      <strong>{{ activeSuppliersCount }}</strong>
+      <p>Disponibles para ordenar</p>
+    </article>
+    <article class="supplier-kpi-card supplier-kpi-card--warning">
+      <span>Con balance</span>
+      <strong>{{ suppliersWithBalanceCount }}</strong>
+      <p>Con pagos pendientes</p>
+    </article>
+    <article class="supplier-kpi-card supplier-kpi-card--info">
+      <span>Importadores</span>
+      <strong>{{ importerSuppliersCount }}</strong>
+      <p>Mercancia del exterior</p>
+    </article>
+  </div>
+
+  <div class="supplier-toolbar">
+    <label class="field">
+      <span>Buscar suplidor</span>
+      <input type="text" [(ngModel)]="supplierSearch" placeholder="Buscar por codigo, empresa, contacto o documento..." />
+    </label>
+    <label class="field">
+      <span>Categoria</span>
+      <select [(ngModel)]="supplierCategoryFilter">
+        <option value="all">Todas las categorias</option>
+        <option value="Local">Local</option>
+        <option value="Importador">Importador</option>
+        <option value="Servicios">Servicios</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Estado</span>
+      <select [(ngModel)]="supplierStatusFilter">
+        <option value="all">Todos</option>
+        <option value="Activo">Activo</option>
+        <option value="Inactivo">Inactivo</option>
+        <option value="Suspendido">Suspendido</option>
+      </select>
+    </label>
+  </div>
+
+  <section class="panel supplier-table-panel">
+    <div class="supplier-table-count">
+      {{ isLoadingSuppliers ? 'Cargando suplidores desde Supabase...' : ('Mostrando ' + filteredSuppliers.length + ' de ' + suppliers.length + ' suplidores') }}
+    </div>
+    <div class="supplier-table">
+      <div class="supplier-table__row supplier-table__row--head">
+        <span>Codigo</span>
+        <span>Empresa</span>
+        <span>Documento</span>
+        <span>Telefono</span>
+        <span>Balance</span>
+        <span>Estado</span>
+        <span>Opciones</span>
+      </div>
+
+      <div
+        *ngFor="let supplier of filteredSuppliers"
+        class="supplier-table__row supplier-table__row--item"
+        [class.supplier-table__row--active]="isSelectedSupplier(supplier)"
+        (click)="selectSupplier(supplier)"
+      >
+        <span>{{ supplier.code }}</span>
+        <span>
+          <strong>{{ supplier.companyName }}</strong>
+          <small>{{ supplier.contactName }}</small>
+        </span>
+        <span>
+          <strong>{{ supplier.documentType }}</strong>
+          <small>{{ supplier.documentNumber }}</small>
+        </span>
+        <span>{{ supplier.phone }}</span>
+        <span [class.supplier-balance--open]="supplier.balance > 0">RD${{ supplier.balance | number:'1.2-2' }}</span>
+        <span class="company-status-pill" [class.company-status-pill--inactive]="supplier.status !== 'Activo'">{{ supplier.status }}</span>
+        <div class="supplier-table__actions" (click)="$event.stopPropagation()">
+          <button class="supplier-options__trigger" type="button" (click)="toggleSupplierOptions(supplier.id, $event)">
+            Opciones
+          </button>
+
+          <div class="supplier-options__menu" *ngIf="openSupplierOptionsId === supplier.id">
+            <button class="supplier-options__item" type="button" (click)="editSupplier(supplier, $event)">
+              Editar
+            </button>
+            <button class="supplier-options__item" type="button" (click)="deleteSupplier(supplier)">
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
+
+<div class="supplier-editor-modal" *ngIf="isSupplierEditorOpen" (click)="closeSupplierEditor()">
+  <section class="panel supplier-editor-modal__panel" (click)="$event.stopPropagation()">
+    <div class="panel__header company-panel-header">
+      <div>
+        <h3>{{ supplierEditorMode === 'create' ? 'Registrar suplidor' : 'Editar suplidor' }}</h3>
+        <p>{{ supplierMessage }}</p>
+      </div>
+      <div class="supplier-editor-modal__header-actions">
+        <div class="company-form__chip">{{ supplierEditorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}</div>
+        <button class="secondary-action" type="button" (click)="closeSupplierEditor()">Cerrar</button>
+      </div>
+    </div>
+
+    <div class="supplier-editor-modal__content">
+      <form class="company-form" (ngSubmit)="saveSupplier()">
+        <div class="company-form__grid">
+          <label class="field"><span>Codigo suplidor</span><input type="text" name="supplierCode" [(ngModel)]="supplierForm.code" /></label>
+          <label class="field"><span>Nombre comercial</span><input type="text" name="supplierCompanyName" [(ngModel)]="supplierForm.companyName" /></label>
+          <label class="field"><span>Contacto</span><input type="text" name="supplierContactName" [(ngModel)]="supplierForm.contactName" /></label>
+          <label class="field"><span>Tipo documento</span><select name="supplierDocumentType" [(ngModel)]="supplierForm.documentType"><option value="RNC">RNC</option><option value="Cedula">Cedula</option><option value="Pasaporte">Pasaporte</option></select></label>
+          <label class="field"><span>Numero documento</span><input type="text" name="supplierDocumentNumber" [(ngModel)]="supplierForm.documentNumber" /></label>
+          <label class="field"><span>Telefono</span><input type="text" name="supplierPhone" [(ngModel)]="supplierForm.phone" /></label>
+          <label class="field"><span>Correo</span><input type="email" name="supplierEmail" [(ngModel)]="supplierForm.email" /></label>
+          <label class="field"><span>Ciudad</span><input type="text" name="supplierCity" [(ngModel)]="supplierForm.city" /></label>
+          <label class="field field--full"><span>Direccion</span><input type="text" name="supplierAddress" [(ngModel)]="supplierForm.address" /></label>
+          <label class="field"><span>Categoria</span><select name="supplierCategory" [(ngModel)]="supplierForm.category"><option value="Local">Local</option><option value="Importador">Importador</option><option value="Servicios">Servicios</option></select></label>
+          <label class="field"><span>Condiciones pago</span><input type="text" name="supplierPaymentTerms" [(ngModel)]="supplierForm.paymentTerms" /></label>
+          <label class="field"><span>Balance</span><input type="number" name="supplierBalance" [(ngModel)]="supplierForm.balance" /></label>
+          <label class="field"><span>Estado</span><select name="supplierStatus" [(ngModel)]="supplierForm.status"><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option><option value="Suspendido">Suspendido</option></select></label>
+        </div>
+
+        <div class="company-form__actions">
+          <button class="secondary-action" type="button" (click)="closeSupplierEditor()">Cancelar</button>
+          <button class="primary-action" type="submit" [disabled]="isSavingSupplier">
+            {{ isSavingSupplier ? 'Guardando...' : (supplierEditorMode === 'create' ? 'Guardar suplidor' : 'Actualizar suplidor') }}
+          </button>
+        </div>
+      </form>
+
+      <aside class="panel company-detail-panel supplier-editor-modal__summary">
+        <div class="panel__header company-panel-header">
+          <div>
+            <h3>Resumen de suplidor</h3>
+            <p>Vista rapida del suplidor mientras completas la plantilla.</p>
+          </div>
+        </div>
+
+        <div class="company-detail-card">
+          <div class="company-detail-card__top">
+            <div class="company-detail-card__avatar">SP</div>
+            <div>
+              <strong>{{ supplierForm.companyName || 'Suplidor sin nombre' }}</strong>
+              <p>{{ supplierForm.contactName || 'Sin contacto' }} - {{ supplierForm.code || 'Sin codigo' }}</p>
+            </div>
+          </div>
+
+          <div class="company-detail-card__stats">
+            <div><span>Documento</span><strong>{{ supplierForm.documentType }} {{ supplierForm.documentNumber || 'Pendiente' }}</strong></div>
+            <div><span>Balance</span><strong>RD${{ supplierForm.balance | number:'1.2-2' }}</strong></div>
+            <div><span>Pago</span><strong>{{ supplierForm.paymentTerms || 'Sin definir' }}</strong></div>
+          </div>
+
+          <div class="company-detail-card__info">
+            <p><strong>Contacto:</strong> {{ supplierForm.contactName || 'Sin contacto' }}</p>
+            <p><strong>Telefono:</strong> {{ supplierForm.phone || 'Sin telefono' }}</p>
+            <p><strong>Correo:</strong> {{ supplierForm.email || 'Sin correo' }}</p>
+            <p><strong>Ciudad:</strong> {{ supplierForm.city || 'Sin ciudad' }}</p>
+            <p><strong>Direccion:</strong> {{ supplierForm.address || 'Sin direccion' }}</p>
+            <p><strong>Categoria:</strong> {{ supplierForm.category }}</p>
+            <p><strong>Estado:</strong> {{ supplierForm.status }}</p>
+            <p><strong>Ultima orden:</strong> {{ selectedSupplier?.lastOrder || 'Sin registro' }}</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</div>

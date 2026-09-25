@@ -1,0 +1,170 @@
+<section class="dashboard-content">
+  <div class="dashboard-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Resumen general</p>
+      <h2>Dashboard Comercial</h2>
+    </div>
+    <div class="dashboard-header__pill">Actualizado hoy</div>
+  </div>
+
+  <div class="stats-grid">
+    <article *ngFor="let stat of statCards" class="stat-card" [class]="'stat-card stat-card--' + stat.tone">
+      <div class="stat-card__top">
+        <span class="stat-card__icon">
+          <ng-container [ngSwitch]="stat.icon">
+            <svg *ngSwitchCase="'sale'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17 3H7L3 9v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9zm-5 14a3 3 0 1 1 3-3 3 3 0 0 1-3 3m3.87-9H8.13l1.2-3h5.34z" />
+            </svg>
+            <svg *ngSwitchCase="'wallet'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 7H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2M6 5h12V3H6a2 2 0 0 0-2 2v1.5A3.96 3.96 0 0 1 6 6m12 7a1.5 1.5 0 1 1-1.5 1.5A1.5 1.5 0 0 1 18 12" />
+            </svg>
+            <svg *ngSwitchCase="'bag'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 7h-2a5 5 0 0 0-10 0H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2M9 7a3 3 0 0 1 6 0zm3 7a2 2 0 1 1 2-2 2 2 0 0 1-2 2" />
+            </svg>
+            <svg *ngSwitchCase="'file'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 2h9l5 5v15H6zm8 1.5V8h4.5zM9 12h6v-2H9zm0 4h6v-2H9z" />
+            </svg>
+            <svg *ngSwitchCase="'alert'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M1 21h22L12 2zm12-3h-2v2h2zm0-8h-2v6h2z" />
+            </svg>
+          </ng-container>
+        </span>
+        <span class="stat-card__hint">{{ stat.hint }}</span>
+      </div>
+      <p class="stat-card__label">{{ stat.label }}</p>
+      <h3 class="stat-card__value">{{ stat.value }}</h3>
+    </article>
+  </div>
+
+  <div class="dashboard-grid">
+    <section class="panel panel--sales">
+      <div class="panel__header">
+        <h3>Ventas Ultimos 7 Dias</h3>
+      </div>
+
+      <div class="sales-layout">
+        <div class="sales-chart">
+          <div class="sales-chart__grid"></div>
+          <svg class="sales-chart__svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="salesArea" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.35"></stop>
+                <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"></stop>
+              </linearGradient>
+            </defs>
+            <polygon points="8,76 22,46 36,60 50,28 64,50 78,40 92,12 92,100 8,100" fill="url(#salesArea)"></polygon>
+            <polyline points="8,76 22,46 36,60 50,28 64,50 78,40 92,12" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          </svg>
+
+          <div *ngFor="let point of salesSeries" class="sales-chart__point" [style.left.%]="point.x" [style.bottom.%]="point.y">
+            <span class="sales-chart__dot"></span>
+            <span class="sales-chart__tooltip">{{ point.value }}</span>
+            <span class="sales-chart__label">{{ point.label }}</span>
+          </div>
+        </div>
+
+        <div class="mini-table">
+          <div class="mini-table__header">
+            <h4>Top Productos Vendidos</h4>
+          </div>
+          <div class="mini-table__row mini-table__row--head">
+            <span>Producto</span>
+            <span>Cantidad</span>
+            <span>Ingresos</span>
+          </div>
+          <div *ngFor="let product of topProducts" class="mini-table__row">
+            <span>{{ product.name }}</span>
+            <span>{{ product.quantity }}</span>
+            <strong>{{ product.amount }}</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel panel--alerts">
+      <div class="panel__header">
+        <h3>Alertas</h3>
+      </div>
+
+      <div *ngFor="let group of alertGroups" class="alert-group">
+        <div class="alert-group__title">
+          <span class="alert-group__icon" [class.alert-group__icon--warning]="group.icon === 'alert'">
+            <svg *ngIf="group.icon === 'alert'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M1 21h22L12 2zm12-3h-2v2h2zm0-8h-2v6h2z" />
+            </svg>
+            <svg *ngIf="group.icon === 'box'" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2 4 6v12l8 4 8-4V6zm0 2.2 5.7 2.85L12 9.9 6.3 7.05zM6 8.7l5 2.5v8.2l-5-2.5zm7 10.7v-8.2l5-2.5v8.2z" />
+            </svg>
+          </span>
+          <span>{{ group.title }}</span>
+        </div>
+        <ul>
+          <li *ngFor="let item of group.items">{{ item }}</li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="panel panel--categories">
+      <div class="panel__header">
+        <h3>Ventas por Categoria</h3>
+      </div>
+
+      <div class="categories-layout">
+        <div class="categories-panel">
+          <div class="donut-chart"></div>
+          <div class="category-list">
+            <div *ngFor="let category of categories" class="category-row">
+              <div class="category-row__name">
+                <span class="category-row__swatch" [style.background]="category.color"></span>
+                <span>{{ category.label }}</span>
+              </div>
+              <strong>{{ category.percent }}%</strong>
+            </div>
+          </div>
+        </div>
+
+        <section class="panel panel--inventory">
+          <div class="panel__header">
+            <h3>Movimiento de Inventario</h3>
+          </div>
+
+          <div *ngFor="let item of inventoryFlow" class="inventory-row">
+            <div class="inventory-row__meta">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+            <div class="inventory-row__track">
+              <div class="inventory-row__fill" [style.width.%]="item.width" [class]="'inventory-row__fill inventory-row__fill--' + item.tone"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="panel panel--transactions">
+      <div class="panel__header">
+        <h3>Ultimas Transacciones</h3>
+      </div>
+
+      <div class="transactions-table">
+        <div class="transactions-table__row transactions-table__row--head">
+          <span>Fecha</span>
+          <span>Factura</span>
+          <span>Cliente</span>
+          <span>Total</span>
+          <span>Estado</span>
+        </div>
+
+        <div *ngFor="let item of transactions" class="transactions-table__row">
+          <span>{{ item.date }}</span>
+          <strong>{{ item.invoice }}</strong>
+          <span>{{ item.client }}</span>
+          <span>{{ item.total }}</span>
+          <span class="status-pill" [class.status-pill--pending]="item.status === 'Pendiente'" [class.status-pill--cancelled]="item.status === 'Anulada'">
+            {{ item.status }}
+          </span>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>

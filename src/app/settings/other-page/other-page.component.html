@@ -1,0 +1,301 @@
+<section class="dashboard-content standalone-module-content" *ngIf="activeView === 'settings_other'">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">{{ moduleCategory }}</p>
+      <h2>{{ moduleTitle }}</h2>
+      <p class="company-header__copy">{{ moduleDescription }}</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">{{ modulePill }}</div>
+      <button class="primary-action" type="button" (click)="saveOtherSettings()">Guardar cambios</button>
+    </div>
+  </div>
+
+  <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
+    <button
+      *ngFor="let item of maintenanceLinks"
+      class="maintenance-tab"
+      type="button">
+      {{ item.label }}
+    </button>
+  </div>
+
+  <div class="settings-layout">
+    <section class="panel digital-certificate-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Firma Digital</h3>
+          <p>Sube el certificado de firma digital de la empresa en formato P12 o PFX.</p>
+        </div>
+        <span class="certificate-status" [class.certificate-status--expired]="certificateIsExpired">
+          {{ certificateMetadata ? (certificateIsExpired ? 'Vencido' : 'Activo') : 'Sin certificado' }}
+        </span>
+      </div>
+
+      <div class="certificate-upload-grid">
+        <label class="field">
+          <span>Archivo del certificado</span>
+          <input type="file" accept=".p12,.pfx,application/x-pkcs12" (change)="onCertificateFileSelected($event)" />
+        </label>
+        <label class="field">
+          <span>Contraseña del certificado</span>
+          <input type="password" name="certificatePassword" [(ngModel)]="certificatePassword" autocomplete="new-password" />
+        </label>
+        <div class="certificate-upload-action">
+          <button class="primary-action" type="button" (click)="uploadCertificate()" [disabled]="isUploadingCertificate">
+            {{ isUploadingCertificate ? 'Validando...' : 'Cargar certificado' }}
+          </button>
+        </div>
+      </div>
+      <p class="certificate-message">{{ certificateMessage }}</p>
+      <p class="certificate-security-note">La contraseña se usa solo para validar el archivo y no se guarda en el sistema.</p>
+
+      <div class="certificate-details" *ngIf="certificateMetadata; else noCertificate">
+        <div><span>Titular</span><strong>{{ certificateMetadata.holder }}</strong></div>
+        <div><span>Emisor</span><strong>{{ certificateMetadata.issuer }}</strong></div>
+        <div><span>Número de serie</span><strong>{{ certificateMetadata.serialNumber }}</strong></div>
+        <div><span>Válido desde</span><strong>{{ formatCertificateDate(certificateMetadata.validFrom) }}</strong></div>
+        <div><span>Vence el</span><strong>{{ formatCertificateDate(certificateMetadata.validUntil) }}</strong></div>
+        <div><span>Archivo</span><strong>{{ certificateMetadata.fileName }}</strong></div>
+      </div>
+      <ng-template #noCertificate>
+        <div class="certificate-empty" *ngIf="!isLoadingCertificate">Aún no hay un certificado de firma digital registrado para esta empresa.</div>
+      </ng-template>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div><h3>Facturación electrónica DGII</h3><p>Define si los envíos usan el servicio de prueba o producción.</p></div>
+        <span class="certificate-status">{{ ecfConfiguration.ambiente }}</span>
+      </div>
+      <div class="company-form__grid">
+        <label class="field"><span>Ambiente</span><select [(ngModel)]="ecfConfiguration.ambiente"><option value="TEST">TEST</option><option value="PROD">PROD</option></select></label>
+        <label class="field"><span>Tipo de ingreso</span><input type="text" maxlength="2" [(ngModel)]="ecfConfiguration.tipo_ingreso" /></label>
+        <label class="field field--full"><span>URL base del servicio</span><input type="text" [(ngModel)]="ecfConfiguration.url_base" /></label>
+        <label class="field field--full"><span><input type="checkbox" [(ngModel)]="ecfConfiguration.persistir_certificado" /> Permitir persistencia del certificado en el servicio</span></label>
+      </div>
+      <div class="settings-actions"><span>{{ ecfMessage }}</span><button class="primary-action" type="button" (click)="saveEcfConfiguration()">Guardar configuración e-CF</button></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Apariencia y Tema</h3>
+          <p>Personaliza colores, tema visual y preferencias de la interfaz.</p>
+        </div>
+      </div>
+
+      <form class="company-form">
+        <div class="company-form__grid">
+        <label class="field">
+          <span>Color primario</span>
+          <div class="color-field">
+            <input type="color" name="primaryColor" [(ngModel)]="preferences.primaryColor" />
+            <input type="text" name="primaryColorText" [(ngModel)]="preferences.primaryColor" />
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Color secundario</span>
+          <div class="color-field">
+            <input type="color" name="secondaryColor" [(ngModel)]="preferences.secondaryColor" />
+            <input type="text" name="secondaryColorText" [(ngModel)]="preferences.secondaryColor" />
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Color de acento</span>
+          <div class="color-field">
+            <input type="color" name="accentColor" [(ngModel)]="preferences.accentColor" />
+            <input type="text" name="accentColorText" [(ngModel)]="preferences.accentColor" />
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Fondo</span>
+          <div class="color-field">
+            <input type="color" name="backgroundColor" [(ngModel)]="preferences.backgroundColor" />
+            <input type="text" name="backgroundColorText" [(ngModel)]="preferences.backgroundColor" />
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Tema visual</span>
+          <select name="theme" [(ngModel)]="preferences.theme">
+            <option *ngFor="let t of themeOptions" [value]="t.value">{{ t.label }}</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Tamano de pagina por defecto</span>
+          <select name="pageSize" [(ngModel)]="preferences.defaultPageSize">
+            <option *ngFor="let size of pageSizeOptions" [ngValue]="size">{{ size }} registros</option>
+          </select>
+        </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Moneda y Formato</h3>
+          <p>Configura moneda, formato de fecha y separadores numericos.</p>
+        </div>
+      </div>
+
+      <form class="company-form">
+        <div class="company-form__grid">
+        <label class="field">
+          <span>Moneda predeterminada</span>
+          <select name="currency" [(ngModel)]="preferences.currency" (change)="updateCurrencySymbol()">
+            <option *ngFor="let c of currencyOptions" [value]="c.code">{{ c.name }}</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Simbolo de moneda</span>
+          <input type="text" name="currencySymbol" [(ngModel)]="preferences.currencySymbol" />
+        </label>
+
+        <label class="field">
+          <span>Formato de fecha</span>
+          <select name="dateFormat" [(ngModel)]="preferences.dateFormat">
+            <option *ngFor="let d of dateFormatOptions" [value]="d.value">{{ d.label }}</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Zona horaria</span>
+          <select name="timezone" [(ngModel)]="preferences.timezone">
+            <option *ngFor="let tz of timezoneOptions" [value]="tz.value">{{ tz.label }}</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Separador decimal</span>
+          <select name="decimalSeparator" [(ngModel)]="preferences.decimalSeparator">
+            <option value=".">Punto (1,234.56)</option>
+            <option value=",">Coma (1.234,56)</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Separador de miles</span>
+          <select name="thousandSeparator" [(ngModel)]="preferences.thousandSeparator">
+            <option value=",">Coma (1,234.56)</option>
+            <option value=".">Punto (1.234,56)</option>
+            <option value=" ">Espacio (1 234.56)</option>
+          </select>
+        </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Idioma y Regional</h3>
+          <p>Selecciona idioma y configuraciones regionales del sistema.</p>
+        </div>
+      </div>
+
+      <form class="company-form">
+        <div class="company-form__grid">
+        <label class="field field--full">
+          <span>Idioma del sistema</span>
+          <select name="language" [(ngModel)]="preferences.language">
+            <option *ngFor="let lang of languageOptions" [value]="lang.code">{{ lang.name }}</option>
+          </select>
+        </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Notificaciones y Comportamiento</h3>
+          <p>Configura notificaciones, sonidos y guardado automatico.</p>
+        </div>
+      </div>
+
+      <form class="company-form">
+        <div class="company-form__grid">
+        <label class="field checkbox-field">
+          <input type="checkbox" name="enableNotifications" [(ngModel)]="preferences.enableNotifications" />
+          <span>Habilitar notificaciones del sistema</span>
+        </label>
+
+        <label class="field checkbox-field">
+          <input type="checkbox" name="enableSounds" [(ngModel)]="preferences.enableSounds" />
+          <span>Habilitar sonidos de eventos</span>
+        </label>
+
+        <label class="field checkbox-field">
+          <input type="checkbox" name="autoSave" [(ngModel)]="preferences.autoSave" />
+          <span>Guardado automatico</span>
+        </label>
+
+        <label class="field" *ngIf="preferences.autoSave">
+          <span>Intervalo (segundos)</span>
+          <input type="number" min="10" step="5" name="autoSaveInterval" [(ngModel)]="preferences.autoSaveInterval" />
+        </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Impresion y Valores Predeterminados</h3>
+          <p>Configura logo, pie de impresion y valores por defecto para documentos.</p>
+        </div>
+      </div>
+
+      <form class="company-form">
+        <div class="company-form__grid">
+        <label class="field field--full">
+          <span>URL del logo de la empresa</span>
+          <input type="text" name="companyLogoUrl" [(ngModel)]="preferences.companyLogoUrl" />
+        </label>
+
+        <label class="field field--full">
+          <span>Texto de pie de pagina para impresion</span>
+          <input type="text" name="printFooterText" [(ngModel)]="preferences.printFooterText" />
+        </label>
+
+        <label class="field">
+          <span>Tipo NCF por defecto</span>
+          <select name="defaultNcfType" [(ngModel)]="preferences.defaultNcfType">
+            <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Metodo de pago por defecto</span>
+          <select name="defaultPaymentMethod" [(ngModel)]="preferences.defaultPaymentMethod">
+            <option value="Contado">Contado</option>
+            <option value="Credito">Credito</option>
+          </select>
+        </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Acciones</h3>
+          <p>{{ otherMessage }}</p>
+        </div>
+      </div>
+
+      <div class="company-form__actions">
+        <button class="ghost-action" type="button" (click)="restoreDefaultSettings()">Restaurar valores por defecto</button>
+        <button class="secondary-action" type="button" (click)="resetOtherSettings()">Deshacer cambios</button>
+        <button class="primary-action" type="button" (click)="saveOtherSettings()">Guardar preferencias</button>
+      </div>
+    </section>
+  </div>
+</section>

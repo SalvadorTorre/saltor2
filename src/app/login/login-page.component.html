@@ -1,0 +1,69 @@
+<main class="login-page">
+  <section class="login-card" aria-labelledby="login-title">
+    <div class="login-brand">
+      <img src="assets/logosaltor.jpg" alt="Logo de SaltorSystem">
+      <div>
+        <h1 id="login-title">SaltorSystem</h1>
+        <p>Panel administrativo</p>
+      </div>
+    </div>
+
+    <ng-container *ngIf="!showInitialSetup; else initialSetup">
+      <div class="login-heading">
+        <h2>Iniciar sesión</h2>
+        <p>Ingrese sus datos para acceder al sistema.</p>
+      </div>
+
+      <form (ngSubmit)="login()" #loginForm="ngForm">
+        <label for="login-email">Correo electrónico</label>
+        <input id="login-email" type="email" name="email" [(ngModel)]="email" required autocomplete="email">
+
+        <label for="login-password">Clave</label>
+        <input id="login-password" type="password" name="password" [(ngModel)]="password" required autocomplete="current-password">
+
+        <p *ngIf="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
+        <button type="submit" [disabled]="isLoading || loginForm.invalid">
+          {{ isLoading ? 'Verificando...' : 'Entrar' }}
+        </button>
+      </form>
+    </ng-container>
+
+    <ng-template #initialSetup>
+      <div class="login-heading">
+        <h2>Crear administrador inicial</h2>
+        <p>Este será el primer acceso para administrar el sistema.</p>
+      </div>
+
+      <form (ngSubmit)="createInitialAdmin()" class="setup-form">
+        <div class="two-columns">
+          <div>
+            <label for="setup-name">Nombre</label>
+            <input id="setup-name" type="text" name="firstName" [(ngModel)]="initialAdmin.firstName" required>
+          </div>
+          <div>
+            <label for="setup-lastname">Apellido</label>
+            <input id="setup-lastname" type="text" name="lastName" [(ngModel)]="initialAdmin.lastName" required>
+          </div>
+        </div>
+        <label for="setup-username">ID de usuario</label>
+        <input id="setup-username" type="text" name="username" [(ngModel)]="initialAdmin.username" required>
+        <label for="setup-email">Correo electrónico</label>
+        <input id="setup-email" type="email" name="setupEmail" [(ngModel)]="initialAdmin.email" required autocomplete="email">
+        <label for="setup-password">Clave</label>
+        <input id="setup-password" type="password" name="setupPassword" [(ngModel)]="initialAdmin.password" required minlength="6" autocomplete="new-password">
+        <label for="setup-company">Empresa</label>
+        <select id="setup-company" name="companyId" [(ngModel)]="initialAdmin.companyId" required>
+          <option [ngValue]="null">Seleccione una empresa</option>
+          <option *ngFor="let company of companies" [ngValue]="company.id">{{ company.name }}</option>
+        </select>
+        <label for="setup-branch">Sucursal</label>
+        <input id="setup-branch" type="text" name="branch" [(ngModel)]="initialAdmin.branch">
+
+        <p *ngIf="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
+        <button type="submit" [disabled]="isLoading">
+          {{ isLoading ? 'Creando cuenta...' : 'Crear y entrar' }}
+        </button>
+      </form>
+    </ng-template>
+  </section>
+</main>

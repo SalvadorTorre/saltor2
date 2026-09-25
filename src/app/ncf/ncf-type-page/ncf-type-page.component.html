@@ -1,0 +1,207 @@
+<section class="dashboard-content ncf-type-content" *ngIf="activeView === 'ncf_type'">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Configuracion</p>
+      <h2>Tipos de e-CF</h2>
+      <p class="company-header__copy">Catalogo de comprobantes fiscales electronicos conectado con Supabase.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Modulo e-NCF</div>
+      <button class="primary-action" type="button" (click)="startCreate()">+ Nuevo Tipo e-CF</button>
+    </div>
+  </div>
+
+  <div class="company-kpi-grid">
+    <article class="company-kpi-card company-kpi-card--accent">
+      <span>Total de tipos</span>
+      <strong>{{ ncfTypes.length }}</strong>
+      <p>Catalogo disponible para facturacion y secuencias</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--success">
+      <span>Tipos activos</span>
+      <strong>{{ activeCount }}</strong>
+      <p>Habilitados para uso en operaciones</p>
+    </article>
+    <!-- <article class="company-kpi-card company-kpi-card--warning">
+      <span>% promedio ITBIS</span>
+      <strong>{{ avgTaxRate }}%</strong>
+      <p>Promedio de tasa gravable del catalogo</p>
+    </article> -->
+  </div>
+
+  <div class="company-grid rnc-grid">
+    <section class="panel company-list-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Tipos de comprobantes registrados</h3>
+          <!-- <p>{{ isLoading ? 'Cargando desde Supabase...' : ('Mostrando ' + filteredTypes.length + ' de ' + ncfTypes.length + ' tipos. Busca por codigo, serie o nombre.') }}</p> -->
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Buscar tipo e-CF</span>
+        <input type="text" [(ngModel)]="searchTerm" placeholder="Buscar por codigo, serie o nombre" />
+      </label>
+
+      <!-- <div class="company-list"> -->
+        <button
+          *ngFor="let record of filteredTypes"
+          class="company-row"
+          type="button"
+          [class.company-row--active]="isSelected(record)"
+          (click)="loadForEdit(record)">
+          <div class="company-row__badge">{{ record.series || record.code }}</div>
+          <div class="company-row__body">
+            <div class="company-row__top">
+              <strong>{{ record.name }}</strong>
+              <span class="company-status-pill" [class.company-status-pill--inactive]="record.status !== 'Activa'">
+                {{ record.status }}
+              </span>
+            </div>
+            <!-- <p>{{ record.description || 'Sin descripcion adicional' }}</p> -->
+            <!-- <div class="company-row__meta">
+              <span>Cod. {{ record.code }}</span>
+              <span>Serie {{ record.series }}</span>
+              <span>{{ record.isElectronic ? 'Electronico' : 'Fisico' }}</span>
+              <span>ITBIS {{ record.taxRate }}%</span>
+              <span>Desde {{ record.createdAt }}</span>
+            </div> -->
+          </div>
+        </button>
+      <!-- </div> -->
+    </section>
+
+    <section class="panel company-form-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>{{ editorMode === 'create' ? 'Nuevo Tipo e-CF' : 'Editando Tipo e-CF' }}</h3>
+          <p>{{ message }}</p>
+        </div>
+        <div class="company-form__chip">
+          {{ editorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}
+        </div>
+      </div>
+
+      <form class="company-form" (ngSubmit)="save()">
+        <div class="company-form__hero">
+          <div class="company-form__logo">e-CF</div>
+          <div>
+            <strong>{{ form.name || 'Nuevo comprobante fiscal' }}</strong>
+            <p>Define el codigo DGII, serie electronica, nombre, tasa ITBIS y estado.</p>
+          </div>
+        </div>
+
+        <div class="company-form__grid">
+          <label class="field">
+            <span>Codigo DGII</span>
+            <input type="text" name="ncfTypeCode" [(ngModel)]="form.code" placeholder="Ej. 31, 32, 47" maxlength="3" />
+          </label>
+
+          <label class="field">
+            <span>Tipo</span>
+            <input type="number" name="ncfTypeGroup" [(ngModel)]="form.type" min="1" step="1" />
+          </label>
+
+          <label class="field">
+            <span>Serie e-CF</span>
+            <input type="text" name="ncfTypeSeries" [(ngModel)]="form.series" placeholder="Ej. E31, E32, E47" maxlength="4" />
+          </label>
+
+          <label class="field">
+            <span>Nombre comprobante</span>
+            <input type="text" name="ncfTypeName" [(ngModel)]="form.name" placeholder="Credito Fiscal, Consumo..." />
+          </label>
+
+          <label class="field">
+            <span>% ITBIS aplicable</span>
+            <input type="number" name="ncfTypeTax" [(ngModel)]="form.taxRate" min="0" max="100" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>Tipo comprobante</span>
+            <select name="ncfTypeElectronic" [(ngModel)]="form.isElectronic">
+              <option [ngValue]="true">Electronico e-CF</option>
+              <option [ngValue]="false">Fisico NCF</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Estado</span>
+            <select name="ncfTypeStatus" [(ngModel)]="form.status">
+              <option value="Activa">Activa</option>
+              <option value="Inactiva">Inactiva</option>
+            </select>
+          </label>
+
+          <label class="field field--full">
+            <span>Descripcion</span>
+            <textarea name="ncfTypeDesc" [(ngModel)]="form.description" rows="4"
+              placeholder="Descripcion del uso y alcance de este tipo de comprobante..."></textarea>
+          </label>
+        </div>
+
+        <div class="company-form__actions">
+          <button class="secondary-action" type="button" (click)="startCreate()">Limpiar</button>
+          <button class="primary-action" type="submit" [disabled]="isSaving">
+            {{ isSaving ? 'Guardando...' : (editorMode === 'create' ? 'Guardar tipo e-CF' : 'Actualizar tipo e-CF') }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel company-detail-panel" *ngIf="selectedRecord">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Acciones rapidas</h3>
+          <p>Herramientas para gestionar el tipo de comprobante seleccionado.</p>
+        </div>
+      </div>
+
+      <div class="company-detail-card">
+        <div class="company-detail-card__top">
+          <div class="company-detail-card__avatar">{{ selectedRecord.series || selectedRecord.code }}</div>
+          <div>
+            <strong>{{ selectedRecord.name }}</strong>
+            <p>{{ selectedRecord.description || 'Sin descripcion adicional' }}</p>
+          </div>
+        </div>
+
+        <div class="company-detail-card__stats">
+          <div>
+            <span>Codigo DGII</span>
+            <strong>{{ selectedRecord.code }}</strong>
+          </div>
+          <div>
+            <span>Serie e-CF</span>
+            <strong>{{ selectedRecord.series }}</strong>
+          </div>
+          <div>
+            <span>Tasa ITBIS</span>
+            <strong>{{ selectedRecord.taxRate }}%</strong>
+          </div>
+          <div>
+            <span>Estado</span>
+            <strong>{{ selectedRecord.status }}</strong>
+          </div>
+        </div>
+
+        <div class="company-detail-card__info">
+          <p><strong>Fecha de registro:</strong> {{ selectedRecord.createdAt }}</p>
+          <p><strong>Usable en facturacion:</strong> {{ selectedRecord.status === 'Activa' ? 'Si' : 'No' }}</p>
+          <p><strong>Comprobante electronico:</strong> {{ selectedRecord.isElectronic ? 'Si' : 'No' }}</p>
+          <p><strong>Aplica credito ITBIS:</strong> {{ selectedRecord.taxRate > 0 ? 'Si, tasa del ' + selectedRecord.taxRate + '%' : 'No (exento o exportacion)' }}</p>
+        </div>
+
+        <div class="rnc-sync-card">
+          <strong>Catalogo e-CF</strong>
+          <p>Incluye los comprobantes electronicos 31, 32, 33, 34, 41, 43, 44, 45, 46 y 47.</p>
+        </div>
+
+        <div class="company-detail-card__actions">
+          <button class="secondary-action" type="button" (click)="loadForEdit(selectedRecord)">Editar registro</button>
+          <button class="ghost-action" type="button" (click)="deleteRecord(selectedRecord)">Eliminar tipo</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>

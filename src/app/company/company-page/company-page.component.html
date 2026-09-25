@@ -1,0 +1,240 @@
+<section class="dashboard-content company-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Configuracion</p>
+      <h2>Gestion de Empresa</h2>
+      <p class="company-header__copy">Agrega, edita y modifica la informacion principal de tus empresas desde una sola vista.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Modulo Empresa</div>
+      <button class="primary-action" type="button" (click)="startCreateCompany()">+ Nueva empresa</button>
+    </div>
+  </div>
+
+  <div class="company-kpi-grid">
+    <article class="company-kpi-card company-kpi-card--accent">
+      <span>Total registradas</span>
+      <strong>{{ companies.length }}</strong>
+      <p>Control general del grupo empresarial</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--success">
+      <span>Empresas activas</span>
+      <strong>{{ activeCompanyCount }}</strong>
+      <p>Listas para operar y facturar</p>
+    </article>
+    <article class="company-kpi-card company-kpi-card--danger">
+      <span>Empresas inactivas</span>
+      <strong>{{ inactiveCompanyCount }}</strong>
+      <p>Requieren revision o reactivacion</p>
+    </article>
+  </div>
+
+  <div class="company-grid">
+    <section class="panel company-list-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Empresas registradas</h3>
+          <p>{{ isLoadingCompanies ? 'Cargando empresas desde Supabase...' : 'Selecciona una para editarla o usa el boton superior para agregar una nueva.' }}</p>
+        </div>
+      </div>
+
+      <div class="company-list">
+        <button
+          *ngFor="let company of companies"
+          class="company-row"
+          type="button"
+          [class.company-row--active]="isSelectedCompany(company)"
+          (click)="selectCompany(company)">
+          <div class="company-row__badge">{{ company.tradeName.slice(0, 2).toUpperCase() }}</div>
+          <div class="company-row__body">
+            <div class="company-row__top">
+              <strong>{{ company.tradeName }}</strong>
+              <span class="company-status-pill" [class.company-status-pill--inactive]="company.status === 'Inactiva'">
+                {{ company.status }}
+              </span>
+            </div>
+            <p>{{ company.legalName }}</p>
+            <div class="company-row__meta">
+              <span>{{ company.city }}</span>
+              <span>{{ company.rnc }}</span>
+              <span>{{ calculateBranchCount(company.id) }} sucursales</span>
+            </div>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel company-form-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>{{ companyEditorMode === 'create' ? 'Agregar empresa' : 'Editar empresa' }}</h3>
+          <p>{{ companyMessage }}</p>
+        </div>
+        <div class="company-form__chip">{{ companyEditorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}</div>
+      </div>
+
+      <form class="company-form" (ngSubmit)="saveCompany()">
+        <div class="company-form__hero">
+          <div class="company-form__logo">EMP</div>
+          <div>
+            <strong>{{ companyForm.tradeName || 'Nueva empresa' }}</strong>
+            <p>Prepara la identidad principal, datos fiscales y contacto.</p>
+          </div>
+        </div>
+
+        <div class="company-form__grid">
+          <label class="field">
+            <span>Nombre comercial</span>
+            <input type="text" name="tradeName" [(ngModel)]="companyForm.tradeName" placeholder="Empresa Comercial SRL" />
+          </label>
+
+          <label class="field">
+            <span>Razon social</span>
+            <input type="text" name="legalName" [(ngModel)]="companyForm.legalName" placeholder="Empresa Comercial Sociedad SRL" />
+          </label>
+
+          <label class="field">
+            <span>RNC</span>
+            <input type="text" name="rnc" [(ngModel)]="companyForm.rnc" placeholder="000000000" />
+          </label>
+
+          <label class="field">
+            <span>Correo electronico</span>
+            <input type="email" name="email" [(ngModel)]="companyForm.email" placeholder="correo@empresa.com" />
+          </label>
+
+          <label class="field">
+            <span>Telefono</span>
+            <input type="text" name="phone" [(ngModel)]="companyForm.phone" placeholder="(809) 555-0000" />
+          </label>
+
+          <label class="field">
+            <span>Ciudad</span>
+            <input type="text" name="city" [(ngModel)]="companyForm.city" placeholder="Santo Domingo" />
+          </label>
+
+          <label class="field">
+            <span>Sitio web</span>
+            <input type="text" name="website" [(ngModel)]="companyForm.website" placeholder="www.empresa.com" />
+          </label>
+
+          <label class="field">
+            <span>Categoria</span>
+            <select name="category" [(ngModel)]="companyForm.category">
+              <option value="Principal">Principal</option>
+              <option value="Sucursal">Sucursal</option>
+              <option value="Logistica">Logistica</option>
+              <option value="Administrativa">Administrativa</option>
+            </select>
+          </label>
+
+          <label class="field field--full">
+            <span>Direccion</span>
+            <textarea name="address" [(ngModel)]="companyForm.address" rows="3" placeholder="Direccion fiscal o comercial"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Estado</span>
+            <select name="status" [(ngModel)]="companyForm.status">
+              <option value="Activa">Activa</option>
+              <option value="Inactiva">Inactiva</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="company-form__actions">
+          <button class="secondary-action" type="button" (click)="cancelCompanyEdit()">Cancelar</button>
+          <button class="primary-action" type="submit" [disabled]="isSavingCompany">
+            {{ isSavingCompany ? 'Guardando...' : (companyEditorMode === 'create' ? 'Guardar empresa' : 'Actualizar empresa') }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel company-detail-panel" *ngIf="selectedCompany as selected">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Resumen de empresa</h3>
+          <p>Acciones rapidas para modificar el registro seleccionado.</p>
+        </div>
+      </div>
+
+      <div class="company-detail-card">
+        <div class="company-detail-card__top">
+          <div class="company-detail-card__avatar">{{ selected.tradeName.slice(0, 2).toUpperCase() }}</div>
+          <div>
+            <strong>{{ selected.tradeName }}</strong>
+            <p>{{ selected.legalName }}</p>
+          </div>
+        </div>
+
+        <div class="company-detail-card__stats">
+          <div>
+            <span>RNC</span>
+            <strong>{{ selected.rnc }}</strong>
+          </div>
+          <div>
+            <span>Ciudad</span>
+            <strong>{{ selected.city }}</strong>
+          </div>
+          <div>
+            <span>Ultima actualizacion</span>
+            <strong>{{ selected.lastUpdate || 'Sin registro' }}</strong>
+          </div>
+        </div>
+
+        <div class="company-detail-card__info">
+          <p><strong>Correo:</strong> {{ selected.email || 'Sin correo' }}</p>
+          <p><strong>Telefono:</strong> {{ selected.phone || 'Sin telefono' }}</p>
+          <p><strong>Direccion:</strong> {{ selected.address || 'Sin direccion' }}</p>
+          <p><strong>Web:</strong> {{ selected.website || 'Sin sitio web' }}</p>
+        </div>
+
+        <div class="company-detail-card__actions">
+          <button class="secondary-action" type="button" (click)="selectCompany(selected)">Modificar datos</button>
+          <button class="primary-action" type="button" (click)="openBranchesModal(selected)">Gestionar sucursales</button>
+          <button class="ghost-action" type="button" (click)="toggleSelectedCompanyStatus()">
+            {{ selected.status === 'Activa' ? 'Desactivar empresa' : 'Activar empresa' }}
+          </button>
+          <button class="ghost-action" type="button" (click)="deleteCompany(selected)">Eliminar empresa</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<div *ngIf="isBranchModalOpen" class="company-branch-modal" role="dialog" aria-modal="true" aria-labelledby="branch-modal-title">
+  <section class="panel company-branch-modal__panel">
+    <div class="panel__header company-panel-header">
+      <div>
+        <h3 id="branch-modal-title">Sucursales de {{ selectedCompany?.tradeName }}</h3>
+        <p>{{ branchMessage }}</p>
+      </div>
+      <button class="ghost-action" type="button" (click)="closeBranchesModal()">Cerrar</button>
+    </div>
+
+    <div class="company-branch-modal__content">
+      <div class="company-branch-list">
+        <p *ngIf="isLoadingBranches">Cargando sucursales...</p>
+        <button *ngFor="let branch of selectedCompanyBranches" type="button" class="company-branch-row" (click)="editBranch(branch)">
+          <span><strong>{{ branch.name }}</strong><small>{{ branch.city || 'Sin ciudad' }} · {{ branch.phone || 'Sin teléfono' }}</small></span>
+          <em [class.company-status-pill--inactive]="branch.status === 'Inactiva'">{{ branch.status }}</em>
+        </button>
+        <p *ngIf="!isLoadingBranches && !selectedCompanyBranches.length">Todavía no hay sucursales registradas.</p>
+      </div>
+
+      <form class="company-form company-branch-form" (ngSubmit)="saveBranch()">
+        <h4>{{ editingBranchId ? 'Editar sucursal' : 'Nueva sucursal' }}</h4>
+        <label class="field"><span>Nombre</span><input type="text" name="branchName" [(ngModel)]="branchForm.name"></label>
+        <label class="field"><span>Teléfono</span><input type="text" name="branchPhone" [(ngModel)]="branchForm.phone"></label>
+        <label class="field"><span>Ciudad</span><input type="text" name="branchCity" [(ngModel)]="branchForm.city"></label>
+        <label class="field"><span>Estado</span><select name="branchStatus" [(ngModel)]="branchForm.status"><option value="Activa">Activa</option><option value="Inactiva">Inactiva</option></select></label>
+        <label class="field"><span>Dirección</span><textarea name="branchAddress" rows="2" [(ngModel)]="branchForm.address"></textarea></label>
+        <div class="company-form__actions">
+          <button class="secondary-action" type="button" (click)="newBranch()">Nueva</button>
+          <button class="primary-action" type="submit" [disabled]="isSavingBranch">{{ isSavingBranch ? 'Guardando...' : 'Guardar sucursal' }}</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

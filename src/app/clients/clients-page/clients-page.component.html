@@ -1,0 +1,198 @@
+<section class="dashboard-content client-content" *ngIf="activeView === 'clients'">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Mantenimiento</p>
+      <h2>Clientes</h2>
+      <p class="company-header__copy">Controla tus clientes, sus documentos, balances y condiciones de credito en una sola plantilla.</p>
+    </div>
+    <div class="company-header__actions">
+      <div class="dashboard-header__pill">Modulo de Clientes</div>
+      <button class="primary-action" type="button" (click)="startCreateClient()">+ Nuevo cliente</button>
+    </div>
+  </div>
+
+  <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
+    <button
+      *ngFor="let item of maintenanceLinks"
+      class="maintenance-tab"
+      type="button"
+      [class.maintenance-tab--active]="activeMaintenanceLabel === item.label">
+      {{ item.label }}
+    </button>
+  </div>
+
+  <div class="client-kpi-grid">
+    <article class="client-kpi-card client-kpi-card--accent">
+      <span>Total Clientes</span>
+      <strong>{{ totalClientsCount }}</strong>
+      <p>Cartera comercial activa</p>
+    </article>
+    <article class="client-kpi-card client-kpi-card--success">
+      <span>Activos</span>
+      <strong>{{ activeClientsCount }}</strong>
+      <p>Listos para facturar</p>
+    </article>
+    <article class="client-kpi-card client-kpi-card--warning">
+      <span>Con balance</span>
+      <strong>{{ clientsWithBalanceCount }}</strong>
+      <p>Cuentas por cobrar</p>
+    </article>
+    <article class="client-kpi-card client-kpi-card--info">
+      <span>Corporativos</span>
+      <strong>{{ corporateClientsCount }}</strong>
+      <p>Segmento empresarial</p>
+    </article>
+  </div>
+
+  <div class="client-toolbar">
+    <label class="field">
+      <span>Buscar cliente</span>
+      <input type="text" [(ngModel)]="clientSearch" placeholder="Buscar por codigo, nombre, empresa o documento..." />
+    </label>
+    <label class="field">
+      <span>Categoria</span>
+      <select [(ngModel)]="clientCategoryFilter">
+        <option value="all">Todas las categorias</option>
+        <option value="Credito">Credito</option>
+        <option value="Contado">Contado</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Estado</span>
+      <select [(ngModel)]="clientStatusFilter">
+        <option value="all">Todos</option>
+        <option value="Activo">Activo</option>
+        <option value="Inactivo">Inactivo</option>
+        <option value="Bloqueado">Bloqueado</option>
+      </select>
+    </label>
+  </div>
+
+  <section class="panel client-table-panel">
+    <div class="client-table-count">
+      {{ isLoadingClients ? 'Cargando clientes desde Supabase...' : ('Mostrando ' + filteredClients.length + ' de ' + clients.length + ' clientes') }}
+    </div>
+    <div class="client-table">
+      <div class="client-table__row client-table__row--head">
+        <span>Codigo</span>
+        <span>Cliente</span>
+        <span>Documento</span>
+        <span>Telefono</span>
+        <span>Balance</span>
+        <span>Estado</span>
+        <span>Opciones</span>
+      </div>
+
+      <div
+        *ngFor="let client of filteredClients"
+        class="client-table__row client-table__row--item"
+        [class.client-table__row--active]="isSelectedClient(client)"
+        (click)="selectClient(client)"
+      >
+        <span>{{ client.code }}</span>
+        <span>
+          <strong>{{ client.fullName }}</strong>
+          <small>{{ client.companyName || client.category }}</small>
+        </span>
+        <span>
+          <strong>{{ client.documentType }}</strong>
+          <small>{{ client.documentNumber }}</small>
+        </span>
+        <span>{{ client.phone }}</span>
+        <span [class.client-balance--open]="client.balance > 0">RD${{ client.balance | number:'1.2-2' }}</span>
+        <span class="company-status-pill" [class.company-status-pill--inactive]="client.status !== 'Activo'">{{ client.status }}</span>
+        <div class="client-table__actions" (click)="$event.stopPropagation()">
+          <button class="client-options__trigger" type="button" (click)="openClientOptions(client.id, $event)">
+            Opciones
+          </button>
+
+          <div class="client-options__menu" *ngIf="openClientOptionsId === client.id">
+            <button class="client-options__item" type="button" (click)="editClientFromOptions(client, $event)">
+              Editar
+            </button>
+            <button class="client-options__item client-options__item--danger" type="button" [disabled]="!canDeleteClient(client)" (click)="deleteClient(client)">
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="client-editor-modal" *ngIf="isClientEditorOpen" (click)="closeClientEditor()">
+    <section class="panel client-editor-modal__panel" (click)="$event.stopPropagation()">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>{{ clientEditorMode === 'create' ? 'Registrar cliente' : 'Editar cliente' }}</h3>
+          <p>{{ clientMessage }}</p>
+        </div>
+        <div class="client-editor-modal__header-actions">
+          <div class="company-form__chip">{{ clientEditorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}</div>
+          <button class="secondary-action" type="button" (click)="closeClientEditor()">Cerrar</button>
+        </div>
+      </div>
+
+      <div class="client-editor-modal__content">
+        <form class="company-form" (ngSubmit)="saveClient()">
+          <div class="company-form__grid">
+            <label class="field"><span>Codigo del cliente</span><input type="text" name="clientCode" [(ngModel)]="clientForm.code" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Nombre completo</span><input type="text" name="clientFullName" [(ngModel)]="clientForm.fullName" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Empresa</span><input type="text" name="clientCompanyName" [(ngModel)]="clientForm.companyName" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Tipo de documento</span><select name="clientDocumentType" [(ngModel)]="clientForm.documentType" (keydown.enter)="focusNextField($event)"><option value="Cedula">Cedula</option><option value="RNC">RNC</option><option value="Pasaporte">Pasaporte</option></select></label>
+            <label class="field"><span>Numero de documento</span><input type="text" name="clientDocumentNumber" [(ngModel)]="clientForm.documentNumber" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Telefono</span><input type="text" name="clientPhone" [(ngModel)]="clientForm.phone" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Correo</span><input type="email" name="clientEmail" [(ngModel)]="clientForm.email" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Ciudad</span><input type="text" name="clientCity" [(ngModel)]="clientForm.city" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field field--full"><span>Direccion</span><input type="text" name="clientAddress" [(ngModel)]="clientForm.address" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Categoria</span><select name="clientCategory" [(ngModel)]="clientForm.category" (keydown.enter)="focusNextField($event)"><option value="Credito">Credito</option><option value="Contado">Contado</option></select></label>
+            <label class="field"><span>Limite de credito</span><input type="number" name="clientCreditLimit" [(ngModel)]="clientForm.creditLimit" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Balance</span><input type="number" name="clientBalance" [(ngModel)]="clientForm.balance" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Estado</span><select name="clientStatus" [(ngModel)]="clientForm.status" (keydown.enter)="focusNextField($event)"><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option><option value="Bloqueado">Bloqueado</option></select></label>
+          </div>
+
+          <div class="company-form__actions">
+            <button class="secondary-action" type="button" (click)="closeClientEditor()">Cancelar</button>
+            <button class="primary-action" type="submit" [disabled]="isSavingClient">
+              {{ isSavingClient ? 'Guardando...' : (clientEditorMode === 'create' ? 'Guardar cliente' : 'Actualizar cliente') }}
+            </button>
+          </div>
+        </form>
+
+        <aside class="panel company-detail-panel client-editor-modal__summary">
+          <div class="panel__header company-panel-header">
+            <div>
+              <h3>Resumen de cliente</h3>
+              <p>Vista rapida del cliente mientras completas la plantilla.</p>
+            </div>
+          </div>
+
+          <div class="company-detail-card">
+            <div class="company-detail-card__top">
+              <div class="company-detail-card__avatar">CL</div>
+              <div>
+                <strong>{{ clientForm.fullName || 'Cliente sin nombre' }}</strong>
+                <p>{{ clientForm.companyName || clientForm.category }} - {{ clientForm.code || 'Sin codigo' }}</p>
+              </div>
+            </div>
+
+            <div class="company-detail-card__stats">
+              <div><span>Documento</span><strong>{{ clientForm.documentType }} {{ clientForm.documentNumber || 'Pendiente' }}</strong></div>
+              <div><span>Balance</span><strong>RD${{ clientForm.balance | number:'1.2-2' }}</strong></div>
+              <div><span>Credito</span><strong>RD${{ clientForm.creditLimit | number:'1.2-2' }}</strong></div>
+            </div>
+
+            <div class="company-detail-card__info">
+              <p><strong>Telefono:</strong> {{ clientForm.phone || 'Sin telefono' }}</p>
+              <p><strong>Correo:</strong> {{ clientForm.email || 'Sin correo' }}</p>
+              <p><strong>Ciudad:</strong> {{ clientForm.city || 'Sin ciudad' }}</p>
+              <p><strong>Direccion:</strong> {{ clientForm.address || 'Sin direccion' }}</p>
+              <p><strong>Categoria:</strong> {{ clientForm.category }}</p>
+              <p><strong>Estado:</strong> {{ clientForm.status }}</p>
+              <p><strong>Ultima compra:</strong> {{ selectedClient?.lastPurchase || 'Sin registro' }}</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+</section>
