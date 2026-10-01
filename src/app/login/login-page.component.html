@@ -22,8 +22,12 @@
         <input id="login-password" type="password" name="password" [(ngModel)]="password" required autocomplete="current-password">
 
         <p *ngIf="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
+        <p *ngIf="confirmationMessage" class="login-success" role="status">{{ confirmationMessage }}</p>
         <button type="submit" [disabled]="isLoading || loginForm.invalid">
           {{ isLoading ? 'Verificando...' : 'Entrar' }}
+        </button>
+        <button type="button" class="resend-button" [disabled]="isLoading || !email.trim()" (click)="resendConfirmation()">
+          Reenviar correo de confirmación
         </button>
       </form>
     </ng-container>

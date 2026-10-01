@@ -17,6 +17,7 @@ export class LoginPageComponent implements OnInit {
   password = '';
   isLoading = false;
   errorMessage = '';
+  confirmationMessage = '';
   showInitialSetup = false;
   companies: LoginCompany[] = [];
   initialAdmin: InitialAdminForm = {
@@ -32,17 +33,32 @@ export class LoginPageComponent implements OnInit {
         this.companies = await this.auth.getCompanies();
       }
     } catch {
-      this.errorMessage = 'No fue posible verificar las cuentas registradas. Revise la conexión con Supabase.';
+      this.errorMessage = 'No se puede leer la cuenta. En Supabase habilite el esquema myappdb en Settings > API > Exposed schemas.';
     }
   }
 
   async login(): Promise<void> {
     this.errorMessage = '';
+    this.confirmationMessage = '';
     this.isLoading = true;
     try {
       this.loggedIn.emit(await this.auth.signIn(this.email, this.password));
     } catch (error) {
       this.errorMessage = this.messageFrom(error, 'Correo o clave incorrectos.');
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  async resendConfirmation(): Promise<void> {
+    this.errorMessage = '';
+    this.confirmationMessage = '';
+    this.isLoading = true;
+    try {
+      await this.auth.resendConfirmation(this.email);
+      this.confirmationMessage = 'Enviamos un correo de confirmación. Revise su bandeja de entrada y correo no deseado.';
+    } catch (error) {
+      this.errorMessage = this.messageFrom(error, 'No fue posible reenviar el correo de confirmación.');
     } finally {
       this.isLoading = false;
     }
@@ -67,6 +83,10 @@ export class LoginPageComponent implements OnInit {
   }
 
   private messageFrom(error: unknown, fallback: string): string {
-    return error instanceof Error && error.message ? error.message : fallback;
+    const message = error instanceof Error && error.message ? error.message : fallback;
+    if (message.toLowerCase().includes('email not confirmed')) {
+      return 'Tu correo aún no está confirmado. Usa el botón “Reenviar correo de confirmación” y abre el enlace más reciente.';
+    }
+    return message;
   }
 }

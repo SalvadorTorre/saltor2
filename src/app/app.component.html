@@ -235,7 +235,7 @@
     </ng-container>
 
     <ng-container *ngIf="activeView === 'quotation'">
-      <app-quotation-page></app-quotation-page>
+      <app-quotation-page (convertToInvoice)="openInvoiceFromQuotation()"></app-quotation-page>
     </ng-container>
 
     <ng-container *ngIf="activeView === 'cash_opening'">

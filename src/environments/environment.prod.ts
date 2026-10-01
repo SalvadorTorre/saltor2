@@ -4,9 +4,9 @@ export const environment = {
   bypassAuth: false,
   supabase: {
     enabled: true,
-    url: 'http://localhost:8000',
+    url: 'https://mkgjfrzfylghvrmxjmgy.supabase.co',
     anonKey:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg3NjE3NzIwLCJleHAiOjE5NDUyOTc3MjB9.3KC628riEJB6_1UrR9jfuhQ65Pv-mIufLWbOP42Z2Gc',
+      'sb_publishable_kpsmFNEkFvqzmkQfoExwEA_U1khwzzf',
     schema: 'myappdb',
   },
   // backendUrl:"http://190.166.82.95:3390/api"

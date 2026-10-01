@@ -85,6 +85,23 @@ export class AuthService {
     this.clearStoredUser();
   }
 
+  async resendConfirmation(email: string): Promise<void> {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      throw new Error('Escriba su correo electrónico para reenviar la confirmación.');
+    }
+
+    const { error } = await this.registrationClient.auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: { emailRedirectTo: this.confirmationRedirectUrl() }
+    });
+
+    if (error) {
+      throw error;
+    }
+  }
+
   async hasRegisteredUsers(): Promise<boolean> {
     const { count, error } = await this.supabase.client
       .from('usuarios')
@@ -126,6 +143,7 @@ export class AuthService {
       email: form.email.trim(),
       password: form.password,
       options: {
+        emailRedirectTo: this.confirmationRedirectUrl(),
         data: {
           nombre_usuario: form.username.trim(),
           empresa_id: form.companyId,
@@ -201,6 +219,10 @@ export class AuthService {
       .eq('codusuario', profile.codusuario);
 
     return activeUser;
+  }
+
+  private confirmationRedirectUrl(): string {
+    return document.baseURI;
   }
 
   private clearStoredUser(): void {

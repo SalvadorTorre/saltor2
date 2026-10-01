@@ -109,6 +109,7 @@ export class UsersService {
       email: form.email.trim(),
       password: form.password,
       options: {
+        emailRedirectTo: this.confirmationRedirectUrl(),
         data: {
           nombre_usuario: form.username.trim(),
           empresa_id: form.companyId,
@@ -145,5 +146,9 @@ export class UsersService {
 
   private buildAvatar(firstName: string, lastName: string): string {
     return `${firstName[0] ?? ''}${lastName[0] ?? ''}`.toUpperCase();
+  }
+
+  private confirmationRedirectUrl(): string {
+    return document.baseURI;
   }
 }

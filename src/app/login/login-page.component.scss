@@ -36,6 +36,9 @@ input:focus, select:focus { border-color: #2764dc; box-shadow: 0 0 0 3px rgba(39
 button { background: #2764dc; border: 0; border-radius: 8px; color: #fff; cursor: pointer; font-size: 14px; font-weight: 700; height: 44px; margin-top: 16px; }
 button:disabled { cursor: wait; opacity: 0.65; }
 .login-error { color: #b42318; font-size: 13px; margin: 10px 0 0; }
+.login-success { color: #067647; font-size: 13px; margin: 10px 0 0; }
+.resend-button { background: transparent; color: #2764dc; height: auto; margin-top: 0; padding: 7px 0; text-align: left; }
+.resend-button:disabled { color: #8296bd; cursor: not-allowed; opacity: 1; }
 .two-columns { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .two-columns div { display: flex; flex-direction: column; gap: 7px; }
 .two-columns label { margin-top: 8px; }

@@ -118,6 +118,12 @@ export class AppComponent implements OnInit {
     }
   }
 
+  openInvoiceFromQuotation(): void {
+    this.activeModuleLabel = 'Facturacion';
+    this.activeModuleChild = 'Nueva Factura';
+    this.activeView = 'invoice_new';
+  }
+
   selectStandaloneModule(item: ModuleItem): void {
     this.activeModuleLabel = item.label;
     this.activeModuleChild = '';

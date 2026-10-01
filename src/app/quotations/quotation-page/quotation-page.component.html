@@ -1,132 +1,97 @@
 <section class="quotation-page">
-  <header>
-    <div>
-      <small>COTIZACIONES</small>
-      <h1>{{ editingId ? "Editar cotización" : "Nueva cotización" }}</h1>
+  <header class="page-header">
+    <div class="page-title">
+      <span class="page-title__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
+      <div><h1>Cotizaciones</h1><p>Crea y consulta tus cotizaciones</p></div>
     </div>
-    <div>
-      <button (click)="reset()">Limpiar</button
-      ><button class="primary" (click)="save()">Guardar</button>
+    <div class="page-actions">
+      <ng-container *ngIf="tab === 'create'"><button type="button" class="button button--secondary" (click)="backToList()">{{ isReadOnly ? 'Cerrar' : 'Cancelar' }}</button><button *ngIf="editingId" type="button" class="button button--secondary" (click)="print({ id: editingId, number: quote.number, date: quote.date, validUntil: quote.validUntil, customer: quote.customer, rnc: quote.rnc, phone: quote.phone, email: quote.email, address: quote.address, notes: quote.notes, subtotal: subtotal, itbis: tax, total: total, status: quoteStatus, lines: [] })">Imprimir</button><button *ngIf="!isReadOnly" type="button" class="button button--dark" (click)="save()">Guardar</button></ng-container>
     </div>
   </header>
-  <div class="tabs">
-    <button [class.active]="tab === 'create'" (click)="tab = 'create'">
-      Crear cotización</button
-    ><button [class.active]="tab === 'consult'" (click)="tab = 'consult'">
-      Consultar cotizaciones
-    </button>
-  </div>
-  <p *ngIf="message" class="message">{{ message }}</p>
-  <form *ngIf="tab === 'create'" (ngSubmit)="save()">
-    <!-- <section class="card grid"> -->
-      <div class="row">
-        <div class="col-2">
-          <label>RNC/Cédula
-            <input [(ngModel)]="quote.rnc" name="rnc" />
-          </label>
+
+  <nav class="quotation-tabs" role="tablist" aria-label="Opciones de cotización">
+    <button type="button" role="tab" [attr.aria-selected]="tab === 'create'" [class.quotation-tabs__button--active]="tab === 'create'" class="quotation-tabs__button" (click)="newQuotation()">Nueva cotización</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab === 'consult'" [class.quotation-tabs__button--active]="tab === 'consult'" class="quotation-tabs__button" (click)="backToList()">Consulta de cotizaciones</button>
+  </nav>
+
+  <p *ngIf="message" class="message" [class.message--error]="message.includes('No se pudo') || message.includes('Completa')">{{ message }}</p>
+
+  <section *ngIf="tab === 'consult'" class="quotation-list">
+    <div class="list-toolbar">
+      <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input [(ngModel)]="search" name="quotationSearch" placeholder="Buscar por cliente, folio o correo..." /></label>
+      <div class="status-filters" aria-label="Filtrar por estado"><button *ngFor="let status of statusFilters" type="button" [class.active]="statusFilter === status" (click)="statusFilter = status">{{ status }}</button></div>
+    </div>
+    <div class="table-shell">
+      <table>
+        <thead><tr><th>Numero</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="amount">Total</th><th class="actions-column"></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let item of filtered">
+            <td class="folio">{{ item.number }}</td><td class="customer">{{ item.customer }}</td><td>{{ item.date | date: 'dd MMM y' }}</td>
+            <td><span class="status" [ngClass]="statusClass(item.status)">{{ displayStatus(item.status) }}</span></td><td class="amount">RD${{ item.total | number: '1.2-2' }}</td>
+            <td class="row-actions">
+              <button type="button" title="Consultar cotización" aria-label="Consultar cotización" (click)="view(item)"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></button>
+              <button type="button" title="Editar cotización" aria-label="Editar cotización" (click)="edit(item)"><svg viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m13.8 7.2 3 3"/></svg></button>
+              <button type="button" title="Convertir en factura" aria-label="Convertir en factura" [disabled]="displayStatus(item.status) === 'Facturada'" (click)="convert(item)">F</button>
+              <button type="button" title="Imprimir cotización" aria-label="Imprimir cotización" (click)="print(item)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/></svg></button>
+              <button type="button" title="Descargar PDF" aria-label="Descargar PDF" (click)="pdf(item)">PDF</button>
+            </td>
+          </tr>
+          <tr *ngIf="!filtered.length"><td colspan="6" class="empty-state">No hay cotizaciones que coincidan con la búsqueda.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="list-count">{{ filtered.length }} de {{ quotes.length }} cotizaciones</p>
+  </section>
+
+  <form *ngIf="tab === 'create'" class="quotation-form" [class.quotation-form--readonly]="isReadOnly" (ngSubmit)="save()">
+    <fieldset [disabled]="isReadOnly">
+    <section class="form-section">
+      <h2>Datos generales</h2>
+      <div class="general-grid">
+        <div class="general-row general-row--identity">
+          <label>RNC/Cédula<input id="quotationRnc" [(ngModel)]="quote.rnc" name="rnc" list="quotationRncDatalist" autocomplete="off" (ngModelChange)="onQuoteRncChange()" (keydown.enter)="onQuoteRncEnter($event)" /><datalist id="quotationRncDatalist"><option *ngFor="let client of filteredRncClients" [value]="client.documentNumber">{{ client.fullName }}</option><option *ngFor="let record of filteredRncRecords" [value]="record.rnc">{{ record.legalName }} [DGII]</option></datalist></label>
+          <label>Cliente<input id="quotationCustomer" [(ngModel)]="quote.customer" name="customer" placeholder="Nombre o razón social" list="quotationCustomerDatalist" autocomplete="off" (ngModelChange)="onQuoteCustomerChange()" (keydown.enter)="onQuoteCustomerEnter($event)" /><datalist id="quotationCustomerDatalist"><option *ngFor="let client of filteredCustomerClients" [value]="client.fullName">{{ client.documentNumber }}</option></datalist></label>
+          <label>No. Cotización<input [value]="quote.number || 'Se genera al guardar'" readonly tabindex="-1" /></label>
+          <label>Fecha<input type="date" [(ngModel)]="quote.date" name="date" readonly tabindex="-1" /></label>
         </div>
-        <div class="col-6">
-          <label>Cliente
-            <input [(ngModel)]="quote.customer" name="customer"  />
-          </label>
+        <div class="general-row general-row--address">
+          <label>Dirección<input id="quotationAddress" [(ngModel)]="quote.address" name="address" (keydown.enter)="focusEditorField($event, 'quotationPhone')" /></label>
+          <label>Teléfono<input id="quotationPhone" [(ngModel)]="quote.phone" name="phone" (keydown.enter)="focusEditorField($event, 'quotationUserCode')" /></label>
+          <label>Usuario<input id="quotationUserCode" type="password" [(ngModel)]="quotationUserCode" name="quotationUserCode" inputmode="numeric" autocomplete="off" (input)="quotationUserName = ''" (keydown.enter)="onQuotationUserCodeEnter($event)" /></label>
+          <label>Nombre<input [value]="quotationUserName" readonly tabindex="-1" /></label>
         </div>
-        <div class="col-2">
-          <label>No. Cotización
-          <input [(ngModel)]="quote.number" name="number" />
-          </label>
-        </div>
-        <div class="col-2">
-          <label>Fecha
-            <input type="date" [(ngModel)]="quote.date" name="date" />
-          </label>
-        </div>
-     </div>
-          
-      <label
-        >Fecha<input type="date" [(ngModel)]="quote.date" name="date" /></label
-      ><label
-        >Válida hasta<input
-          type="date"
-          [(ngModel)]="quote.validUntil"
-          name="valid" /></label
-      ><label>Teléfono<input [(ngModel)]="quote.phone" name="phone" /></label
-      ><label>Correo<input [(ngModel)]="quote.email" name="email" /></label
-      ><label class="wide"
-        >Dirección<input [(ngModel)]="quote.address" name="address" /></label
-      ><label class="wide"
-        >Notas<textarea [(ngModel)]="quote.notes" name="notes"></textarea>
-      </label>
-    <!-- </section> -->
-    <section class="card">
-      <div class="card-title">
-        <h2>Detalle</h2>
-        <button type="button" (click)="addLine()">+ Línea</button>
-      </div>
-      <div class="line head">
-        <span>Código</span><span>Descripción</span><span>Cant.</span
-        ><span>Precio</span><span>ITBIS</span><span>Total</span><span></span>
-      </div>
-      <div class="line" *ngFor="let line of quote.lines; let i = index">
-        <input [(ngModel)]="line.code" [name]="'code' + i" /><input
-          [(ngModel)]="line.description"
-          [name]="'description' + i"
-        /><input
-          type="number"
-          min="1"
-          [(ngModel)]="line.quantity"
-          [name]="'quantity' + i"
-        /><input
-          type="number"
-          min="0"
-          [(ngModel)]="line.price"
-          [name]="'price' + i"
-        /><input
-          type="number"
-          min="0"
-          [(ngModel)]="line.itbis"
-          [name]="'tax' + i"
-        /><strong
-          >RD${{
-            line.quantity * line.price * (1 + line.itbis / 100)
-              | number: "1.2-2"
-          }}</strong
-        ><button type="button" (click)="removeLine(i)">×</button>
-      </div>
-      <div class="totals">
-        <span>Subtotal RD${{ subtotal | number: "1.2-2" }}</span
-        ><span>ITBIS RD${{ tax | number: "1.2-2" }}</span
-        ><strong>Total RD${{ total | number: "1.2-2" }}</strong>
       </div>
     </section>
+    <section class="form-section concepts-section">
+      <div class="section-heading"><h2>Detalle de productos</h2></div>
+      <div class="quotation-products-layout">
+        <div class="quotation-products-main">
+          <div class="quote-product-editor">
+            <label class="quote-product-field">Código<input id="quotationLineCode" [(ngModel)]="lineEditor.code" name="quotationLineCode" autocomplete="off" [disabled]="editingLineIndex !== null" (ngModelChange)="onQuoteProductCodeChange()" (focus)="onProductSuggestionFocus('code')" (blur)="onProductSuggestionBlur()" (keydown.enter)="onQuoteProductCodeEnter($event)" (keydown)="onProductSuggestionKeydown($event)" /><div class="product-suggestions" *ngIf="productSuggestionField === 'code' && productSuggestions.length" role="listbox"><button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)"><span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span><span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span></button></div></label>
+            <label class="quote-product-field">Producto<input id="quotationLineDescription" [(ngModel)]="lineEditor.description" name="quotationLineDescription" autocomplete="off" [disabled]="editingLineIndex !== null" (ngModelChange)="onQuoteProductNameChange()" (focus)="onProductSuggestionFocus('name')" (blur)="onProductSuggestionBlur()" (keydown.enter)="onQuoteProductNameEnter($event)" (keydown)="onProductSuggestionKeydown($event)" /><div class="product-suggestions" *ngIf="productSuggestionField === 'name' && productSuggestions.length" role="listbox"><button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)"><span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span><span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span></button></div></label>
+            <label>Cantidad<input id="quotationLineQuantity" type="number" min="1" step="1" [(ngModel)]="lineEditor.quantity" name="quotationLineQuantity" (focus)="selectFieldValue($event)" (keydown.enter)="focusEditorField($event, 'quotationLinePrice')" /></label>
+            <label>Precio<input id="quotationLinePrice" type="number" min="0" step="0.01" [(ngModel)]="lineEditor.price" name="quotationLinePrice" (focus)="selectFieldValue($event)" (keydown.enter)="addQuotationLine($event)" /></label>
+            <div class="quote-product-editor__total"><span>Importe</span><strong>RD${{ lineEditorTotal | number:'1.2-2' }}</strong></div>
+          </div>
+          <p *ngIf="lineEditorMessage" class="quote-product-editor__message">{{ lineEditorMessage }}</p>
+          <div class="quotation-lines-table">
+            <div class="line-header"><span>Código</span><span>Producto</span><span>Cant.</span><span>Precio</span><span>Total</span><span>Acciones</span></div>
+            <div class="quote-line" *ngFor="let line of quote.lines; let i = index">
+              <strong>{{ line.code || '-' }}</strong><strong>{{ line.description }}</strong>
+              <span>{{ line.quantity }}</span><span>RD${{ line.price | number:'1.2-2' }}</span>
+              <strong>RD${{ line.quantity * line.price * (1 + line.itbis / 100) | number: '1.2-2' }}</strong>
+              <span class="quote-line__actions"><button type="button" class="remove-line" aria-label="Editar producto" title="Editar producto" (click)="editQuotationLine(i)">✎</button><button type="button" class="remove-line remove-line--delete" aria-label="Quitar producto" title="Quitar producto" (click)="removeQuotationLine(i)"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></span>
+            </div>
+            <p *ngIf="!quote.lines.length" class="quote-lines-empty">Agrega productos por código o descripción.</p>
+          </div>
+        </div>
+        <aside class="quotation-summary">
+          <div class="totals"><p><span>Subtotal</span><strong>RD${{ subtotal | number: '1.2-2' }}</strong></p><p><span>ITBIS</span><strong>RD${{ tax | number: '1.2-2' }}</strong></p><p class="total"><span>Total</span><strong>RD${{ total | number: '1.2-2' }}</strong></p></div>
+          <button type="submit" class="button button--dark quotation-summary__save">Guardar</button>
+        </aside>
+      </div>
+    </section>
+    <section class="form-section notes-section"><label>Notas internas<textarea [(ngModel)]="quote.notes" name="notes" placeholder="Agrega notas o condiciones de la cotización"></textarea></label></section>
+    </fieldset>
   </form>
-  <section *ngIf="tab === 'consult'" class="card">
-    <div class="card-title">
-      <h2>Cotizaciones</h2>
-      <input [(ngModel)]="search" placeholder="Buscar cotización o cliente" />
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Número</th>
-          <th>Fecha</th>
-          <th>Cliente</th>
-          <th>Total</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let item of filtered">
-          <td>{{ item.number }}</td>
-          <td>{{ item.date | date: "dd/MM/yyyy" }}</td>
-          <td>{{ item.customer }}</td>
-          <td>RD${{ item.total | number: "1.2-2" }}</td>
-          <td>
-            <button title="Editar" (click)="edit(item)">✎</button
-            ><button title="Imprimir" (click)="print(item)">▣</button
-            ><button title="PDF" (click)="pdf(item)">PDF</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
 </section>

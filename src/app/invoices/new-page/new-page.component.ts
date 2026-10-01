@@ -233,6 +233,7 @@ export class InvoiceNewPageComponent implements OnInit {
     void this.loadClients();
     void this.loadPaymentMethods();
     this.startNewInvoice();
+    this.restoreQuotationDraft();
     this.focusRncField();
   }
 
@@ -759,6 +760,41 @@ export class InvoiceNewPageComponent implements OnInit {
     this.invoiceMessage = 'Completa la informacion y agrega productos para generar la factura.';
     this.resetLineEditor();
     this.closeProductSuggestions();
+  }
+
+  private restoreQuotationDraft(): void {
+    const rawDraft = sessionStorage.getItem('saltor.quotationInvoiceDraft');
+    if (!rawDraft) return;
+    sessionStorage.removeItem('saltor.quotationInvoiceDraft');
+    try {
+      const quotation = JSON.parse(rawDraft) as {
+        number: string; date: string; customer: string; rnc: string; phone: string; email: string; address: string; notes: string;
+        lines: { code: string; description: string; quantity: number; price: number; itbis: number }[];
+      };
+      const client = this.clients.find((item) => item.documentNumber.trim() === quotation.rnc.trim());
+      this.invoiceForm = {
+        ...this.invoiceForm,
+        customerId: client?.id ?? null,
+        customerName: quotation.customer,
+        rnc: quotation.rnc,
+        invoiceDate: quotation.date || this.invoiceForm.invoiceDate,
+        notes: [quotation.notes, `Generada desde cotización ${quotation.number}.`].filter(Boolean).join(' '),
+        customerPhone: quotation.phone,
+        customerEmail: quotation.email,
+        customerAddress: quotation.address
+      };
+      this.invoiceLines = quotation.lines.map((line, index) => {
+        const product = this.products.find((item) => item.code.trim().toLowerCase() === line.code.trim().toLowerCase());
+        const taxRate = Number(line.itbis) || 0;
+        const unitPrice = Number(line.price) * (1 + taxRate / 100);
+        const lineTotal = Number(line.quantity) * unitPrice;
+        return { id: index + 1, productId: product?.id ?? null, description: line.description, quantity: Number(line.quantity), unitPrice, taxRate, taxAmount: taxRate ? lineTotal - (lineTotal / (1 + taxRate / 100)) : 0, lineTotal };
+      });
+      this.nextInvoiceLineId = this.invoiceLines.length + 1;
+      this.invoiceMessage = `Factura preparada desde la cotización ${quotation.number}.`;
+    } catch {
+      this.invoiceMessage = 'No se pudieron transferir los datos de la cotización.';
+    }
   }
 
   private get invoiceHasData(): boolean {

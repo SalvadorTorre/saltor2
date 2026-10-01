@@ -500,14 +500,16 @@
         <button class="blue">Guardar secuencia</button>
       </form></ng-container
     >
-    <ng-container *ngSwitchCase="'credit'"
-      ><header class="credit-page-header">
+    <ng-container *ngSwitchCase="'credit'">
+      <div class="credit-sticky">
+      <header class="credit-page-header">
         <h1>Nota de crédito electrónica</h1>
         <div><span class="credit-page-header__status">{{ creditDgii.status }}</span><button type="button" (click)="clearCreditNote()">↻ Limpiar</button><button class="credit-page-header__save" type="button" [disabled]="isSavingCreditNote || isSendingCreditNote || creditMode === 'view'" (click)="saveCreditNote()">{{ isSavingCreditNote ? 'Guardando...' : creditMode === 'edit' ? '▣ Guardar cambios' : '▣ Guardar' }}</button><button class="blue" type="button" [disabled]="isSavingCreditNote || isSendingCreditNote || creditMode === 'view'" (click)="sendCreditNote()">{{ isSendingCreditNote ? 'Enviando...' : '✈ Enviar a DGII' }}</button></div>
       </header>
       <div class="credit-tabs" role="tablist" aria-label="Opciones de nota de crédito">
         <button type="button" role="tab" [attr.aria-selected]="creditTab === 'create'" [class.credit-tabs__button--active]="creditTab === 'create'" (click)="creditTab = 'create'">▣ Crear nota</button>
         <button type="button" role="tab" [attr.aria-selected]="creditTab === 'consult'" [class.credit-tabs__button--active]="creditTab === 'consult'" (click)="creditTab = 'consult'">⌕ Consultar notas</button>
+      </div>
       </div>
       <p *ngIf="message" class="credit-page-message">{{ message }}</p>
       <ng-container *ngIf="creditTab === 'create'">
@@ -711,39 +713,93 @@
         <button class="blue">Guardar cuenta</button>
       </form></ng-container
     >
-    <ng-container *ngSwitchCase="'rep606'"
-      ><header class="heading">
-        <small>CONTABILIDAD FISCAL</small>
-        <h1>Rep. 606</h1>
-        <p>Registro de compras y gastos para declaración fiscal.</p>
-      </header>
-      <form class="form" (ngSubmit)="save('Compra del Rep. 606')">
-        <h3>Agregar compra</h3>
-        <div class="grid">
-          <label
-            >Período<input
-              type="month"
-              [(ngModel)]="purchase.period"
-              name="period" /></label
-          ><label
-            >Suplidor<input
-              [(ngModel)]="purchase.supplier"
-              name="supplier" /></label
-          ><label>RNC<input [(ngModel)]="purchase.rnc" name="rnc" /></label
-          ><label
-            >NCF/e-NCF<input
-              [(ngModel)]="purchase.document"
-              name="document" /></label
-          ><label
-            >Monto<input
-              type="number"
-              [(ngModel)]="purchase.amount"
-              name="amount"
-          /></label>
-        </div>
-        <button class="blue">Agregar al reporte</button>
-      </form></ng-container
-    >
+    <ng-container *ngSwitchCase="'rep606'">
+      <section class="purchase606">
+        <div class="purchase606__sticky">
+          <header class="purchase606__header">
+            <div class="purchase606__brand">
+              <span class="purchase606__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7z"/><path d="M10 7h4M10 11h4M10 15h4M5 6v15h14"/></svg></span>
+              <div><h1>Facturas de Compra</h1><p>Sistema de Registro para Reporte 606 - DGII</p></div>
+            </div>
+          </header>
+          <nav class="purchase606__tabs" aria-label="Opciones de compras">
+            <button type="button" [class.is-active]="purchaseTab === 'register'" (click)="purchaseTab = 'register'"><span aria-hidden="true">▧</span> Registrar factura</button>
+            <button type="button" [class.is-active]="purchaseTab === 'list'" (click)="purchaseTab = 'list'"><span aria-hidden="true">☷</span> Facturas</button>
+            <button type="button" [class.is-active]="purchaseTab === 'report'" (click)="purchaseTab = 'report'"><span aria-hidden="true">▥</span> Reporte 606</button>
+          </nav>
+          </div>
+
+        <ng-container *ngIf="purchaseTab === 'register'">
+          <div class="purchase606__intro"><h2>Registrar Factura de Compra</h2>
+          </div>
+          <form class="purchase606__form" (ngSubmit)="savePurchase606()" (keydown.enter)="focusPurchaseNext($event)">
+            <div class="purchase606__registration-row"><div></div><section class="purchase606__registration-panel"><label>No. de registro<input [value]="purchase.sequence || 'Se genera al guardar'" readonly /></label><label>Fecha<input type="date" [value]="purchase.registrationDate" readonly /></label></section></div>
+            <div class="purchase606__main-panels">
+              <section class="purchase606__section purchase606__supplier-panel">
+                <div class="purchase606__section-head"><h3>Proveedor</h3><button type="button" class="purchase606__new-supplier" (click)="openPurchaseSupplierForm()">♙ Nuevo Proveedor</button></div>
+                <section *ngIf="showPurchaseSupplierForm" class="purchase606__supplier-modal" aria-label="Registrar nuevo proveedor">
+                  <label>Tipo ID<select [(ngModel)]="purchaseSupplier.documentType" name="purchaseSupplierType"><option value="RNC">RNC</option><option value="Cedula">Cédula</option><option value="Pasaporte">Pasaporte</option></select></label>
+                  <label>RNC / Cédula<input [(ngModel)]="purchaseSupplier.documentNumber" name="purchaseSupplierDocument" placeholder="131123456" /></label>
+                  <label>Nombre / Razón Social<input [(ngModel)]="purchaseSupplier.companyName" name="purchaseSupplierName" placeholder="Empresa SRL" /></label>
+                  <div class="purchase606__supplier-modal-actions"><button type="button" class="purchase606__save" [disabled]="isSavingPurchaseSupplier" (click)="savePurchaseSupplier()">{{ isSavingPurchaseSupplier ? 'Guardando...' : 'Guardar Proveedor' }}</button><button type="button" class="purchase606__cancel" [disabled]="isSavingPurchaseSupplier" (click)="cancelPurchaseSupplierForm()">Cancelar</button></div>
+                </section>
+                <div class="purchase606__supplier-fields"><label><span>RNC / Cédula <b>*</b></span><input [(ngModel)]="purchase.rnc" name="rnc" placeholder="RNC del proveedor" list="purchase606SupplierRnc" autocomplete="off" (ngModelChange)="onPurchaseRncChange()" /><datalist id="purchase606SupplierRnc"><option *ngFor="let supplier of purchaseSupplierSuggestions" [value]="supplier.documentNumber">{{ supplier.companyName }}</option></datalist></label><label><span>Nombre / Razón Social <b>*</b></span><input [(ngModel)]="purchase.supplier" name="supplier" placeholder="Nombre del proveedor" /></label></div>
+              </section>
+              <section class="purchase606__section purchase606__invoice-panel">
+                <h3>Datos de la Factura</h3>
+                <div class="purchase606__grid purchase606__grid--invoice">
+                  <label><span>No. Factura <b>*</b></span><input [(ngModel)]="purchase.document" name="document" /></label>
+                  <label><span>NCF <b>*</b></span><input [(ngModel)]="purchase.ncf" name="ncf" /></label>
+                  <label><span>Fecha Factura <b>*</b></span><input type="date" [(ngModel)]="purchase.invoiceDate" name="invoiceDate" /></label>
+                  <label>Fecha de Pago<input type="date" [(ngModel)]="purchase.paymentDate" name="paymentDate" /></label>
+                  <label>Tipo de Pago<select [(ngModel)]="purchase.paymentType" name="paymentType"><option>01 - Efectivo</option><option>02 - Cheque / Transferencia</option><option>03 - Tarjeta</option><option>04 - Crédito</option></select></label>
+                  <label>Tipo de Bien/Servicio<select [(ngModel)]="purchase.goodsType" name="goodsType"><option>02 - Bienes</option><option>01 - Servicios</option><option>03 - Mixto</option></select></label>
+                </div>
+              </section>
+            </div>
+            <section class="purchase606__section">
+              <h3>Montos</h3>
+              <div class="purchase606__grid purchase606__grid--three">
+                <label><span>Monto Facturado <b>*</b></span><input type="number" min="0" step="0.01" [(ngModel)]="purchase.invoiceAmount" name="invoiceAmount" placeholder="0.00" /></label>
+                <div class="purchase606__total-box"><span>Monto ITBIS (18%, calculado)</span><strong>▦&nbsp; RD${{ purchaseItbis | number: '1.2-2' }}</strong></div>
+                <div class="purchase606__total-box"><span>Subtotal (monto facturado - ITBIS)</span><strong>▦&nbsp; RD${{ purchaseSubtotal | number: '1.2-2' }}</strong></div>
+              </div>
+              <div class="purchase606__actions"><button type="button" class="purchase606__clear" [disabled]="isSavingPurchase" (click)="clearPurchase()">Limpiar</button><button type="submit" class="purchase606__save" [disabled]="isSavingPurchase">{{ isSavingPurchase ? 'Guardando...' : 'Guardar factura de compra' }}</button></div>
+            </section>
+          </form>
+        </ng-container>
+
+        <section *ngIf="purchaseTab === 'list'" class="purchase606__list">
+          <header class="purchase606__list-head"><h2>Facturas Registradas</h2><p>{{ filteredPurchaseRecords.length }} factura(s) registrada(s)</p></header>
+          <div class="purchase606__metrics">
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--blue">▧</span><div><small>Total Facturado</small><strong>RD$ {{ purchaseAmountTotal | number:'1.2-2' }}</strong></div></article>
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--green">▤</span><div><small>Total ITBIS</small><strong>RD$ {{ purchaseItbisTotal | number:'1.2-2' }}</strong></div></article>
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--yellow">▥</span><div><small>Facturas</small><strong>{{ purchaseRecords.length }}</strong></div></article>
+          </div>
+          <label class="purchase606__list-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input [(ngModel)]="purchaseSearch" name="purchaseSearch" placeholder="Buscar por RNC, factura o NCF..." /></label>
+          <div class="purchase606__table-wrap">
+            <table class="purchase606__table"><thead><tr><th>Fecha</th><th>RNC</th><th>NCF</th><th>Factura</th><th class="amount">Total</th><th class="amount">ITBIS</th><th class="amount">Retenido</th><th>Acciones</th></tr></thead>
+              <tbody><tr *ngFor="let record of filteredPurchaseRecords"><td>{{ record.invoiceDate | date:'dd/MM/yyyy' }}</td><td>{{ record.rnc }}</td><td>{{ record.ncf }}</td><td>{{ record.document }}</td><td class="amount">{{ record.invoiceAmount | number:'1.2-2' }}</td><td class="amount">{{ record.itbisAmount | number:'1.2-2' }}</td><td class="amount">0.00</td><td>{{ record.sequence }}</td></tr><tr *ngIf="!isLoadingPurchases && !filteredPurchaseRecords.length"><td colspan="8" class="purchase606__table-empty">No hay facturas de compra registradas.</td></tr><tr *ngIf="isLoadingPurchases"><td colspan="8" class="purchase606__table-empty">Cargando facturas...</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section *ngIf="purchaseTab === 'report'" class="purchase606__report">
+          <header class="purchase606__report-head"><h2>Reporte 606 - Compras</h2><p>Reporte de compras para la Declaración Informativa (DGII Formulario 606)</p></header>
+          <div class="purchase606__report-filters">
+            <label>Mes<select [(ngModel)]="purchaseReportMonth" name="purchaseReportMonth"><option *ngFor="let month of purchaseMonths; let index = index" [ngValue]="index + 1">{{ month }}</option></select></label>
+            <label>Año<input type="number" min="2000" [(ngModel)]="purchaseReportYear" name="purchaseReportYear" /></label>
+            <button type="button" class="purchase606__export" (click)="save('Archivo CSV 606')">⇩&nbsp; Exportar CSV (606)</button>
+          </div>
+          <div class="purchase606__report-metrics">
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--blue">▥</span><div><small>Total Facturado</small><strong>RD$ {{ purchaseReportAmountTotal | number:'1.2-2' }}</strong></div></article>
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--green">▤</span><div><small>Total ITBIS</small><strong>RD$ {{ purchaseReportItbisTotal | number:'1.2-2' }}</strong></div></article>
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--yellow">▧</span><div><small>Subtotal</small><strong>RD$ {{ purchaseReportAmountTotal - purchaseReportItbisTotal | number:'1.2-2' }}</strong></div></article>
+            <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--red">▣</span><div><small>Cantidad Facturas</small><strong>{{ purchaseReportRecords.length }}</strong></div></article>
+          </div>
+          <div class="purchase606__table-wrap purchase606__report-table"><table class="purchase606__table"><thead><tr><th>#</th><th>RNC/Cédula</th><th>Tipo ID</th><th>NCF</th><th>Fecha</th><th class="amount">Total</th><th class="amount">ITBIS</th><th class="amount">Retenido</th><th>Tipo pago</th></tr></thead><tbody><tr *ngFor="let record of purchaseReportRecords; let index = index"><td>{{ index + 1 }}</td><td>{{ record.rnc }}</td><td>{{ record.documentType }}</td><td>{{ record.ncf }}</td><td>{{ record.invoiceDate | date:'dd/MM/yyyy' }}</td><td class="amount">{{ record.invoiceAmount | number:'1.2-2' }}</td><td class="amount">{{ record.itbisAmount | number:'1.2-2' }}</td><td class="amount">0.00</td><td>{{ record.paymentType }}</td></tr><tr *ngIf="!purchaseReportRecords.length"><td colspan="9" class="purchase606__table-empty">No hay facturas para el período seleccionado.</td></tr></tbody><tfoot><tr><th colspan="5">Totales</th><th class="amount">{{ purchaseReportAmountTotal | number:'1.2-2' }}</th><th class="amount">{{ purchaseReportItbisTotal | number:'1.2-2' }}</th><th class="amount">0.00</th><th></th></tr></tfoot></table></div>
+        </section>
+      </section>
+    </ng-container>
   </ng-container>
   <p *ngIf="active !== 'rep607' && message" class="message">{{ message }}</p>
 </section>

@@ -6,10 +6,12 @@ import { AuthService } from '../../core/services/auth/auth.service';
 import { BranchRecord, BranchesService } from '../../core/services/branches/branches.service';
 import { PendingInvoice, Rep607Invoice, Rep607Service } from '../../core/services/accounting/rep607.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
-import { NcfType } from '../../app.models';
+import { NcfType, SupplierFormModel, SupplierRecord } from '../../app.models';
 import { NcfTypesService } from '../../core/services/ncf-types/ncf-types.service';
 import { CreditNoteDetail, CreditNoteRecord, CreditNotesService } from '../../core/services/credit-notes/credit-notes.service';
 import { MinorExpenseRecord, MinorExpensesService, MinorExpenseSaveData, MinorExpenseStatus } from '../../core/services/minor-expenses/minor-expenses.service';
+import { SuppliersService } from '../../core/services/suppliers/suppliers.service';
+import { Purchase606Record, Purchases606Service } from '../../core/services/accounting/purchases-606.service';
 
 type FiscalView = 'pending' | 'rep607' | 'encf' | 'credit' | 'expenses' | 'receivables' | 'rep606';
 type DgiiSendDialog = { phase: 'confirm' | 'processing' | 'success' | 'error'; invoiceNumber: string; message: string };
@@ -196,7 +198,140 @@ export class AccountingPageComponent implements OnInit {
     return [expense.dgiiError || expense.dgiiMessage || 'Sin mensajes adicionales.'];
   }
   receivable = { customer: '', invoice: '', dueDate: '', amount: 0 };
-  purchase = { period: '', supplier: '', rnc: '', document: '', amount: 0 };
+  purchaseTab: 'register' | 'list' | 'report' = 'register';
+  purchaseSearch = '';
+  purchaseReportMonth = new Date().getMonth() + 1;
+  purchaseReportYear = new Date().getFullYear();
+  readonly purchaseMonths = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  purchaseRecords: Purchase606Record[] = [];
+  isLoadingPurchases = false;
+  isSavingPurchase = false;
+  purchasesError = '';
+  showPurchaseSupplierForm = false;
+  isSavingPurchaseSupplier = false;
+  purchaseSuppliers: SupplierRecord[] = [];
+  purchaseSupplier = { documentType: 'RNC' as 'RNC' | 'Cedula' | 'Pasaporte', documentNumber: '', companyName: '' };
+  purchase = {
+    period: new Date().toISOString().slice(0, 7), supplier: '', rnc: '', document: '', ncf: '', sequence: '', invoiceDate: new Date().toISOString().slice(0, 10), registrationDate: new Date().toISOString().slice(0, 10),
+    paymentDate: '', paymentType: '01 - Efectivo', goodsType: '02 - Bienes', invoiceAmount: 0, servicesAmount: 0, goodsAmount: 0,
+    itbis: 0, itbisWithheld: 0, itbisAdvanced: 0
+  };
+  get purchaseTotal(): number { return this.round2(Number(this.purchase.invoiceAmount || 0)); }
+  get purchaseItbis(): number { return this.round2(this.purchaseTotal * 18 / 118); }
+  get purchaseSubtotal(): number { return this.round2(this.purchaseTotal - this.purchaseItbis); }
+  get purchaseSupplierSuggestions(): SupplierRecord[] {
+    const rnc = this.purchase.rnc.trim().toLowerCase();
+    return this.purchaseSuppliers.filter((supplier) => !rnc || supplier.documentNumber.toLowerCase().includes(rnc)).slice(0, 30);
+  }
+  get filteredPurchaseRecords(): Purchase606Record[] {
+    const search = this.purchaseSearch.trim().toLowerCase();
+    return !search ? this.purchaseRecords : this.purchaseRecords.filter((record) =>
+      [record.rnc, record.ncf, record.document, record.supplier].some((value) => value.toLowerCase().includes(search)));
+  }
+  get purchaseReportRecords(): Purchase606Record[] {
+    const month = String(this.purchaseReportMonth).padStart(2, '0');
+    return this.purchaseRecords.filter((record) => record.invoiceDate.startsWith(`${this.purchaseReportYear}-${month}`));
+  }
+  get purchaseAmountTotal(): number { return this.purchaseRecords.reduce((sum, record) => sum + record.invoiceAmount, 0); }
+  get purchaseItbisTotal(): number { return this.purchaseRecords.reduce((sum, record) => sum + record.itbisAmount, 0); }
+  get purchaseReportAmountTotal(): number { return this.purchaseReportRecords.reduce((sum, record) => sum + record.invoiceAmount, 0); }
+  get purchaseReportItbisTotal(): number { return this.purchaseReportRecords.reduce((sum, record) => sum + record.itbisAmount, 0); }
+  clearPurchase(): void {
+    this.purchase = {
+      period: new Date().toISOString().slice(0, 7), supplier: '', rnc: '', document: '', ncf: '', sequence: '', invoiceDate: new Date().toISOString().slice(0, 10), registrationDate: new Date().toISOString().slice(0, 10),
+      paymentDate: '', paymentType: '01 - Efectivo', goodsType: '02 - Bienes', invoiceAmount: 0, servicesAmount: 0, goodsAmount: 0,
+      itbis: 0, itbisWithheld: 0, itbisAdvanced: 0
+    };
+    this.showPurchaseSupplierForm = false;
+    this.message = '';
+  }
+  openPurchaseSupplierForm(): void {
+    this.purchaseSupplier = { documentType: 'RNC', documentNumber: '', companyName: '' };
+    this.showPurchaseSupplierForm = true;
+  }
+  cancelPurchaseSupplierForm(): void { this.showPurchaseSupplierForm = false; }
+  async loadPurchaseRecords(): Promise<void> {
+    this.isLoadingPurchases = true;
+    this.purchasesError = '';
+    try {
+      this.purchaseRecords = await this.purchases606Service.list();
+    } catch (error) {
+      this.purchaseRecords = [];
+      this.purchasesError = error instanceof Error ? error.message : 'No se pudieron cargar las facturas de compra.';
+    } finally {
+      this.isLoadingPurchases = false;
+    }
+  }
+  async loadPurchaseSuppliers(): Promise<void> {
+    try { this.purchaseSuppliers = await this.suppliersService.getSuppliers(); } catch { this.purchaseSuppliers = []; }
+  }
+  onPurchaseRncChange(): void {
+    const rnc = this.purchase.rnc.trim().toLowerCase();
+    const supplier = this.purchaseSuppliers.find((item) => item.documentNumber.trim().toLowerCase() === rnc);
+    if (supplier) this.purchase.supplier = supplier.companyName;
+  }
+  focusPurchaseNext(event: Event): void {
+    if (event.defaultPrevented || !(event.target instanceof HTMLElement)) return;
+    event.preventDefault();
+    const form = event.target.closest('form.purchase606__form');
+    if (!form) return;
+    const fields = Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input:not([readonly]):not([disabled]), select:not([disabled])"));
+    const currentIndex = fields.indexOf(event.target as HTMLInputElement | HTMLSelectElement);
+    fields[currentIndex + 1]?.focus();
+  }
+  async savePurchase606(): Promise<void> {
+    if (this.isSavingPurchase) return;
+    if (!this.purchase.supplier.trim() || !this.purchase.rnc.trim() || !this.purchase.document.trim() || !this.purchase.ncf.trim()) {
+      this.message = 'Completa el proveedor, RNC/Cédula, número de factura y NCF.';
+      return;
+    }
+    if (this.purchaseTotal <= 0) {
+      this.message = 'El monto facturado debe ser mayor que cero.';
+      return;
+    }
+    this.isSavingPurchase = true;
+    try {
+      const saved = await this.purchases606Service.create({
+        supplier: this.purchase.supplier.trim(), rnc: this.purchase.rnc.trim(), document: this.purchase.document.trim(), ncf: this.purchase.ncf.trim(),
+        invoiceDate: this.purchase.invoiceDate, paymentDate: this.purchase.paymentDate, paymentType: this.purchase.paymentType,
+        goodsType: this.purchase.goodsType, invoiceAmount: this.purchaseTotal, itbisAmount: this.purchaseItbis, subtotal: this.purchaseSubtotal
+      });
+      this.purchase.sequence = saved.sequence;
+      this.message = `Factura de compra ${this.purchase.document} guardada con el registro ${saved.sequence}.`;
+      await this.loadPurchaseRecords();
+    } catch (error) {
+      this.message = error instanceof Error ? `No se pudo guardar la factura de compra. ${error.message}` : 'No se pudo guardar la factura de compra.';
+    } finally {
+      this.isSavingPurchase = false;
+    }
+  }
+  async savePurchaseSupplier(): Promise<void> {
+    if (this.isSavingPurchaseSupplier) return;
+    if (!this.purchaseSupplier.documentNumber.trim() || !this.purchaseSupplier.companyName.trim()) {
+      this.message = 'Completa el RNC/Cédula y el nombre del proveedor.';
+      return;
+    }
+    this.isSavingPurchaseSupplier = true;
+    const form: SupplierFormModel = {
+      code: `SUP-${Date.now().toString().slice(-8)}`,
+      companyName: this.purchaseSupplier.companyName.trim(),
+      contactName: '',
+      documentType: this.purchaseSupplier.documentType,
+      documentNumber: this.purchaseSupplier.documentNumber.trim(),
+      phone: '', email: '', address: '', city: '', category: 'Local', paymentTerms: '', balance: 0, status: 'Activo'
+    };
+    try {
+      const supplier = await this.suppliersService.createSupplier(form, new Date().toISOString().slice(0, 10));
+      this.purchase.supplier = supplier.companyName;
+      this.purchase.rnc = supplier.documentNumber;
+      this.showPurchaseSupplierForm = false;
+      this.message = `Proveedor ${supplier.companyName} guardado y seleccionado.`;
+    } catch (error) {
+      this.message = error instanceof Error ? `No se pudo guardar el proveedor. ${error.message}` : 'No se pudo guardar el proveedor.';
+    } finally {
+      this.isSavingPurchaseSupplier = false;
+    }
+  }
   @Input() set section(value: string) {
     const views: Record<string, FiscalView> = {
       'Facturas pendientes': 'pending',
@@ -213,6 +348,7 @@ export class AccountingPageComponent implements OnInit {
     if (this.initialized && this.active === 'pending') void this.loadPendingInvoices();
     if (this.initialized && this.active === 'credit') void this.loadCreditNotes();
     if (this.initialized && this.active === 'expenses') void this.loadMinorData();
+    if (this.initialized && this.active === 'rep606') void this.loadPurchaseRecords();
   }
   constructor(
     public data: AppDataService,
@@ -222,7 +358,9 @@ export class AccountingPageComponent implements OnInit {
     private readonly ecfService: EcfService,
     private readonly ncfTypesService: NcfTypesService,
     private readonly creditNotesService: CreditNotesService,
-    private readonly minorExpensesService: MinorExpensesService
+    private readonly minorExpensesService: MinorExpensesService,
+    private readonly suppliersService: SuppliersService,
+    private readonly purchases606Service: Purchases606Service
   ) {}
 
   ngOnInit(): void {
@@ -231,6 +369,8 @@ export class AccountingPageComponent implements OnInit {
     void this.loadRep607();
     void this.loadPendingInvoices();
     void this.loadCreditNotes();
+    void this.loadPurchaseRecords();
+    void this.loadPurchaseSuppliers();
   }
 
   get rep607Accepted(): number { return this.rep607Invoices.filter((invoice) => invoice.status === 'Aceptado').length; }

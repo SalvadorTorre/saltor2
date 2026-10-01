@@ -39,8 +39,12 @@ body {
 .sidebar {
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
   padding: 22px 18px 18px;
+  position: sticky;
+  top: 0;
   color: #eff6ff;
   background:
     linear-gradient(180deg, rgba(31, 81, 255, 0.22) 0%, rgba(31, 81, 255, 0) 20%),
@@ -251,6 +255,9 @@ body {
     linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(15, 23, 42, 0.12)),
     linear-gradient(180deg, #16325f 0%, #0f2344 100%);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .topbar__brand {
@@ -3431,7 +3438,10 @@ body {
   }
 
   .sidebar {
+    height: auto;
     min-height: auto;
+    overflow: visible;
+    position: static;
   }
 
   .topbar {
