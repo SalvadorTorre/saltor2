@@ -51,7 +51,7 @@ export class AppComponent implements OnInit {
     {
       label: 'Contabilidad', icon: 'calculator', key: 'accounting', children: [
         'Facturas pendientes', 'Rep. 607', 'e-NCF', 'Nota de crédito',
-        'Gastos menores', 'Cuentas por cobrar', 'Rep. 606'
+        'Gastos menores', 'Cuentas por cobrar', 'Rep. 606', 'Compra informal E41'
       ]
     },
     { label: 'Reporte', icon: 'chart' }

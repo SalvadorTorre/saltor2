@@ -130,14 +130,31 @@ export class RncPageComponent implements OnInit {
     }
   }
 
-  checkRnc(record: RncRecord | null): void {
-    if (!record) {
-      this.rncMessage = 'No hay un RNC seleccionado para consultar.';
+  async checkRnc(record: RncRecord | null): Promise<void> {
+    const rnc = record?.rnc || this.rncForm.rnc;
+    if (!rnc.trim()) {
+      this.rncMessage = 'Indica un RNC antes de consultar.';
       return;
     }
 
-    this.selectRncRecord(record);
-    this.rncMessage = `Consultando RNC ${record.rnc}...`;
+    if (record) this.selectRncRecord(record);
+    this.rncMessage = `Consultando RNC ${rnc} en Megaplus...`;
+    try {
+      const result = await this.rncService.lookup(rnc);
+      this.rncForm = {
+        rnc: result.rnc,
+        legalName: result.legalName,
+        tradeName: result.tradeName,
+        category: result.category,
+        address: result.address,
+        phone: result.phone,
+        email: result.email,
+        dgiiStatus: result.dgiiStatus
+      };
+      this.rncMessage = `RNC ${result.rnc} consultado correctamente en Megaplus. Revisa los datos y guarda para actualizar tu catálogo.`;
+    } catch (error) {
+      this.rncMessage = this.formatSupabaseError(error, 'No se pudo consultar el RNC en Megaplus.');
+    }
   }
 
   async syncRnc(record: RncRecord | null): Promise<void> {

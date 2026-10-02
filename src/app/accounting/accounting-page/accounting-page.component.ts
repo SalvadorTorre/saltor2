@@ -12,8 +12,11 @@ import { CreditNoteDetail, CreditNoteRecord, CreditNotesService } from '../../co
 import { MinorExpenseRecord, MinorExpensesService, MinorExpenseSaveData, MinorExpenseStatus } from '../../core/services/minor-expenses/minor-expenses.service';
 import { SuppliersService } from '../../core/services/suppliers/suppliers.service';
 import { Purchase606Record, Purchases606Service } from '../../core/services/accounting/purchases-606.service';
+import { E41Record, E41SaveData, E41Service, E41Status, IsrRate } from '../../core/services/accounting/e41.service';
+import { RncService } from '../../core/services/rnc/rnc.service';
+import { QzPrintService } from '../../core/services/printing/qz-print.service';
 
-type FiscalView = 'pending' | 'rep607' | 'encf' | 'credit' | 'expenses' | 'receivables' | 'rep606';
+type FiscalView = 'pending' | 'rep607' | 'encf' | 'credit' | 'expenses' | 'receivables' | 'rep606' | 'e41';
 type DgiiSendDialog = { phase: 'confirm' | 'processing' | 'success' | 'error'; invoiceNumber: string; message: string };
 type DgiiSendTarget = { source: 'pending' | 'rep607'; invoice: PendingInvoice | Rep607Invoice };
 const MINOR_CATEGORIES = ['Oficina y suministros', 'Combustible', 'Viáticos', 'Hospedaje', 'Alimentación', 'Mantenimiento', 'Transporte', 'Comunicaciones', 'Servicios profesionales', 'Publicidad', 'Impuestos y tasas', 'Otros gastos'];
@@ -198,6 +201,107 @@ export class AccountingPageComponent implements OnInit {
     return [expense.dgiiError || expense.dgiiMessage || 'Sin mensajes adicionales.'];
   }
   receivable = { customer: '', invoice: '', dueDate: '', amount: 0 };
+  e41Mode: 'list' | 'create' | 'view' | 'edit' = 'list';
+  e41Search = '';
+  e41StatusFilter: E41Status | 'Todos' = 'Todos';
+  e41Records: E41Record[] = [];
+  e41IsrRates: IsrRate[] = [];
+  e41 = this.newE41Form();
+  private editingE41Id: number | null = null;
+  get e41ItbisAmount(): number { return this.round2(Math.max(0, Number(this.e41.purchaseAmount) || 0) * (Number(this.e41.itbisRate) || 0) / 100); }
+  get e41ItbisWithheld(): number { return this.round2(this.e41ItbisAmount * (Number(this.e41.itbisWithholding) || 0) / 100); }
+  get e41IsrWithheld(): number { return this.round2(Math.max(0, Number(this.e41.purchaseAmount) || 0) * (Number(this.e41.isrWithholding) || 0) / 100); }
+  get e41PayableTotal(): number { return this.round2(Math.max(0, Number(this.e41.purchaseAmount) || 0) + this.e41ItbisAmount - this.e41ItbisWithheld - this.e41IsrWithheld); }
+  get e41TotalPurchases(): number { return this.e41Records.reduce((sum, record) => sum + record.total, 0); }
+  get e41TotalItbis(): number { return this.e41Records.reduce((sum, record) => sum + record.itbis, 0); }
+  get e41TotalWithheld(): number { return this.e41Records.reduce((sum, record) => sum + record.withheld, 0); }
+  get filteredE41Records(): E41Record[] {
+    const search = this.e41Search.trim().toLocaleLowerCase();
+    return this.e41Records.filter((record) => (this.e41StatusFilter === 'Todos' || record.status === this.e41StatusFilter) && (!search || [record.ncf, record.provider, record.identification].some((value) => value.toLocaleLowerCase().includes(search))));
+  }
+  newE41Form(): { sequence: string; ncf: string; date: string; purchaseType: string; description: string; providerIdType: string; providerId: string; providerName: string; purchaseAmount: number; itbisRate: number; itbisWithholding: number; isrWithholding: number } {
+    return { sequence: '', ncf: '', date: new Date().toISOString().slice(0, 10), purchaseType: 'Producto', description: '', providerIdType: 'Cédula', providerId: '', providerName: '', purchaseAmount: 0, itbisRate: 18, itbisWithholding: 100, isrWithholding: 0 };
+  }
+  openNewE41(): void { this.e41 = this.newE41Form(); this.editingE41Id = null; this.e41Mode = 'create'; }
+  cancelE41(): void { this.editingE41Id = null; this.e41Mode = 'list'; }
+  onE41Enter(event: Event, next?: HTMLElement): void {
+    event.preventDefault();
+    next?.focus();
+  }
+  openE41Record(record: E41Record, mode: 'view' | 'edit'): void {
+    this.e41 = { sequence: record.sequence, ncf: record.ncf, date: record.date, purchaseType: record.purchaseType, description: record.description, providerIdType: record.providerIdType, providerId: record.identification, providerName: record.provider, purchaseAmount: record.amount, itbisRate: record.itbisRate, itbisWithholding: record.itbisWithholding, isrWithholding: record.isrWithholding };
+    this.editingE41Id = record.id;
+    this.e41Mode = mode;
+  }
+  async deleteE41(record: E41Record): Promise<void> {
+    if (record.status === 'Aceptado') return;
+    if (!window.confirm(`¿Deseas eliminar el comprobante ${record.ncf}? Esta acción no se puede deshacer.`)) return;
+    try {
+      await this.e41Service.delete(record.id);
+      await this.loadE41Data();
+      this.message = `El comprobante ${record.ncf} fue eliminado.`;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : 'No se pudo eliminar el comprobante E41.';
+    }
+  }
+  async printE41(record: E41Record): Promise<void> {
+    const escape = (value: unknown): string => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] ?? character));
+    const money = (value: number): string => `RD$${Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const issueDate = new Date(`${record.date}T00:00:00`).toLocaleDateString('es-DO');
+    const controlDate = new Date(`${record.controlDate}T00:00:00`).toLocaleDateString('es-DO');
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Compra ${escape(record.ncf)}</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{color:#111;font-family:Arial,sans-serif;font-size:11px;margin:0;width:74mm}.center{text-align:center}.company{font-size:14px;font-weight:800}.rule{border-top:1px dashed #222;margin:8px 0}.line{display:flex;justify-content:space-between;gap:8px;margin:4px 0}.line span:last-child{text-align:right}.total{font-size:13px;font-weight:800;margin-top:6px}.muted{color:#444}h1{font-size:13px;margin:7px 0}.footer{font-size:9px;margin-top:12px;text-align:center}</style></head><body><div class="center company">${escape(this.loggedCompanyName || 'SALTOR SYSTEM')}</div><div class="center muted">Comprobante de Compra Electrónica E41</div><div class="rule"></div><div><b>e-NCF:</b> ${escape(record.ncf)}</div><div><b>Control:</b> ${escape(record.sequence)}</div><div><b>Fecha emisión:</b> ${escape(issueDate)}</div><div><b>Fecha control:</b> ${escape(controlDate)}</div><div><b>Estado:</b> ${escape(record.status)}</div><div class="rule"></div><h1>Proveedor informal</h1><div><b>Nombre:</b> ${escape(record.provider)}</div><div><b>${escape(record.providerIdType)}:</b> ${escape(record.identification)}</div><div><b>Tipo de compra:</b> ${escape(record.purchaseType)}</div>${record.description ? `<div><b>Descripción:</b> ${escape(record.description)}</div>` : ''}<div class="rule"></div><div class="line"><span>Monto compra</span><span>${money(record.amount)}</span></div><div class="line"><span>ITBIS (${escape(record.itbisRate)}%)</span><span>${money(record.itbis)}</span></div><div class="line"><span>Retención ITBIS (${escape(record.itbisWithholding)}%)</span><span>-${money(record.itbis * record.itbisWithholding / 100)}</span></div><div class="line"><span>Retención ISR (${escape(record.isrWithholding)}%)</span><span>-${money(record.amount * record.isrWithholding / 100)}</span></div><div class="rule"></div><div class="line total"><span>TOTAL A PAGAR</span><span>${money(record.total)}</span></div><div class="footer">Documento generado por SaltoSystem</div><script>window.onload=()=>window.print()<\/script></body></html>`;
+    const result = await this.qzPrintService.printHtml(html, `Compra ${record.ncf}`, 'width=420,height=760');
+    if (result === 'unavailable') this.message = 'No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.';
+  }
+  async sendE41ToDgii(record: E41Record): Promise<void> {
+    if (!record || record.status === 'Aceptado') return;
+    try {
+      await this.e41Service.markAsSent(record.id);
+      await this.loadE41Data();
+      this.message = `El comprobante ${record.ncf} fue marcado como enviado a la DGII.`;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : 'No se pudo actualizar el comprobante E41.';
+    }
+  }
+  async saveE41(status: Extract<E41Status, 'Borrador' | 'Enviado'>): Promise<void> {
+    if (!this.e41.providerId.trim() || !this.e41.providerName.trim() || Number(this.e41.purchaseAmount) <= 0) {
+      this.message = 'Completa los datos del proveedor y el monto de compra para continuar.';
+      return;
+    }
+    const data: E41SaveData = {
+      date: this.e41.date, purchaseType: this.e41.purchaseType, description: this.e41.description,
+      providerIdType: this.e41.providerIdType, providerId: this.e41.providerId, providerName: this.e41.providerName,
+      purchaseAmount: Number(this.e41.purchaseAmount), itbisRate: Number(this.e41.itbisRate),
+      itbisWithholding: Number(this.e41.itbisWithholding), isrWithholding: Number(this.e41.isrWithholding), status
+    };
+    try {
+      const saved = this.editingE41Id === null
+        ? await this.e41Service.create(data)
+        : await this.e41Service.update(this.editingE41Id, data);
+      this.e41Mode = 'list';
+      this.editingE41Id = null;
+      await this.loadE41Data();
+      this.message = status === 'Enviado'
+        ? `Comprobante ${saved.ncf}, secuencia ${saved.sequence}, guardado y marcado para envío a la DGII.`
+        : `Comprobante ${saved.ncf}, secuencia ${saved.sequence}, guardado como borrador.`;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : 'No se pudo guardar el comprobante E41.';
+    }
+  }
+  async loadE41Data(): Promise<void> {
+    try {
+      const [records, isrRates] = await Promise.all([
+        this.e41Service.list(),
+        this.e41Service.getIsrRates()
+      ]);
+      this.e41Records = records;
+      this.e41IsrRates = isrRates;
+    } catch (error) {
+      this.e41Records = [];
+      this.e41IsrRates = [];
+      this.message = error instanceof Error ? error.message : 'No se pudieron cargar los comprobantes E41.';
+    }
+  }
   purchaseTab: 'register' | 'list' | 'report' = 'register';
   purchaseSearch = '';
   purchaseReportMonth = new Date().getMonth() + 1;
@@ -270,6 +374,20 @@ export class AccountingPageComponent implements OnInit {
     const supplier = this.purchaseSuppliers.find((item) => item.documentNumber.trim().toLowerCase() === rnc);
     if (supplier) this.purchase.supplier = supplier.companyName;
   }
+  async onPurchaseRncEnter(event: Event): Promise<void> {
+    this.onPurchaseRncChange();
+    if (!this.purchase.supplier.trim() && this.purchase.rnc.trim()) {
+      try {
+        const result = await this.rncService.lookup(this.purchase.rnc);
+        this.purchase.rnc = result.rnc;
+        this.purchase.supplier = result.tradeName || result.legalName;
+      } catch (error) {
+        this.message = error instanceof Error ? error.message : 'No se pudo consultar el RNC en Megaplus.';
+        return;
+      }
+    }
+    this.focusPurchaseNext(event);
+  }
   focusPurchaseNext(event: Event): void {
     if (event.defaultPrevented || !(event.target instanceof HTMLElement)) return;
     event.preventDefault();
@@ -340,7 +458,8 @@ export class AccountingPageComponent implements OnInit {
       'Nota de crédito': 'credit',
       'Gastos menores': 'expenses',
       'Cuentas por cobrar': 'receivables',
-      'Rep. 606': 'rep606'
+      'Rep. 606': 'rep606',
+      'Compra informal E41': 'e41'
     };
     this.active = views[value] ?? 'rep607';
     this.message = this.active === 'rep607' ? 'Selecciona los filtros y pulsa Filtrar para consultar.' : '';
@@ -349,6 +468,7 @@ export class AccountingPageComponent implements OnInit {
     if (this.initialized && this.active === 'credit') void this.loadCreditNotes();
     if (this.initialized && this.active === 'expenses') void this.loadMinorData();
     if (this.initialized && this.active === 'rep606') void this.loadPurchaseRecords();
+    if (this.initialized && this.active === 'e41') void this.loadE41Data();
   }
   constructor(
     public data: AppDataService,
@@ -360,7 +480,10 @@ export class AccountingPageComponent implements OnInit {
     private readonly creditNotesService: CreditNotesService,
     private readonly minorExpensesService: MinorExpensesService,
     private readonly suppliersService: SuppliersService,
-    private readonly purchases606Service: Purchases606Service
+    private readonly purchases606Service: Purchases606Service,
+    private readonly e41Service: E41Service,
+    private readonly rncService: RncService,
+    private readonly qzPrintService: QzPrintService
   ) {}
 
   ngOnInit(): void {
@@ -371,6 +494,7 @@ export class AccountingPageComponent implements OnInit {
     void this.loadCreditNotes();
     void this.loadPurchaseRecords();
     void this.loadPurchaseSuppliers();
+    void this.loadE41Data();
   }
 
   get rep607Accepted(): number { return this.rep607Invoices.filter((invoice) => invoice.status === 'Aceptado').length; }
@@ -452,10 +576,9 @@ export class AccountingPageComponent implements OnInit {
     const detail = await this.creditNotesService.getCreditNoteById(note.id);
     if (!detail) return;
     const rows = detail.lines.map((line) => `<tr><td>${this.escapeHtml(line.description)}</td><td>${line.quantity}</td><td>${this.money(line.price)}</td><td>${this.money(line.lineTotal + line.taxAmount)}</td></tr>`).join('');
-    const printer = window.open('', '_blank', 'width=420,height=720');
-    if (!printer) { this.message = 'El navegador bloqueó la ventana de impresión.'; return; }
-    printer.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Nota ${this.escapeHtml(detail.number)}</title><style>@page{size:80mm auto;margin:3mm}body{font:11px Arial;width:74mm;margin:0;color:#111}h2,p{margin:4px 0;text-align:center}.left{text-align:left}.line{border-top:1px dashed #555;margin:7px 0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{padding:3px 0;text-align:left}th:last-child,td:last-child{text-align:right}.total{font-size:13px;font-weight:bold}</style></head><body><h2>NOTA DE CRÉDITO</h2><p>No. ${this.escapeHtml(detail.number)}</p><p>e-NCF: ${this.escapeHtml(detail.noteEncf || 'Pendiente')}</p><div class="line"></div><p class="left">Cliente: ${this.escapeHtml(detail.customer)}</p><p class="left">Factura afectada: ${this.escapeHtml(detail.invoice)}</p><p class="left">Fecha: ${this.escapeHtml(detail.date)}</p><div class="line"></div><table><thead><tr><th>Detalle</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="line"></div><p class="left">Subtotal: RD$${this.money(detail.subtotal)}</p><p class="left">ITBIS: RD$${this.money(detail.itbis)}</p><p class="left total">TOTAL: RD$${this.money(detail.total)}</p><div class="line"></div><p>Estado DGII: ${this.escapeHtml(detail.status)}</p><script>window.onload=()=>window.print();<\/script></body></html>`);
-    printer.document.close();
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Nota ${this.escapeHtml(detail.number)}</title><style>@page{size:80mm auto;margin:3mm}body{font:11px Arial;width:74mm;margin:0;color:#111}h2,p{margin:4px 0;text-align:center}.left{text-align:left}.line{border-top:1px dashed #555;margin:7px 0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{padding:3px 0;text-align:left}th:last-child,td:last-child{text-align:right}.total{font-size:13px;font-weight:bold}</style></head><body><h2>NOTA DE CRÉDITO</h2><p>No. ${this.escapeHtml(detail.number)}</p><p>e-NCF: ${this.escapeHtml(detail.noteEncf || 'Pendiente')}</p><div class="line"></div><p class="left">Cliente: ${this.escapeHtml(detail.customer)}</p><p class="left">Factura afectada: ${this.escapeHtml(detail.invoice)}</p><p class="left">Fecha: ${this.escapeHtml(detail.date)}</p><div class="line"></div><table><thead><tr><th>Detalle</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="line"></div><p class="left">Subtotal: RD$${this.money(detail.subtotal)}</p><p class="left">ITBIS: RD$${this.money(detail.itbis)}</p><p class="left total">TOTAL: RD$${this.money(detail.total)}</p><div class="line"></div><p>Estado DGII: ${this.escapeHtml(detail.status)}</p><script>window.onload=()=>window.print();<\/script></body></html>`;
+    const result = await this.qzPrintService.printHtml(html, `Nota ${detail.number}`, 'width=420,height=720');
+    if (result === 'unavailable') this.message = 'No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.';
   }
 
   async downloadCreditNotePdf(note: CreditNoteRecord): Promise<void> {

@@ -8,6 +8,7 @@ import { ClientsService } from '../../core/services/clients/clients.service';
 import { ProductsService } from '../../core/services/products/products.service';
 import { RncService } from '../../core/services/rnc/rnc.service';
 import { UsersService } from '../../core/services/users/users.service';
+import { QzPrintService } from '../../core/services/printing/qz-print.service';
 
 @Component({ selector: 'app-quotation-page', standalone: true, imports: [CommonModule, FormsModule], templateUrl: './quotation-page.component.html', styleUrls: ['./quotation-page.component.scss'] })
 export class QuotationPageComponent implements OnInit {
@@ -38,7 +39,8 @@ export class QuotationPageComponent implements OnInit {
     private readonly clientsService: ClientsService,
     private readonly productsService: ProductsService,
     private readonly rncService: RncService,
-    private readonly usersService: UsersService
+    private readonly usersService: UsersService,
+    private readonly qzPrintService: QzPrintService
   ) {}
   ngOnInit(): void { void this.load(); void this.loadClients(); void this.loadProducts(); void this.loadRncRecords(); void this.loadUsers(); }
   emptyQuote() { return { number: '', date: new Date().toISOString().slice(0, 10), validUntil: '', customer: '', rnc: '', phone: '', email: '', address: '', notes: '', lines: [] as Omit<QuotationLine, 'total'>[] }; }
@@ -98,7 +100,32 @@ export class QuotationPageComponent implements OnInit {
     if (record) { this.quote.customer = record.tradeName?.trim() || record.legalName; this.quote.rnc = record.rnc; this.quote.phone = record.phone ?? ''; this.quote.email = record.email ?? ''; this.quote.address = record.address ?? ''; this.isRncInvalid = false; this.message = `RNC registrado: ${record.legalName} (${record.rnc}).`; return; }
     this.clearCustomerContact(); this.isRncInvalid = true; this.message = 'RNC inválido. Debe estar registrado en Clientes o en el catálogo RNC.';
   }
-  onQuoteRncEnter(event: Event): void { event.preventDefault(); this.onQuoteRncChange(); this.focusEditorField('quotationCustomer'); }
+  async onQuoteRncEnter(event: Event): Promise<void> {
+    event.preventDefault();
+    this.onQuoteRncChange();
+    if (this.isRncInvalid) {
+      try {
+        const result = await this.rncService.lookup(this.quote.rnc);
+        const record: RncRecord = {
+          id: 0, rnc: result.rnc, legalName: result.legalName, tradeName: result.tradeName,
+          category: result.category, address: result.address, phone: result.phone, email: result.email,
+          dgiiStatus: result.dgiiStatus, syncStatus: 'Sincronizado', lastCheck: new Date().toISOString()
+        };
+        this.data.rncRecords = [record, ...this.data.rncRecords.filter((item) => item.rnc !== record.rnc)];
+        this.quote.customer = record.tradeName || record.legalName;
+        this.quote.rnc = record.rnc;
+        this.quote.phone = record.phone;
+        this.quote.email = record.email;
+        this.quote.address = record.address;
+        this.isRncInvalid = false;
+        this.message = `RNC consultado en Megaplus: ${record.legalName}.`;
+      } catch (error) {
+        this.message = error instanceof Error ? error.message : 'No se pudo consultar el RNC.';
+        return;
+      }
+    }
+    this.focusEditorField('quotationCustomer');
+  }
   onQuoteCustomerChange(): void {
     const value = this.quote.customer.trim().toLowerCase();
     const client = this.clients.find((item) => [item.fullName, item.documentNumber, item.companyName ?? ''].some((text) => text.trim().toLowerCase() === value));
@@ -225,17 +252,16 @@ export class QuotationPageComponent implements OnInit {
     if (!q) return;
     const company = this.data.companies[0];
     const rows = q.lines.map((line) => `<tr><td>${this.e(line.description)}<br><small>${line.quantity} x RD$${line.price.toFixed(2)}</small></td><td>RD$${line.total.toFixed(2)}</td></tr>`).join('');
-    const win = window.open('', '_blank', 'width=420,height=700');
-    if (!win) return;
-    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${this.e(q.number)}</title><style>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${this.e(q.number)}</title><style>
       @page { size: 80mm auto; margin: 0; }
       * { box-sizing: border-box; }
       body { color:#111; font:11px Arial,sans-serif; margin:0; width:80mm; }
       .print-document { padding:4mm; width:80mm; }
       .center { text-align:center; } h1 { font-size:14px; margin:0 0 3px; } p { margin:3px 0; }
       .rule { border-top:1px dashed #111; margin:5px 0; } table { border-collapse:collapse; width:100%; } th,td { padding:4px 0; text-align:left; vertical-align:top; } th:last-child,td:last-child { text-align:right; } small { font-size:10px; } .total p { display:flex; justify-content:space-between; } .grand { font-size:14px; font-weight:700; }
-    </style></head><body><main class="print-document"><section class="center"><h1>${this.e(company?.legalName || this.data.companyName)}</h1><p>RNC: ${this.e(company?.rnc || '')}</p><p>${this.e(company?.address || '')}</p><p>Tel.: ${this.e(company?.phone || '')}</p></section><div class="rule"></div><section><p><b>COTIZACIÓN ${this.e(q.number)}</b></p><p>Fecha: ${q.date}</p><p>Válida hasta: ${q.validUntil || 'N/D'}</p><p>Cliente: ${this.e(q.customer)}</p><p>RNC/Cédula: ${this.e(q.rnc)}</p><p>Teléfono: ${this.e(q.phone)}</p><p>Dirección: ${this.e(q.address)}</p></section><div class="rule"></div><table><thead><tr><th>Producto</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="rule"></div><section class="total"><p><span>Subtotal</span><b>RD$${q.subtotal.toFixed(2)}</b></p><p><span>ITBIS</span><b>RD$${q.itbis.toFixed(2)}</b></p><p class="grand"><span>TOTAL</span><span>RD$${q.total.toFixed(2)}</span></p></section><div class="rule"></div><p class="center">Gracias por su preferencia</p></main><script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`);
-    win.document.close();
+    </style></head><body><main class="print-document"><section class="center"><h1>${this.e(company?.legalName || this.data.companyName)}</h1><p>RNC: ${this.e(company?.rnc || '')}</p><p>${this.e(company?.address || '')}</p><p>Tel.: ${this.e(company?.phone || '')}</p></section><div class="rule"></div><section><p><b>COTIZACIÓN ${this.e(q.number)}</b></p><p>Fecha: ${q.date}</p><p>Válida hasta: ${q.validUntil || 'N/D'}</p><p>Cliente: ${this.e(q.customer)}</p><p>RNC/Cédula: ${this.e(q.rnc)}</p><p>Teléfono: ${this.e(q.phone)}</p><p>Dirección: ${this.e(q.address)}</p></section><div class="rule"></div><table><thead><tr><th>Producto</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="rule"></div><section class="total"><p><span>Subtotal</span><b>RD$${q.subtotal.toFixed(2)}</b></p><p><span>ITBIS</span><b>RD$${q.itbis.toFixed(2)}</b></p><p class="grand"><span>TOTAL</span><span>RD$${q.total.toFixed(2)}</span></p></section><div class="rule"></div><p class="center">Gracias por su preferencia</p></main><script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`;
+    const result = await this.qzPrintService.printHtml(html, `Cotización ${q.number}`, 'width=420,height=700');
+    if (result === 'unavailable') this.message = 'No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.';
   }
   async pdf(item: Quotation) { const q = await this.quotations.get(item.id); if (!q) return; const { jsPDF } = await import('jspdf'); const doc = new jsPDF({ unit: 'mm', format: 'letter' }); let y = 18; const write = (text: string, bold = false) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); const lines = doc.splitTextToSize(text, 170); doc.text(lines, 20, y); y += lines.length * 6 + 3; }; write(`COTIZACIÓN ${q.number}`, true); write(`Fecha: ${q.date}    Válida hasta: ${q.validUntil || 'N/D'}`); write(`Cliente: ${q.customer}`); q.lines.forEach((l) => write(`${l.quantity} x ${l.description} - RD$${l.total.toFixed(2)}`)); write(`TOTAL: RD$${q.total.toFixed(2)}`, true); doc.save(`cotizacion-${q.number}.pdf`); }
   private e(value: string) { return String(value || '').replace(/[&<>'\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c] || c)); }

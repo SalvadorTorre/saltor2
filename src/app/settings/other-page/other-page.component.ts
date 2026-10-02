@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
 import { DigitalCertificateMetadata, DigitalCertificatesService } from '../../core/services/digital-certificates/digital-certificates.service';
 import { EcfConfigService, EcfConfiguration } from '../../core/services/ecf/ecf-config.service';
+import { CompanyPrintSettingsService, PrintPaper } from '../../core/services/printing/company-print-settings.service';
 
 export interface OtherPreferences {
   primaryColor: string;
@@ -27,6 +28,7 @@ export interface OtherPreferences {
   printFooterText: string;
   defaultNcfType: string;
   defaultPaymentMethod: string;
+  printPaper: PrintPaper;
 }
 
 @Component({
@@ -102,7 +104,8 @@ export class SettingsOtherPageComponent implements OnInit {
     companyLogoUrl: 'assets/logosaltor.jpg',
     printFooterText: 'Gracias por su preferencia',
     defaultNcfType: '02 - Consumo',
-    defaultPaymentMethod: 'Contado'
+    defaultPaymentMethod: 'Contado',
+    printPaper: 'carta'
   };
 
   private originalPreferences: OtherPreferences = { ...this.preferences };
@@ -120,12 +123,14 @@ export class SettingsOtherPageComponent implements OnInit {
   constructor(
     public data: AppDataService,
     private readonly digitalCertificatesService: DigitalCertificatesService,
-    private readonly ecfConfigService: EcfConfigService
+    private readonly ecfConfigService: EcfConfigService,
+    private readonly companyPrintSettings: CompanyPrintSettingsService
   ) {}
 
   ngOnInit(): void {
     void this.loadCertificate();
     void this.loadEcfConfiguration();
+    void this.loadPrintPaper();
   }
 
   get certificateIsExpired(): boolean {
@@ -175,9 +180,15 @@ export class SettingsOtherPageComponent implements OnInit {
     }).format(new Date(value));
   }
 
-  saveOtherSettings(): void {
+  async saveOtherSettings(): Promise<void> {
+    try {
+      await this.companyPrintSettings.savePaper(this.preferences.printPaper);
+    } catch (error) {
+      this.otherMessage = error instanceof Error ? error.message : 'No se pudo guardar el tipo de papel de la empresa.';
+      return;
+    }
     this.originalPreferences = { ...this.preferences };
-    this.otherMessage = `Preferencias guardadas correctamente el ${this.formatTimestamp()}.`;
+    this.otherMessage = `Preferencias y tipo de papel guardados correctamente el ${this.formatTimestamp()}.`;
   }
 
   resetOtherSettings(): void {
@@ -207,7 +218,8 @@ export class SettingsOtherPageComponent implements OnInit {
       companyLogoUrl: 'assets/logosaltor.jpg',
       printFooterText: 'Gracias por su preferencia',
       defaultNcfType: '02 - Consumo',
-      defaultPaymentMethod: 'Contado'
+      defaultPaymentMethod: 'Contado',
+      printPaper: 'carta'
     };
     this.otherMessage = 'Preferencias restauradas a valores por defecto. Recuerda guardar los cambios.';
   }
@@ -244,5 +256,14 @@ export class SettingsOtherPageComponent implements OnInit {
   private async loadEcfConfiguration(): Promise<void> {
     try { const value = await this.ecfConfigService.get(); if (value) this.ecfConfiguration = value; }
     catch { this.ecfMessage = 'No se pudo consultar la configuración e-CF.'; }
+  }
+
+  private async loadPrintPaper(): Promise<void> {
+    try {
+      this.preferences.printPaper = await this.companyPrintSettings.getPaper();
+      this.originalPreferences = { ...this.preferences };
+    } catch {
+      this.otherMessage = 'No se pudo cargar el tipo de papel de la empresa.';
+    }
   }
 }

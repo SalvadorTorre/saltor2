@@ -90,7 +90,7 @@
         <div class="company-form__grid">
           <label class="field">
             <span>RNC</span>
-            <input type="text" name="rncRecord" [(ngModel)]="rncForm.rnc" placeholder="101234567" />
+            <input type="text" name="rncRecord" [(ngModel)]="rncForm.rnc" placeholder="101234567" (keydown.enter)="$event.preventDefault(); checkRnc(null)" />
           </label>
 
           <label class="field">

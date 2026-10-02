@@ -266,6 +266,17 @@
         </label>
 
         <label class="field">
+          <span>Tipo de papel de la empresa</span>
+          <select name="printPaper" [(ngModel)]="preferences.printPaper">
+            <option value="80mm">80 mm - impresora térmica</option>
+            <option value="90mm">90 mm - impresora térmica</option>
+            <option value="carta">Carta</option>
+            <option value="media_carta">1/2 carta</option>
+          </select>
+        </label>
+        <p class="field-help">Todos los reportes usarán este formato. QZ Tray imprime en la impresora predeterminada de Windows.</p>
+
+        <label class="field">
           <span>Tipo NCF por defecto</span>
           <select name="defaultNcfType" [(ngModel)]="preferences.defaultNcfType">
             <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>

@@ -713,6 +713,97 @@
         <button class="blue">Guardar cuenta</button>
       </form></ng-container
     >
+    <ng-container *ngSwitchCase="'e41'">
+      <section class="e41">
+        <ng-container *ngIf="e41Mode === 'list'; else e41CreateForm">
+          <div class="e41__sticky">
+            <header class="e41__header">
+              <div class="e41__brand">
+                <span class="e41__brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7zM10 8h4M10 12h4M10 16h3M5 6v15h14"/></svg></span>
+                <div><h1>Comprobante de Compra Electrónica</h1><p>E41 · DGII República Dominicana</p></div>
+              </div>
+            </header>
+            <nav class="e41__tabs" aria-label="Opciones de comprobantes E41">
+              <button type="button" [class.is-active]="e41Mode !== 'list'" (click)="openNewE41()">Crear compra informal E41</button>
+              <button type="button" [class.is-active]="e41Mode === 'list'" (click)="cancelE41()">Consultar E41</button>
+            </nav>
+          </div>
+
+          <main class="e41__content">
+            <section class="e41__metrics" aria-label="Totales de comprobantes E41">
+              <article class="e41__metric"><span class="e41__metric-icon e41__metric-icon--blue">▦</span><div><small>Monto Total Compras</small><strong>RD${{ e41TotalPurchases | number:'1.2-2' }}</strong></div></article>
+              <article class="e41__metric"><span class="e41__metric-icon e41__metric-icon--green">▤</span><div><small>ITBIS Total</small><strong>RD${{ e41TotalItbis | number:'1.2-2' }}</strong></div></article>
+              <article class="e41__metric"><span class="e41__metric-icon e41__metric-icon--orange">!</span><div><small>Retenciones Totales</small><strong>RD${{ e41TotalWithheld | number:'1.2-2' }}</strong></div></article>
+            </section>
+
+            <section class="e41__filters">
+              <label class="e41__search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input [(ngModel)]="e41Search" name="e41Search" placeholder="Buscar por proveedor, NCF o identificación..." /></label>
+              <div class="e41__status-filters" aria-label="Filtrar por estado">
+                <button type="button" [class.is-active]="e41StatusFilter === 'Todos'" (click)="e41StatusFilter = 'Todos'">Todos</button>
+                <button type="button" [class.is-active]="e41StatusFilter === 'Borrador'" (click)="e41StatusFilter = 'Borrador'">Borrador</button>
+                <button type="button" [class.is-active]="e41StatusFilter === 'Enviado'" (click)="e41StatusFilter = 'Enviado'">Enviado</button>
+                <button type="button" [class.is-active]="e41StatusFilter === 'Aceptado'" (click)="e41StatusFilter = 'Aceptado'">Aceptado</button>
+                <button type="button" [class.is-active]="e41StatusFilter === 'Rechazado'" (click)="e41StatusFilter = 'Rechazado'">Rechazado</button>
+              </div>
+            </section>
+
+            <section *ngIf="!filteredE41Records.length" class="e41__empty"><span aria-hidden="true">▤</span><p>No hay comprobantes registrados. Cree uno nuevo para comenzar.</p></section>
+            <div *ngIf="filteredE41Records.length" class="e41__table-wrap"><table class="e41__table"><thead><tr><th>No. secuencia / control</th><th>Fecha control</th><th>NCF electrónico</th><th>Proveedor informal</th><th>Identificación</th><th class="num">Total</th><th>Estado DGII</th><th>Acciones</th></tr></thead><tbody><tr *ngFor="let record of filteredE41Records"><td><strong>{{ record.sequence }}</strong></td><td>{{ record.controlDate | date:'dd/MM/yyyy' }}</td><td>{{ record.ncf }}</td><td>{{ record.provider }}</td><td>{{ record.identification }}</td><td class="num">RD${{ record.total | number:'1.2-2' }}</td><td><span class="e41__status" [class]="'e41__status e41__status--' + record.status.toLowerCase()">{{ record.status }}</span></td><td class="e41__actions"><button type="button" class="e41__action e41__action--view" title="Consultar comprobante" (click)="openE41Record(record, 'view')">◉</button><button *ngIf="record.status === 'Borrador'" type="button" class="e41__action e41__action--edit" title="Editar comprobante" (click)="openE41Record(record, 'edit')">✎</button><button *ngIf="record.status === 'Rechazado'" type="button" class="e41__action e41__action--correct" title="Corregir comprobante rechazado" (click)="openE41Record(record, 'edit')">✎</button><button type="button" class="e41__action e41__action--print" title="Imprimir en 80 mm" (click)="printE41(record)">▣</button><button *ngIf="record.status !== 'Aceptado'" type="button" class="e41__action e41__action--send" title="Enviar a DGII" (click)="sendE41ToDgii(record)">✈</button><button *ngIf="record.status !== 'Aceptado'" type="button" class="e41__action e41__action--delete" title="Eliminar compra" (click)="deleteE41(record)">×</button></td></tr></tbody></table></div>
+          </main>
+          <footer class="e41__footer">Dirección General de Impuestos Internos (DGII) · Comprobante de Compra Electrónica E41</footer>
+        </ng-container>
+
+        <ng-template #e41CreateForm>
+          <main class="e41-form-shell">
+            <button type="button" class="e41__back" (click)="cancelE41()">←&nbsp; Volver a la lista</button>
+            <header class="e41-form__intro"><h1>{{ e41Mode === 'view' ? 'Consulta de Comprobante de Compra E41' : e41Mode === 'edit' ? 'Editar Comprobante de Compra E41' : 'Comprobante de Compra E41' }}</h1></header>
+
+            <form class="e41-form" (ngSubmit)="saveE41('Borrador')">
+              <fieldset class="e41-form__fieldset" [disabled]="e41Mode === 'view'">
+              <div class="e41-form__top-panels">
+                <section class="e41-form__section">
+                  <header><span>♙</span><h2>Datos del Proveedor Informal</h2></header>
+                  <div class="e41-form__grid e41-form__grid--two">
+                    <label><span>Tipo de Documento</span><select [(ngModel)]="e41.providerIdType" name="e41ProviderIdType" (keydown.enter)="onE41Enter($event, e41ProviderId)"><option>Cédula</option><option>Pasaporte</option><option>Otro</option></select></label>
+                    <label><span>No. Documento <b>*</b></span><input #e41ProviderId [(ngModel)]="e41.providerId" name="e41ProviderId" placeholder="000-0000000-0" required (keydown.enter)="onE41Enter($event, e41ProviderName)" /></label>
+                    <label class="e41-form__wide"><span>Nombre del Proveedor <b>*</b></span><input #e41ProviderName [(ngModel)]="e41.providerName" name="e41ProviderName" placeholder="Nombre completo del proveedor informal" required (keydown.enter)="onE41Enter($event, e41Date)" /></label>
+                  </div>
+                </section>
+
+                <section class="e41-form__section">
+                  <header><span>▧</span><h2>Datos del Comprobante</h2><div class="e41-form__header-fields"><label>No. secuencia<input [value]="e41.sequence || 'Se genera al guardar'" readonly /></label><label>Fecha documento<input [value]="e41.date" readonly /></label></div></header>
+                  <div class="e41-form__grid e41-form__grid--two">
+                    <label><span>NCF</span><input [value]="e41.ncf || 'Se genera al guardar'" name="e41Ncf" readonly /></label>
+                    <label><span>Fecha Emisión <b>*</b></span><input #e41Date type="date" [(ngModel)]="e41.date" name="e41Date" required (keydown.enter)="onE41Enter($event, e41PurchaseType)" /></label>
+                    <label><span>Tipo de Compra</span><select #e41PurchaseType [(ngModel)]="e41.purchaseType" name="e41PurchaseType" (keydown.enter)="onE41Enter($event, e41Description)"><option>Producto</option><option>Servicio</option><option>Mixto</option></select></label>
+                    <label><span>Descripción de la Operación</span><input #e41Description [(ngModel)]="e41.description" name="e41Description" placeholder="Ej: Compra de productos agrícolas" (keydown.enter)="onE41Enter($event, e41PurchaseAmount)" /></label>
+                  </div>
+                </section>
+              </div>
+
+              <div class="e41-form__bottom-panels">
+                <section class="e41-form__section">
+                  <header><span>▦</span><h2>Montos y Retenciones</h2></header>
+                  <div class="e41-form__amount-fields">
+                    <label><div class="e41-form__money"><span>RD$</span><input #e41PurchaseAmount type="number" min="0" step="0.01" [(ngModel)]="e41.purchaseAmount" name="e41PurchaseAmount" required (keydown.enter)="onE41Enter($event, e41ItbisRate)" /><em>0.00</em></div><span>Monto de Compra (sin ITBIS) <b>*</b></span></label>
+                    <label><select #e41ItbisRate [(ngModel)]="e41.itbisRate" name="e41ItbisRate" (keydown.enter)="onE41Enter($event, e41ItbisWithholding)"><option [ngValue]="18">18% (Tasa general)</option><option [ngValue]="16">16%</option><option [ngValue]="0">0% (Exento)</option></select><span>Tasa de ITBIS (%)</span></label>
+                    <label><select #e41ItbisWithholding [(ngModel)]="e41.itbisWithholding" name="e41ItbisWithholding" (keydown.enter)="onE41Enter($event, e41IsrWithholding)"><option [ngValue]="100">100%</option><option [ngValue]="30">30%</option><option [ngValue]="0">0% (Sin retención)</option></select><span>Retención ITBIS (%)</span></label>
+                    <label><select #e41IsrWithholding [(ngModel)]="e41.isrWithholding" name="e41IsrWithholding" (keydown.enter)="onE41Enter($event)"><option *ngFor="let rate of e41IsrRates" [ngValue]="rate.percentage">{{ rate.description }}</option></select><span>Retención ISR (%)</span></label>
+                  </div>
+                </section>
+                <section class="e41-form__section">
+                  <header><span>▤</span><h2>Totales</h2></header>
+                  <div class="e41-form__summary"><div><span>Monto Base Imponible</span><b>RD${{ e41.purchaseAmount || 0 | number:'1.2-2' }}</b></div><div><span>ITBIS ({{ e41.itbisRate }}%)</span><b>RD${{ e41ItbisAmount | number:'1.2-2' }}</b></div><div class="is-negative"><span>Retención ITBIS ({{ e41.itbisWithholding }}%)</span><b>- RD${{ e41ItbisWithheld | number:'1.2-2' }}</b></div><div *ngIf="e41.isrWithholding" class="is-negative"><span>Retención ISR ({{ e41.isrWithholding }}%)</span><b>- RD${{ e41IsrWithheld | number:'1.2-2' }}</b></div><div class="e41-form__summary-total"><strong>Total a Pagar al Proveedor</strong><strong>RD${{ e41PayableTotal | number:'1.2-2' }}</strong></div></div>
+                </section>
+              </div>
+              </fieldset>
+
+              <div class="e41-form__actions"><button *ngIf="e41Mode !== 'view'" type="submit" class="e41-form__draft">▧&nbsp; {{ e41Mode === 'edit' ? 'Actualizar borrador' : 'Guardar Borrador' }}</button><button *ngIf="e41Mode !== 'view'" type="button" class="e41-form__send" (click)="saveE41('Enviado')">✈&nbsp; {{ e41Mode === 'edit' ? 'Actualizar y Enviar a DGII' : 'Guardar y Enviar a DGII' }}</button><button type="button" class="e41-form__cancel" (click)="cancelE41()">{{ e41Mode === 'view' ? 'Volver a la lista' : 'Cancelar' }}</button></div>
+            </form>
+          </main>
+        </ng-template>
+      </section>
+    </ng-container>
     <ng-container *ngSwitchCase="'rep606'">
       <section class="purchase606">
         <div class="purchase606__sticky">
@@ -743,7 +834,7 @@
                   <label>Nombre / Razón Social<input [(ngModel)]="purchaseSupplier.companyName" name="purchaseSupplierName" placeholder="Empresa SRL" /></label>
                   <div class="purchase606__supplier-modal-actions"><button type="button" class="purchase606__save" [disabled]="isSavingPurchaseSupplier" (click)="savePurchaseSupplier()">{{ isSavingPurchaseSupplier ? 'Guardando...' : 'Guardar Proveedor' }}</button><button type="button" class="purchase606__cancel" [disabled]="isSavingPurchaseSupplier" (click)="cancelPurchaseSupplierForm()">Cancelar</button></div>
                 </section>
-                <div class="purchase606__supplier-fields"><label><span>RNC / Cédula <b>*</b></span><input [(ngModel)]="purchase.rnc" name="rnc" placeholder="RNC del proveedor" list="purchase606SupplierRnc" autocomplete="off" (ngModelChange)="onPurchaseRncChange()" /><datalist id="purchase606SupplierRnc"><option *ngFor="let supplier of purchaseSupplierSuggestions" [value]="supplier.documentNumber">{{ supplier.companyName }}</option></datalist></label><label><span>Nombre / Razón Social <b>*</b></span><input [(ngModel)]="purchase.supplier" name="supplier" placeholder="Nombre del proveedor" /></label></div>
+                <div class="purchase606__supplier-fields"><label><span>RNC / Cédula <b>*</b></span><input [(ngModel)]="purchase.rnc" name="rnc" placeholder="RNC del proveedor" list="purchase606SupplierRnc" autocomplete="off" (ngModelChange)="onPurchaseRncChange()" (keydown.enter)="onPurchaseRncEnter($event)" /><datalist id="purchase606SupplierRnc"><option *ngFor="let supplier of purchaseSupplierSuggestions" [value]="supplier.documentNumber">{{ supplier.companyName }}</option></datalist></label><label><span>Nombre / Razón Social <b>*</b></span><input [(ngModel)]="purchase.supplier" name="supplier" placeholder="Nombre del proveedor" /></label></div>
               </section>
               <section class="purchase606__section purchase606__invoice-panel">
                 <h3>Datos de la Factura</h3>

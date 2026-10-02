@@ -75,6 +75,14 @@
   color: #64748b;
 }
 
+.field-help {
+  align-self: end;
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 800px) {
   .certificate-upload-grid,
   .certificate-details {

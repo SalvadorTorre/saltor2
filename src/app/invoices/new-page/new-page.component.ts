@@ -11,6 +11,7 @@ import { RncService } from '../../core/services/rnc/rnc.service';
 import { ClientsService } from '../../core/services/clients/clients.service';
 import { PaymentMethod, PaymentMethodsService } from '../../core/services/payment-methods/payment-methods.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
+import { QzPrintService } from '../../core/services/printing/qz-print.service';
 
 interface InvoiceFormModelExtended extends InvoiceFormModel {
   customerPhone: string;
@@ -220,7 +221,8 @@ export class InvoiceNewPageComponent implements OnInit {
     private readonly rncService: RncService,
     private readonly clientsService: ClientsService,
     private readonly paymentMethodsService: PaymentMethodsService,
-    private readonly ecfService: EcfService
+    private readonly ecfService: EcfService,
+    private readonly qzPrintService: QzPrintService
   ) {
     this.ncfTypes = this.toNcfOptions(this.data.ncfTypeList);
     this.startNewInvoice();
@@ -950,12 +952,26 @@ export class InvoiceNewPageComponent implements OnInit {
     this.invoiceMessage = `Cliente libre: "${input}" (no registrado). Puedes continuar facturando.`;
   }
 
-  onInvoiceRncEnter(event: Event): void {
+  async onInvoiceRncEnter(event: Event): Promise<void> {
     event.preventDefault();
     this.onInvoiceRncChange();
     if (this.isRncInvalid) {
-      this.focusRncField();
-      return;
+      try {
+        const result = await this.rncService.lookup(this.invoiceForm.rnc);
+        const record: RncRecord = {
+          id: 0, rnc: result.rnc, legalName: result.legalName, tradeName: result.tradeName,
+          category: result.category, address: result.address, phone: result.phone, email: result.email,
+          dgiiStatus: result.dgiiStatus, syncStatus: 'Sincronizado', lastCheck: new Date().toISOString()
+        };
+        this.data.rncRecords = [record, ...this.data.rncRecords.filter((item) => item.rnc !== record.rnc)];
+        this.populateCustomerFromRncRecord(record);
+        this.isRncInvalid = false;
+        this.invoiceMessage = `RNC consultado en Megaplus: ${record.legalName}.`;
+      } catch (error) {
+        this.invoiceMessage = error instanceof Error ? error.message : 'No se pudo consultar el RNC.';
+        this.focusRncField();
+        return;
+      }
     }
     this.focusNextField(event);
   }
@@ -1265,21 +1281,19 @@ export class InvoiceNewPageComponent implements OnInit {
           <td>${money(line.lineTotal)}</td>
         </tr>`;
     }).join('');
-    const printWindow = window.open('', '_blank', 'width=850,height=700');
-    if (!printWindow) {
-      this.invoiceMessage = 'El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes e intenta otra vez.';
-      return;
-    }
-
-    printWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(documentTitle)} ${escape(this.savedInvoice.numero_factura)}</title><style>
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(documentTitle)} ${escape(this.savedInvoice.numero_factura)}</title><style>
       body{font-family:Arial,sans-serif;color:#111827;margin:34px}.head{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:16px}.title{font-size:22px;font-weight:700;color:#123b85}.muted{color:#4b5563;font-size:13px}.customer{margin:22px 0;line-height:1.6}table{border-collapse:collapse;width:100%;margin-top:18px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:13px}th{background:#eff6ff}.total{margin-left:auto;margin-top:20px;width:260px}.total div{display:flex;justify-content:space-between;padding:5px 0}.total strong{font-size:17px}.footer{border-top:1px solid #cbd5e1;margin-top:32px;padding-top:10px;font-size:12px;color:#64748b}</style></head><body>
       <div class="head"><div><div class="title">${escape(documentTitle)}</div><div class="muted">No. ${escape(this.savedInvoice.numero_factura)}</div></div><div class="muted">Fecha: ${escape(this.invoiceForm.invoiceDate)}<br>NCF: ${escape(this.invoiceForm.ncf || 'N/A')}</div></div>
       <div class="customer"><strong>Cliente:</strong> ${escape(this.invoiceForm.customerName)}<br><strong>RNC:</strong> ${escape(this.invoiceForm.rnc || 'Consumidor final')}<br><strong>Dirección:</strong> ${escape(this.invoiceForm.customerAddress)}</div>
       <table><thead><tr><th>Código</th><th>Producto</th><th>Cant.</th><th>Precio sin ITBIS</th><th>ITBIS</th><th>Total</th></tr></thead><tbody>${lines}</tbody></table>
       <div class="total"><div><span>Subtotal</span><span>${money(this.invoiceSubtotal)}</span></div><div><span>ITBIS</span><span>${money(this.invoiceTaxTotal)}</span></div><div><strong>Total</strong><strong>${money(this.invoiceGrandTotal)}</strong></div></div>
       <div class="footer">Estado DGII: ${escape(this.dgiiStatus)}${this.savedInvoice.dgii_track_id ? `<br>Track ID: ${escape(this.savedInvoice.dgii_track_id)}` : ''}</div>
-      <script>window.onload=function(){window.print();};<\/script></body></html>`);
-    printWindow.document.close();
+      <script>window.onload=function(){window.print();};<\/script></body></html>`;
+    const result = await this.qzPrintService.printHtml(html, `${documentTitle} ${this.savedInvoice.numero_factura}`);
+    if (result === 'unavailable') {
+      this.invoiceMessage = 'No fue posible abrir la impresión. Permite las ventanas emergentes e intenta otra vez.';
+      return;
+    }
     this.clearInvoice(true);
 
     try {
