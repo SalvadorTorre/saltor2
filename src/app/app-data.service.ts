@@ -197,21 +197,21 @@ export class AppDataService {
       id: 1, code: 'PROD-001', description: 'Laptop HP Pavilion 15', unit: 'Unidad',
       category: 'Electronica', location: 'Almacen A', brand: 'HP', type: 'Equipo', size: '15 pulgadas',
       stock: 25, minimumStock: 5, cost: 520, salePrice: 650, minimumPrice: 600,
-      wholesalePrice: 620, minimumSaleQuantity: 1, minimumWholesaleQuantity: 3, replacementCode: 'HP-15-2026',
+      wholesaleEnabled: true, wholesalePrice: 620, minimumSaleQuantity: 1, minimumWholesaleQuantity: 3, replacementEnabled: true, replacementCode: 'HP-15-2026',
       exemptItbis: false, taxValue: 18, status: 'Activo'
     },
     {
       id: 2, code: 'PROD-002', description: 'Mouse Logitech MX Master 3', unit: 'Unidad',
       category: 'Electronica', location: 'Estante 1', brand: 'Logitech', type: 'Accesorio', size: 'Estandar',
       stock: 50, minimumStock: 10, cost: 60, salePrice: 85, minimumPrice: 78,
-      wholesalePrice: 74, minimumSaleQuantity: 1, minimumWholesaleQuantity: 5, replacementCode: 'LOG-MX3',
+      wholesaleEnabled: true, wholesalePrice: 74, minimumSaleQuantity: 1, minimumWholesaleQuantity: 5, replacementEnabled: true, replacementCode: 'LOG-MX3',
       exemptItbis: false, taxValue: 18, status: 'Activo'
     },
     {
       id: 3, code: 'PROD-003', description: 'Teclado Mecanico RGB', unit: 'Unidad',
       category: 'Electronica', location: 'Estante 1', brand: 'Redragon', type: 'Accesorio', size: 'Full Size',
       stock: 3, minimumStock: 5, cost: 45, salePrice: 72, minimumPrice: 65,
-      wholesalePrice: 63, minimumSaleQuantity: 1, minimumWholesaleQuantity: 4, replacementCode: 'RED-RGB-01',
+      wholesaleEnabled: true, wholesalePrice: 63, minimumSaleQuantity: 1, minimumWholesaleQuantity: 4, replacementEnabled: true, replacementCode: 'RED-RGB-01',
       exemptItbis: false, taxValue: 18, status: 'Agotado'
     }
   ];
@@ -298,6 +298,6 @@ export class AppDataService {
     dashboard: true, company: false, users: false, ncf: false, rnc: false, settings_other: false,
     products: false, clients: false, suppliers: false, invoice_new: false, invoice_history: false,
     quotation: false, cash_opening: false, cash_closing: false, cash_movements: false,
-    accounting: false, report: false
+    accounting: false, report: false, reports: false
   };
 }

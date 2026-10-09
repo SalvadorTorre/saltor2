@@ -1,4 +1,5 @@
 <section class="dashboard-content invoice-content">
+  <div class="invoice-sticky-header">
   <div class="dashboard-header company-header">
     <div>
       <h2>Facturacion</h2>
@@ -6,8 +7,8 @@
     <div class="company-header__actions" *ngIf="billingTab === 'create'">
       <div class="dashboard-header__pill">{{ isEditingExistingInvoice ? 'Editando factura' : 'Nueva Factura' }}</div>
       <button class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
-      <button *ngIf="!invoiceSaved" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ isSavingInvoice ? 'Guardando...' : 'Guardar' }}</button>
-      <button *ngIf="invoiceSaved" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando DGII...' : 'Enviar a DGII' }}</button>
+      <button *ngIf="!invoiceSaved" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
+      <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando DGII...' : 'Enviar a DGII' }}</button>
       <button *ngIf="invoiceSaved" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
     </div>
   </div>
@@ -17,6 +18,7 @@
     <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="billingTab = 'consultation'">Consulta de facturas</button>
   </div>
   <p class="invoice-feedback" *ngIf="invoiceMessage">{{ invoiceMessage }}</p>
+  </div>
 
   <app-invoice-consultation-page *ngIf="billingTab === 'consultation'" (editRequested)="editSavedInvoice($event)" (resendRequested)="resendInvoiceToDgii($event)"></app-invoice-consultation-page>
   <ng-container *ngIf="billingTab === 'create'">
@@ -27,6 +29,27 @@
       <div class="invoice-clear-confirmation__actions">
         <button class="secondary-action" type="button" (click)="cancelInvoiceClear()">Cancelar</button>
         <button class="primary-action" type="button" (click)="confirmInvoiceClear()">Sí, limpiar</button>
+      </div>
+    </div>
+  </div>
+  <div *ngIf="isPaymentConfirmationVisible" class="invoice-payment-confirmation" role="dialog" aria-modal="true" aria-labelledby="invoicePaymentConfirmTitle">
+    <div class="invoice-payment-confirmation__dialog">
+      <div class="invoice-payment-confirmation__icon" aria-hidden="true">$</div>
+      <div class="invoice-payment-confirmation__heading">
+        <p>Confirmar factura</p>
+        <h3 id="invoicePaymentConfirmTitle">Revisa el pago antes de guardar</h3>
+      </div>
+      <div class="invoice-payment-confirmation__details">
+        <label><span>No. factura</span><input [value]="invoiceForm.invoiceNumber || 'Se genera al guardar'" readonly></label>
+        <label><span>Cliente</span><input [value]="invoiceForm.customerName || 'Cliente contado'" readonly></label>
+        <label><span>Forma de pago</span><select name="paymentConfirmationMethod" [(ngModel)]="paymentMethodCode"><option *ngFor="let method of paymentMethods" [ngValue]="method.code">{{ method.code }} - {{ method.description }}</option></select></label>
+        <label class="invoice-payment-confirmation__invoice-total"><span>Valor de la factura</span><input [value]="invoiceGrandTotal | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO'" readonly></label>
+        <label class="invoice-payment-confirmation__paid" [class.invoice-payment-confirmation__paid--invalid]="!isPaymentSufficient"><span>Monto pagado</span><input type="number" name="paymentConfirmationReceived" [min]="invoiceGrandTotal" step="0.01" [(ngModel)]="paymentReceived" autofocus><small *ngIf="!isPaymentSufficient">Faltan {{ paymentShortfall | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO' }}</small></label>
+        <div class="invoice-payment-confirmation__change" [class.invoice-payment-confirmation__change--invalid]="!isPaymentSufficient"><span>{{ isPaymentSufficient ? 'Cambio' : 'Monto pendiente' }}</span><strong>{{ (isPaymentSufficient ? paymentChange : paymentShortfall) | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO' }}</strong></div>
+      </div>
+      <div class="invoice-payment-confirmation__actions">
+        <button class="secondary-action" type="button" (click)="cancelInvoicePaymentConfirmation()">Volver</button>
+        <button class="primary-action" type="button" (click)="confirmInvoiceSave()" [disabled]="isSavingInvoice || !isPaymentSufficient">{{ requiresDgiiOnSave ? 'Guardar y enviar' : 'Confirmar y guardar' }}</button>
       </div>
     </div>
   </div>
@@ -246,9 +269,9 @@
                   <p class="invoice-summary__amount invoice-summary__amount--total">RD${{ invoiceGrandTotal | number:'1.2-2' }}</p>
                 </div>
               </div>
-              <button *ngIf="!invoiceSaved" class="primary-action invoice-summary__save" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ isSavingInvoice ? 'Guardando...' : 'Guardar factura' }}</button>
+              <button *ngIf="!invoiceSaved" class="primary-action invoice-summary__save" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
               <div *ngIf="invoiceSaved" class="invoice-summary__actions">
-                <button class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : 'Enviar a DGII' }}</button>
+                <button *ngIf="requiresDgiiOnSave" class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : 'Enviar a DGII' }}</button>
                 <button class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
               </div>
             </aside>

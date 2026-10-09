@@ -1,21 +1,32 @@
-<section class="dashboard-content standalone-module-content">
-  <div class="dashboard-header company-header">
-    <div>
-      <p class="dashboard-header__eyebrow">Caja</p>
-      <h2>Apertura de Caja</h2>
-      <p class="company-header__copy">Registra la apertura, fondo inicial y usuario responsable de la caja.</p>
-    </div>
-    <div class="company-header__actions">
-      <div class="dashboard-header__pill">Modulo Apertura</div>
+<section class="cash-opening">
+  <header class="cash-opening__header">
+    <div class="cash-opening__identity"><span class="cash-opening__logo">[]</span><div><h2>Sistema de Caja</h2><p>Apertura de Caja</p></div></div>
+    <div class="cash-opening__date">[] {{ todayLabel }}</div>
+  </header>
+  <div class="cash-opening__content">
+    <section class="cash-summary" aria-label="Resumen de caja">
+      <article><span class="cash-summary__icon cash-summary__icon--green">#</span><div><small>Cajas Abiertas</small><strong>{{ openCashCount }}</strong></div></article>
+      <article><span class="cash-summary__icon cash-summary__icon--blue">$</span><div><small>Fondo Total Activo</small><strong>{{ money(totalActiveFund) }}</strong></div></article>
+      <article><span class="cash-summary__icon cash-summary__icon--dark">[]</span><div><small>Total Aperturas</small><strong>{{ records.length }}</strong></div></article>
+    </section>
+    <div class="cash-opening__grid">
+      <form class="opening-form" (ngSubmit)="openCash()">
+        <div class="opening-form__heading"><span>[]</span><div><h3>Nueva Apertura</h3><p>Registre el inicio de caja</p></div></div>
+        <div class="opening-form__body">
+          <label><span># Numero de Caja <b>*</b></span><input name="cashNumber" [(ngModel)]="cashNumber" placeholder="Ej: 1" autocomplete="off"></label>
+          <label><span>Nombre del Cajero <b>*</b></span><input name="cashierName" [(ngModel)]="cashierName" placeholder="Ej: Juan Perez" autocomplete="off"></label>
+          <div class="opening-form__field"><span>Turno <b>*</b></span><div class="shift-options"><button *ngFor="let option of ['Manana', 'Tarde', 'Noche']" type="button" [class.shift-options__button--active]="shift === option" (click)="shift = $any(option)">{{ option }}</button></div></div>
+          <div class="opening-form__split"><label><span>Moneda <b>*</b></span><select name="currency" [(ngModel)]="currency"><option value="DOP">DOP</option><option value="USD">USD</option></select></label><label><span>Fondo Inicial <b>*</b></span><input name="openingFund" [(ngModel)]="openingFund" type="number" min="0" step="0.01" placeholder="RD$0.00"></label></div>
+          <label><span>Observaciones</span><textarea name="notes" [(ngModel)]="notes" rows="4" placeholder="Notas adicionales (opcional)..."></textarea></label>
+          <p *ngIf="formMessage" class="opening-form__message">{{ formMessage }}</p>
+          <div class="opening-form__actions"><button class="opening-form__submit" type="submit">Abrir Caja</button><button class="opening-form__clear" type="button" (click)="clearForm()">Limpiar</button></div>
+        </div>
+      </form>
+      <section class="recent-openings">
+        <header><div><h3>Aperturas Recientes</h3><p>Historial de cajas abiertas</p></div><label class="recent-openings__search">o<input [(ngModel)]="searchTerm" placeholder="Buscar..." aria-label="Buscar aperturas"></label></header>
+        <div *ngIf="!filteredRecords.length" class="recent-openings__empty"><span>[]</span><strong>No hay aperturas registradas</strong><p>Complete el formulario para crear la primera</p></div>
+        <div *ngIf="filteredRecords.length" class="recent-openings__table-wrap"><table><thead><tr><th>Caja</th><th>Cajero</th><th>Turno</th><th>Fondo inicial</th><th>Hora</th></tr></thead><tbody><tr *ngFor="let record of filteredRecords"><td>#{{ record.cashNumber }}</td><td>{{ record.cashier }}</td><td>{{ record.shift }}</td><td>{{ money(record.openingFund, record.currency) }}</td><td>{{ record.openedAt | date:'hh:mm a' }}</td></tr></tbody></table></div>
+      </section>
     </div>
   </div>
-
-  <section class="panel standalone-module-panel">
-    <div class="panel__header company-panel-header">
-      <div>
-        <h3>Apertura de Caja</h3>
-        <p>Esta opcion ya esta separada como modulo individual. Aqui puedes agregar sus formularios, tablas y acciones especificas.</p>
-      </div>
-    </div>
-  </section>
 </section>

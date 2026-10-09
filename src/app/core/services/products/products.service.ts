@@ -17,14 +17,52 @@ interface ProductRow {
   costo: number | string | null;
   precio_venta: number | string | null;
   precio_minimo: number | string | null;
+  ventaxmayor: 'S' | 'N' | null;
   precio_mayor: number | string | null;
   cantidad_minima_venta: number | string | null;
   cantidad_minima_mayor: number | string | null;
+  reemplazo: 'S' | 'N' | null;
   codigo_reemplazo: string | null;
   exento_itbis: boolean | null;
   valor_impuesto: number | string | null;
   estado: 'Activo' | 'Inactivo' | 'Agotado';
   url_imagen: string | null;
+}
+
+export interface ProductEntryRecord {
+  id: number;
+  code: string;
+  supplierId: number | null;
+  supplierName: string;
+  date: string;
+  reference: string;
+  purchaseOrder: string;
+  supplierInvoiceDate: string;
+  userCode: string;
+  userName: string;
+  notes: string;
+  lines: ProductEntryLine[];
+}
+
+export interface ProductEntryLine {
+  id: number;
+  productId: number;
+  productCode: string;
+  productDescription: string;
+  quantity: number;
+  unitCost: number;
+}
+
+export interface ProductEntryPayload {
+  supplierId: number;
+  date: string;
+  reference: string;
+  purchaseOrder: string;
+  supplierInvoiceDate: string;
+  userCode: string;
+  userName: string;
+  notes: string;
+  lines: Array<{ productId: number; quantity: number; unitCost: number }>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -43,6 +81,20 @@ export class ProductsService {
       throw error;
     }
 
+    return (data ?? []).map((row: ProductRow) => this.fromRow(row));
+  }
+
+  async searchProducts(search: string): Promise<ProductRecord[]> {
+    const term = search.trim();
+    if (!term) return [];
+    const { data, error } = await this.supabase.client
+      .from(this.table)
+      .select('*')
+      .neq('estado', 'Inactivo')
+      .or(`codigo.ilike.%${term}%,descripcion.ilike.%${term}%`)
+      .order('descripcion', { ascending: true })
+        .limit(50);
+    if (error) throw error;
     return (data ?? []).map((row: ProductRow) => this.fromRow(row));
   }
 
@@ -86,6 +138,88 @@ export class ProductsService {
     }
   }
 
+  async getEntries(): Promise<ProductEntryRecord[]> {
+    const { data: headers, error: headersError } = await this.supabase.client
+      .from('product_entry_headers')
+      .select('id, codigo, suplidor_id, fecha, referencia, orden_compra, fecha_factura_suplidor, codigo_usuario, nombre_usuario, notas, suplidor:suplidores(nombre_comercial)')
+      .order('fecha', { ascending: false })
+      .order('id', { ascending: false });
+
+    if (headersError) throw headersError;
+    const entryIds = (headers ?? []).map((header: any) => Number(header.id));
+    if (!entryIds.length) return [];
+
+    const { data: lines, error: linesError } = await this.supabase.client
+      .from('product_entries')
+      .select('id, entrada_id, producto_id, cantidad, costo_unitario, producto:products(codigo, descripcion)')
+      .in('entrada_id', entryIds)
+      .order('id', { ascending: true });
+    if (linesError) throw linesError;
+
+    const linesByEntry = new Map<number, ProductEntryLine[]>();
+    (lines ?? []).forEach((line: any) => {
+      const entryId = Number(line.entrada_id);
+      const entryLines = linesByEntry.get(entryId) ?? [];
+      entryLines.push({
+        id: Number(line.id),
+        productId: Number(line.producto_id),
+        productCode: line.producto?.codigo ?? '',
+        productDescription: line.producto?.descripcion ?? 'Producto no disponible',
+        quantity: Number(line.cantidad),
+        unitCost: Number(line.costo_unitario)
+      });
+      linesByEntry.set(entryId, entryLines);
+    });
+
+    return (headers ?? []).map((header: any) => ({
+      id: Number(header.id),
+      code: header.codigo,
+      supplierId: header.suplidor_id === null ? null : Number(header.suplidor_id),
+      supplierName: header.suplidor?.nombre_comercial ?? 'Sin suplidor',
+      date: header.fecha,
+      reference: header.referencia ?? '',
+      purchaseOrder: header.orden_compra ?? '',
+      supplierInvoiceDate: header.fecha_factura_suplidor ?? '',
+      userCode: header.codigo_usuario ?? '',
+      userName: header.nombre_usuario ?? '',
+      notes: header.notas ?? '',
+      lines: linesByEntry.get(Number(header.id)) ?? []
+    }));
+  }
+
+  async createEntry(payload: ProductEntryPayload): Promise<number> {
+    const { data, error } = await this.supabase.client.rpc('crear_entrada_productos', this.toEntryPayload(payload));
+    if (error) throw error;
+    return Number(data);
+  }
+
+  async updateEntry(entryId: number, payload: ProductEntryPayload): Promise<void> {
+    const { error } = await this.supabase.client.rpc('actualizar_entrada_productos', {
+      p_entrada_id: entryId,
+      ...this.toEntryPayload(payload)
+    });
+    if (error) throw error;
+  }
+
+  async registerEntry(productId: number, supplierId: number | null, date: string, quantity: number, cost: number, reference: string, notes: string): Promise<void> {
+    const { error } = await this.supabase.client.rpc('registrar_entrada_producto', {
+      p_producto_id: productId,
+      p_suplidor_id: supplierId,
+      p_fecha: date,
+      p_cantidad: quantity,
+      p_costo_unitario: cost,
+      p_referencia: reference,
+      p_notas: notes
+    });
+
+    if (error) throw error;
+  }
+
+  async deleteEntry(id: number): Promise<void> {
+    const { error } = await this.supabase.client.rpc('eliminar_entrada_productos', { p_entrada_id: id });
+    if (error) throw error;
+  }
+
   private fromRow(row: ProductRow): ProductRecord {
     return {
       id: row.id,
@@ -102,9 +236,11 @@ export class ProductsService {
       cost: Number(row.costo ?? 0),
       salePrice: Number(row.precio_venta ?? 0),
       minimumPrice: Number(row.precio_minimo ?? 0),
+      wholesaleEnabled: row.ventaxmayor === 'S',
       wholesalePrice: Number(row.precio_mayor ?? 0),
       minimumSaleQuantity: Number(row.cantidad_minima_venta ?? 1),
       minimumWholesaleQuantity: Number(row.cantidad_minima_mayor ?? 0),
+      replacementEnabled: row.reemplazo === 'S' || Boolean(row.codigo_reemplazo),
       replacementCode: row.codigo_reemplazo ?? '',
       exemptItbis: Boolean(row.exento_itbis),
       taxValue: Number(row.valor_impuesto ?? 0),
@@ -128,14 +264,34 @@ export class ProductsService {
       costo: Number(form.cost || 0),
       precio_venta: Number(form.salePrice || 0),
       precio_minimo: Number(form.minimumPrice || 0),
-      precio_mayor: Number(form.wholesalePrice || 0),
+      ventaxmayor: form.wholesaleEnabled ? 'S' : 'N',
+      precio_mayor: form.wholesaleEnabled ? Number(form.wholesalePrice || 0) : 0,
       cantidad_minima_venta: Math.max(1, Number(form.minimumSaleQuantity || 1)),
-      cantidad_minima_mayor: Number(form.minimumWholesaleQuantity || 0),
-      codigo_reemplazo: form.replacementCode.trim() || null,
+      cantidad_minima_mayor: form.wholesaleEnabled ? Number(form.minimumWholesaleQuantity || 0) : 0,
+      reemplazo: form.replacementEnabled ? 'S' : 'N',
+      codigo_reemplazo: form.replacementEnabled ? form.replacementCode.trim() || null : null,
       exento_itbis: Boolean(form.exemptItbis),
       valor_impuesto: Number(form.taxValue || 0),
       estado: form.status,
       url_imagen: form.imageUrl?.trim() || null
+    };
+  }
+
+  private toEntryPayload(payload: ProductEntryPayload): Record<string, unknown> {
+    return {
+      p_suplidor_id: payload.supplierId,
+      p_fecha: payload.date,
+      p_referencia: payload.reference,
+      p_orden_compra: payload.purchaseOrder,
+      p_fecha_factura_suplidor: payload.supplierInvoiceDate || null,
+      p_codigo_usuario: payload.userCode,
+      p_nombre_usuario: payload.userName,
+      p_notas: payload.notes,
+      p_lineas: payload.lines.map((line) => ({
+        producto_id: line.productId,
+        cantidad: line.quantity,
+        costo_unitario: line.unitCost
+      }))
     };
   }
 }

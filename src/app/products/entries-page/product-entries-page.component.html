@@ -1,0 +1,77 @@
+<section class="dashboard-content product-entries-content">
+  <div class="dashboard-header company-header">
+    <div><h2>Entrada de producto</h2>
+      <p class="company-header__copy">.</p></div>
+    <div class="dashboard-header__pill">Inventario</div>
+  </div>
+
+  <nav class="entry-tabs" aria-label="Navegación de entradas">
+    <button type="button" [class.entry-tabs__button--active]="activeTab === 'new'" (click)="selectTab('new')">Nueva entrada</button>
+    <button type="button" [class.entry-tabs__button--active]="activeTab === 'consultation'" (click)="selectTab('consultation')">Consulta entrada</button>
+  </nav>
+
+
+  <section *ngIf="activeTab === 'new'" class="panel product-entries-panel">
+    <form class="entry-reference-form" (ngSubmit)="save()">
+      <fieldset class="entry-editor-fieldset" [disabled]="isEntryReadOnly">
+      <div class="entry-header-grid">
+        <label class="field"><span>RNC Suplidor</span><input type="text" name="supplierDocument" [(ngModel)]="supplierDocumentSearch" (ngModelChange)="onSupplierDocumentChange()" (keydown.enter)="onSupplierDocumentEnter($event)" list="entrySupplierDocumentDatalist" autocomplete="off" placeholder="RNC o cédula del suplidor" /><datalist id="entrySupplierDocumentDatalist"><option *ngFor="let supplier of filteredSupplierDocuments" [value]="supplier.documentNumber">{{ supplier.companyName }}</option></datalist></label>
+        <label class="field entry-header-grid__supplier"><span>Nombre Suplidor</span><input type="text" name="supplierName" [(ngModel)]="supplierNameSearch" (ngModelChange)="onSupplierNameChange()" (keydown.enter)="onSupplierNameEnter($event)" list="entrySupplierNameDatalist" autocomplete="off" placeholder="Escribe el nombre del suplidor" /><datalist id="entrySupplierNameDatalist"><option *ngFor="let supplier of supplierNameSuggestions" [value]="supplier.companyName">{{ supplier.documentNumber }}</option></datalist></label>
+        <button class="secondary-action entry-header-grid__add" type="button" tabindex="-1" (click)="showSupplierDialog = true">+ Agregar proveedor</button>
+        <label class="field"><span>Código Entrada</span><input [value]="entryCode" readonly /></label>
+        <label class="field"><span>Fecha Entrada</span><input type="date" name="date" [(ngModel)]="form.date" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
+        <label class="field"><span>Fact. Suplidor</span><input name="reference" [(ngModel)]="form.reference" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
+        <label class="field"><span>Orden Compra</span><input name="purchaseOrder" [(ngModel)]="form.purchaseOrder" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
+        <label class="field"><span>Fec. Factura</span><input type="date" name="supplierInvoiceDate" [(ngModel)]="form.supplierInvoiceDate" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
+        <label class="field"><span>Cód. Usuario</span><input name="userCode" [(ngModel)]="form.userCode" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
+        <label class="field"><span>Usuario</span><input name="userName" readonly /></label>
+        <label class="field entry-header-grid__notes"><span>Nota</span><textarea name="notes" [(ngModel)]="form.notes" (keydown.enter)="focusNextEntryHeaderField($event)"></textarea></label>
+      </div>
+
+      <section class="entry-lines">
+        <div class="entry-lines__heading"><h3>Agregar productos</h3><button class="secondary-action" type="button" tabindex="-1" (click)="showProductDialog = true">+ Agregar producto</button></div>
+        <div class="entry-line-editor">
+          <label class="field entry-line-editor__product-search"><span>Código</span><input type="text" name="lineProductCode" [(ngModel)]="lineEditor.code" (ngModelChange)="onProductCodeChange()" (focus)="onProductSearchFocus('code')" (blur)="onProductSearchBlur()" (keydown)="onProductSuggestionKeydown($event)" placeholder="Código producto" autocomplete="off" /><div class="product-suggestions entry-product-suggestions" *ngIf="productSuggestionField === 'code' && productSuggestions.length" role="listbox"><button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)"><span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span><span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span></button></div></label>
+          <label class="field entry-line-editor__description entry-line-editor__product-search"><span>Descripción</span><input type="text" name="lineProductDescription" [(ngModel)]="lineEditor.productName" (ngModelChange)="onProductDescriptionChange()" (focus)="onProductSearchFocus('description')" (blur)="onProductSearchBlur()" (keydown)="onProductSuggestionKeydown($event)" placeholder="Descripción producto" autocomplete="off" /><div class="product-suggestions entry-product-suggestions" *ngIf="productSuggestionField === 'description' && productSuggestions.length" role="listbox"><button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)"><span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span><span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span></button></div></label>
+          <label class="field"><span>Cantidad</span><input type="number" min="0.01" step="0.01" name="lineQuantity" [(ngModel)]="lineEditor.quantity" (focus)="selectEntryLineInput($event)" (keydown.enter)="onLineEditorQuantityEnter($event)" /></label>
+          <label class="field"><span>Precio</span><input type="number" min="0" step="0.01" name="lineCost" [(ngModel)]="lineEditor.cost" (focus)="selectEntryLineInput($event)" (keydown.enter)="onLineEditorCostEnter($event)" /></label>
+        </div>
+        <div class="entry-lines-table">
+          <div class="entry-lines-table__row entry-lines-table__row--head"><span>Código</span><span>Descripción</span><span>Cantidad</span><span>Precio</span><span>Total</span><span>Acciones</span></div>
+          <div class="entry-lines-table__row" *ngFor="let line of lines; let index = index"><span>{{ line.product.code }}</span><span>{{ getProductFullDescription(line.product) }}</span><span>{{ line.quantity }}</span><span>RD$ {{ line.cost | number:'1.2-2' }}</span><strong>RD$ {{ line.quantity * line.cost | number:'1.2-2' }}</strong><button type="button" (click)="removeLine(index)">Eliminar</button></div>
+          <p *ngIf="!lines.length" class="entry-lines-table__empty">No hay productos agregados</p>
+        </div>
+      </section>
+      </fieldset>
+      <div class="entry-footer"><strong>Total: RD$ {{ entryTotal | number:'1.2-2' }}</strong><button class="secondary-action" type="button">Imprimir 80mm</button><button class="secondary-action" type="button" *ngIf="!isEntryReadOnly" (click)="clearEntryForm()">Limpiar</button><button class="secondary-action" type="button" *ngIf="isEntryReadOnly" (click)="returnToConsultation()">Volver a consulta</button><button class="primary-action" type="submit" *ngIf="!isEntryReadOnly" [disabled]="isSaving || isLoading">{{ saveEntryLabel }}</button></div>
+    </form>
+  </section>
+
+  <section *ngIf="activeTab === 'consultation'" class="product-entries-consultation">
+    <div class="entry-filters panel">
+      <label class="field entry-filters__search"><span>Buscar entrada</span><input type="search" [(ngModel)]="filters.search" placeholder="Producto, proveedor o referencia" /></label>
+      <label class="field"><span>Proveedor</span><select [(ngModel)]="filters.supplierId"><option [ngValue]="0">Todos</option><option *ngFor="let supplier of suppliers" [ngValue]="supplier.id">{{ supplier.companyName }}</option></select></label>
+      <label class="field"><span>Desde</span><input type="date" [(ngModel)]="filters.from" /></label>
+      <label class="field"><span>Hasta</span><input type="date" [(ngModel)]="filters.to" /></label>
+    </div>
+    <section class="panel entry-table-panel">
+      <p class="entry-table-count">Mostrando {{ filteredEntries.length }} entradas</p>
+      <div class="entry-table">
+        <div class="entry-table__row entry-table__row--head"><span>Fecha</span><span>Entrada</span><span>Productos</span><span>Proveedor</span><span>Referencia</span><span>Items</span><span>Total</span><span>Acciones</span></div>
+        <div class="entry-table__row" *ngFor="let entry of filteredEntries"><span>{{ entry.date | date:'dd/MM/yyyy' }}</span><strong>{{ entry.code }}</strong><span><strong>{{ getEntryProductSummary(entry) }}</strong><small>{{ entry.lines.length }} artículo{{ entry.lines.length === 1 ? '' : 's' }}</small></span><span>{{ entry.supplierName }}</span><span>{{ entry.reference || '-' }}</span><strong>{{ entry.lines.length }}</strong><strong>RD$ {{ getEntryTotal(entry) | number:'1.2-2' }}</strong><span class="entry-table__actions"><button class="entry-table__icon-button entry-table__icon-button--view" type="button" title="Ver entrada" aria-label="Ver entrada" (click)="viewEntry(entry)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.7"></circle></svg></button><button class="entry-table__icon-button entry-table__icon-button--edit" type="button" title="Editar entrada" aria-label="Editar entrada" (click)="editEntry(entry)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L19 8.5 15.5 5 4 16.5Z"></path><path d="m14.5 6 3.5 3.5"></path></svg></button></span></div>
+        <p *ngIf="!isLoading && !filteredEntries.length" class="entry-table-empty">No hay entradas que coincidan con los filtros.</p>
+      </div>
+    </section>
+  </section>
+</section>
+
+<div *ngIf="showProductDialog" class="entry-dialog" (click)="showProductDialog = false"><form class="panel entry-dialog__panel" (click)="$event.stopPropagation()" (ngSubmit)="createQuickProduct()"><h3>Agregar producto</h3><label class="field"><span>Código *</span><input name="quickProductCode" [(ngModel)]="productForm.code" /></label><label class="field"><span>Descripción *</span><input name="quickProductDescription" [(ngModel)]="productForm.description" /></label><label class="field"><span>Costo</span><input type="number" min="0" name="quickProductCost" [(ngModel)]="productForm.cost" /></label><div><button type="button" class="secondary-action" (click)="showProductDialog = false">Cancelar</button><button type="submit" class="primary-action">Guardar producto</button></div></form></div>
+<div *ngIf="showSupplierDialog" class="entry-dialog" (click)="showSupplierDialog = false"><form class="panel entry-dialog__panel" (click)="$event.stopPropagation()" (ngSubmit)="createQuickSupplier()"><h3>Agregar proveedor</h3><label class="field"><span>RNC/Cédula *</span><input name="quickSupplierDocument" [(ngModel)]="supplierForm.documentNumber" /></label><label class="field"><span>Nombre *</span><input name="quickSupplierName" [(ngModel)]="supplierForm.companyName" /></label><label class="field"><span>Código</span><input name="quickSupplierCode" [(ngModel)]="supplierForm.code" /></label><div><button type="button" class="secondary-action" (click)="showSupplierDialog = false">Cancelar</button><button type="submit" class="primary-action">Guardar proveedor</button></div></form></div>
+<div *ngIf="message" class="entry-notice" (click)="dismissMessage()">
+  <section class="entry-notice__panel" role="dialog" aria-modal="true" aria-live="assertive" (click)="$event.stopPropagation()">
+    <div class="entry-notice__icon" [class.entry-notice__icon--error]="messageIsError">{{ messageIsError ? '!' : '✓' }}</div>
+    <h3>{{ messageTitle }}</h3>
+    <p>{{ message }}</p>
+    <button type="button" class="primary-action" (click)="dismissMessage()">Aceptar</button>
+  </section>
+</div>

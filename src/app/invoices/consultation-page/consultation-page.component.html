@@ -1,15 +1,13 @@
 <section class="dashboard-content standalone-module-content">
   <div class="dashboard-header company-header">
     <div>
-      <p class="dashboard-header__eyebrow">Facturación</p>
       <h2>Consulta de Facturas</h2>
-      <p class="company-header__copy">Busca facturas guardadas y revisa su estado ante DGII.</p>
     </div>
     <div class="company-header__actions">
-      <div class="dashboard-header__pill">Consulta</div>
       <button class="secondary-action" type="button" (click)="loadInvoices()" [disabled]="isLoading">{{ isLoading ? 'Actualizando...' : 'Actualizar' }}</button>
     </div>
   </div>
+  
 
   <div class="supplier-toolbar">
     <label class="field">
@@ -36,13 +34,14 @@
     <div class="supplier-table-count">Mostrando {{ filteredInvoices.length }} de {{ invoices.length }} facturas</div>
     <div class="invoice-consultation-table">
       <div class="invoice-consultation-table__row invoice-consultation-table__row--head">
-        <span>Fecha</span><span>Factura</span><span>Cliente</span><span>NCF</span><span>Total</span><span>DGII</span><span>Opciones</span>
+        <span>Fecha</span><span>Factura</span><span>Cliente</span><span>NCF</span><span>Tipo NCF</span><span>Total</span><span>DGII</span><span>Opciones</span>
       </div>
       <div *ngFor="let invoice of filteredInvoices" class="invoice-consultation-table__row invoice-consultation-table__row--data">
         <span>{{ invoice.date | date:'dd/MM/yyyy' }}</span>
         <strong>{{ invoice.number }}</strong>
         <span>{{ invoice.customer }}</span>
         <span>{{ invoice.ncf || 'N/A' }}</span>
+        <span>{{ invoice.ncfType || 'N/A' }}</span>
         <strong>RD${{ invoice.total | number:'1.2-2' }}</strong>
         <span class="invoice-dgii-status">{{ invoice.status === 'Anulada' ? 'Anulada' : invoice.dgiiStatus }}</span>
         <span class="invoice-consultation-actions">

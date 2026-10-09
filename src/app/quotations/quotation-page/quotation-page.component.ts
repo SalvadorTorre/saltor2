@@ -9,6 +9,7 @@ import { ProductsService } from '../../core/services/products/products.service';
 import { RncService } from '../../core/services/rnc/rnc.service';
 import { UsersService } from '../../core/services/users/users.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { AuthService } from '../../core/services/auth/auth.service';
 
 @Component({ selector: 'app-quotation-page', standalone: true, imports: [CommonModule, FormsModule], templateUrl: './quotation-page.component.html', styleUrls: ['./quotation-page.component.scss'] })
 export class QuotationPageComponent implements OnInit {
@@ -40,7 +41,8 @@ export class QuotationPageComponent implements OnInit {
     private readonly productsService: ProductsService,
     private readonly rncService: RncService,
     private readonly usersService: UsersService,
-    private readonly qzPrintService: QzPrintService
+    private readonly qzPrintService: QzPrintService,
+    private readonly auth: AuthService
   ) {}
   ngOnInit(): void { void this.load(); void this.loadClients(); void this.loadProducts(); void this.loadRncRecords(); void this.loadUsers(); }
   emptyQuote() { return { number: '', date: new Date().toISOString().slice(0, 10), validUntil: '', customer: '', rnc: '', phone: '', email: '', address: '', notes: '', lines: [] as Omit<QuotationLine, 'total'>[] }; }
@@ -251,15 +253,19 @@ export class QuotationPageComponent implements OnInit {
     const q = await this.quotations.get(item.id);
     if (!q) return;
     const company = this.data.companies[0];
-    const rows = q.lines.map((line) => `<tr><td>${this.e(line.description)}<br><small>${line.quantity} x RD$${line.price.toFixed(2)}</small></td><td>RD$${line.total.toFixed(2)}</td></tr>`).join('');
+    const seller = (await this.auth.restoreSession())?.fullName ?? this.data.userName;
+    const rows = q.lines.map((line) => {
+      const itbis = line.total - (line.quantity * line.price);
+      return `<tr><td><b>${this.e(line.description)}</b><br><small>${line.quantity} x RD$${line.price.toFixed(2)}</small></td><td>RD$${itbis.toFixed(2)}</td><td>RD$${line.total.toFixed(2)}</td></tr>`;
+    }).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${this.e(q.number)}</title><style>
       @page { size: 80mm auto; margin: 0; }
       * { box-sizing: border-box; }
       body { color:#111; font:11px Arial,sans-serif; margin:0; width:80mm; }
       .print-document { padding:4mm; width:80mm; }
       .center { text-align:center; } h1 { font-size:14px; margin:0 0 3px; } p { margin:3px 0; }
-      .rule { border-top:1px dashed #111; margin:5px 0; } table { border-collapse:collapse; width:100%; } th,td { padding:4px 0; text-align:left; vertical-align:top; } th:last-child,td:last-child { text-align:right; } small { font-size:10px; } .total p { display:flex; justify-content:space-between; } .grand { font-size:14px; font-weight:700; }
-    </style></head><body><main class="print-document"><section class="center"><h1>${this.e(company?.legalName || this.data.companyName)}</h1><p>RNC: ${this.e(company?.rnc || '')}</p><p>${this.e(company?.address || '')}</p><p>Tel.: ${this.e(company?.phone || '')}</p></section><div class="rule"></div><section><p><b>COTIZACIÓN ${this.e(q.number)}</b></p><p>Fecha: ${q.date}</p><p>Válida hasta: ${q.validUntil || 'N/D'}</p><p>Cliente: ${this.e(q.customer)}</p><p>RNC/Cédula: ${this.e(q.rnc)}</p><p>Teléfono: ${this.e(q.phone)}</p><p>Dirección: ${this.e(q.address)}</p></section><div class="rule"></div><table><thead><tr><th>Producto</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="rule"></div><section class="total"><p><span>Subtotal</span><b>RD$${q.subtotal.toFixed(2)}</b></p><p><span>ITBIS</span><b>RD$${q.itbis.toFixed(2)}</b></p><p class="grand"><span>TOTAL</span><span>RD$${q.total.toFixed(2)}</span></p></section><div class="rule"></div><p class="center">Gracias por su preferencia</p></main><script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`;
+      .rule { border-top:1px dashed #111; margin:5px 0; } .doc span { display:inline-block; min-width:72px; } table { border-collapse:collapse; width:100%; } th,td { border-bottom:1px dashed #777; padding:4px 1px; text-align:left; vertical-align:top; font-size:10px; } th:nth-child(2),th:nth-child(3),td:nth-child(2),td:nth-child(3) { text-align:right; } small { font-size:10px; } .total p { display:flex; justify-content:space-between; } .grand { font-size:14px; font-weight:700; }
+    </style></head><body><main class="print-document"><section class="center"><h1>${this.e(company?.legalName || this.data.companyName)}</h1><p>RNC: ${this.e(company?.rnc || '')}</p><p>${this.e(company?.address || '')}</p><p>Tel.: ${this.e(company?.phone || '')}</p></section><div class="rule"></div><section class="doc"><p class="center"><b>COTIZACIÓN ${this.e(q.number)}</b></p><p><span>Fecha:</span>${q.date}</p><p><span>Válida hasta:</span>${q.validUntil || 'N/D'}</p><p>Cliente: ${this.e(q.customer)}</p><p>RNC/Cédula: ${this.e(q.rnc || 'N/D')}</p><p>Dirección: ${this.e(q.address || 'N/D')}</p><p>Teléfono: ${this.e(q.phone || 'N/D')}</p><p>Vendedor: ${this.e(seller)}</p></section><div class="rule"></div><table><thead><tr><th>DESCRIPCIÓN</th><th>ITBIS</th><th>VALOR</th></tr></thead><tbody>${rows}</tbody></table><div class="rule"></div><section class="total"><p><span>Subtotal</span><b>RD$${q.subtotal.toFixed(2)}</b></p><p><span>ITBIS</span><b>RD$${q.itbis.toFixed(2)}</b></p><p class="grand"><span>TOTAL</span><span>RD$${q.total.toFixed(2)}</span></p></section><div class="rule"></div><p class="center">Gracias por su preferencia</p></main><script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`;
     const result = await this.qzPrintService.printHtml(html, `Cotización ${q.number}`, 'width=420,height=700');
     if (result === 'unavailable') this.message = 'No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.';
   }

@@ -12,6 +12,7 @@ export interface ActiveUserSession {
   companyId: number;
   companyName: string;
   branch: string;
+  branchId: number;
   role: string;
 }
 
@@ -38,6 +39,7 @@ interface UserProfileRow {
   correo: string;
   empresa_id: number;
   sucursal: string | null;
+  sucursal_id: number | null;
   rol: string;
   estado: string;
 }
@@ -67,17 +69,26 @@ export class AuthService {
     }
   }
 
-  async signIn(email: string, password: string): Promise<ActiveUserSession> {
-    const { data, error } = await this.supabase.client.auth.signInWithPassword({
-      email: email.trim(),
-      password
+  async signIn(username: string, password: string): Promise<ActiveUserSession> {
+    const { data, error } = await this.supabase.client.functions.invoke('iniciar-sesion-usuario', {
+      body: { idUsuario: username.trim(), clave: password }
     });
+    if (error) throw error;
 
-    if (error || !data.user) {
-      throw error ?? new Error('No se pudo iniciar sesión.');
+    const session = data?.session;
+    if (!session?.access_token || !session?.refresh_token) {
+      throw new Error('ID de usuario o clave incorrectos.');
     }
 
-    return this.loadActiveUser(data.user.id);
+    const { data: sessionData, error: sessionError } = await this.supabase.client.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token
+    });
+    if (sessionError || !sessionData.user) {
+      throw sessionError ?? new Error('No se pudo establecer la sesión del usuario.');
+    }
+
+    return this.loadActiveUser(sessionData.user.id);
   }
 
   async signOut(): Promise<void> {
@@ -133,7 +144,7 @@ export class AuthService {
 
   async registerInitialAdmin(form: InitialAdminForm): Promise<ActiveUserSession> {
     if (await this.hasRegisteredUsers()) {
-      throw new Error('Ya existe un usuario. Inicie sesión con su correo y clave.');
+      throw new Error('Ya existe un usuario. Inicie sesión con su ID de usuario y clave.');
     }
     if (!form.companyId) {
       throw new Error('Seleccione la empresa del administrador.');
@@ -184,7 +195,7 @@ export class AuthService {
   private async loadActiveUser(authUserId: string): Promise<ActiveUserSession> {
     const { data, error } = await this.supabase.client
       .from('usuarios')
-      .select('codusuario, auth_usuario_id, nombre_usuario, nombre_completo, correo, empresa_id, sucursal, rol, estado')
+      .select('codusuario, auth_usuario_id, nombre_usuario, nombre_completo, correo, empresa_id, sucursal, sucursal_id, rol, estado')
       .eq('auth_usuario_id', authUserId)
       .eq('estado', 'Activo')
       .maybeSingle();
@@ -209,6 +220,7 @@ export class AuthService {
       companyId: profile.empresa_id,
       companyName: company?.nombre_comercial ?? 'Empresa',
       branch: profile.sucursal ?? '',
+      branchId: Number(profile.sucursal_id ?? 0),
       role: profile.rol
     };
 

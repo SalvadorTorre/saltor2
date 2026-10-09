@@ -51,12 +51,12 @@
 }
 
 .invoice-consultation-table {
-  min-width: 1420px;
+  min-width: 1600px;
 }
 
 .invoice-consultation-table__row {
   gap: 22px;
-  grid-template-columns: 130px 180px minmax(320px, 1.7fr) 205px 160px 210px 270px;
+  grid-template-columns: 130px 180px minmax(270px, 1.4fr) 190px 220px 160px 210px 270px;
   min-height: 66px;
   padding: 14px 20px;
 }

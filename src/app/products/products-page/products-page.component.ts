@@ -25,6 +25,9 @@ export class ProductsPageComponent implements OnInit {
   productEditorMode: 'create' | 'edit' | 'view' = 'create';
   selectedProductId: number | null = null;
   activeMaintenanceLabel = 'Productos';
+  replacementDescriptionSearch = '';
+  showReplacementSuggestions = false;
+  activeReplacementSuggestionIndex = 0;
 
   readonly maintenanceLinks = [
     { label: 'Productos', icon: 'box' },
@@ -54,9 +57,11 @@ export class ProductsPageComponent implements OnInit {
     cost: 0,
     salePrice: 0,
     minimumPrice: 0,
+    wholesaleEnabled: false,
     wholesalePrice: 0,
     minimumSaleQuantity: 1,
     minimumWholesaleQuantity: 0,
+    replacementEnabled: false,
     replacementCode: '',
     exemptItbis: false,
     taxValue: 18,
@@ -130,9 +135,11 @@ export class ProductsPageComponent implements OnInit {
       cost: 0,
       salePrice: 0,
       minimumPrice: 0,
+      wholesaleEnabled: false,
       wholesalePrice: 0,
       minimumSaleQuantity: 1,
       minimumWholesaleQuantity: 0,
+      replacementEnabled: false,
       replacementCode: '',
       exemptItbis: false,
       taxValue: 18,
@@ -176,6 +183,93 @@ export class ProductsPageComponent implements OnInit {
     this.isProductEditorOpen = false;
   }
 
+  onWholesaleEnabledChange(): void {
+    if (!this.productForm.wholesaleEnabled) {
+      this.productForm.wholesalePrice = 0;
+      this.productForm.minimumWholesaleQuantity = 0;
+    }
+  }
+
+  get replacementCandidates(): ProductRecord[] {
+    const search = this.replacementDescriptionSearch.trim().toLowerCase();
+    if (!this.productForm.replacementEnabled || !this.showReplacementSuggestions || !search) {
+      return [];
+    }
+
+    const availableProducts = this.products.filter((product) => product.id !== this.selectedProductId);
+    const sortByDescription = (products: ProductRecord[]) => products
+      .sort((a, b) => this.getReplacementProductDescription(a).localeCompare(this.getReplacementProductDescription(b), 'es', { sensitivity: 'base' }))
+      .slice(0, 8);
+    const startsWithDescription = availableProducts.filter((product) =>
+      this.getReplacementProductDescription(product).toLowerCase().startsWith(search)
+      || product.code.trim().toLowerCase().startsWith(search)
+    );
+
+    return startsWithDescription.length
+      ? sortByDescription(startsWithDescription)
+      : sortByDescription(availableProducts.filter((product) =>
+        this.getReplacementProductDescription(product).toLowerCase().includes(search)
+        || product.code.trim().toLowerCase().includes(search)
+      ));
+  }
+
+  getReplacementProductDescription(product: ProductRecord): string {
+    return [product.description, product.brand, product.type, product.size]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join(' ');
+  }
+
+  isActiveReplacementSuggestion(index: number): boolean {
+    return index === this.activeReplacementSuggestionIndex;
+  }
+
+  onReplacementEnabledChange(): void {
+    if (!this.productForm.replacementEnabled) {
+      this.productForm.replacementCode = '';
+      this.replacementDescriptionSearch = '';
+    }
+    this.showReplacementSuggestions = false;
+    this.activeReplacementSuggestionIndex = 0;
+  }
+
+  onReplacementDescriptionChange(): void {
+    this.productForm.replacementCode = '';
+    this.showReplacementSuggestions = true;
+    this.activeReplacementSuggestionIndex = 0;
+  }
+
+  selectReplacementProduct(product: ProductRecord): void {
+    this.productForm.replacementCode = product.code;
+    this.replacementDescriptionSearch = this.getReplacementProductDescription(product);
+    this.showReplacementSuggestions = false;
+    this.activeReplacementSuggestionIndex = 0;
+  }
+
+  onReplacementSuggestionKeydown(event: Event): void {
+    if (!(event instanceof KeyboardEvent)) return;
+    const suggestions = this.replacementCandidates;
+    if (event.key === 'Escape') {
+      this.showReplacementSuggestions = false;
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const selectedProduct = suggestions[this.activeReplacementSuggestionIndex];
+      if (selectedProduct) this.selectReplacementProduct(selectedProduct);
+      return;
+    }
+    if (!suggestions.length || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+
+    event.preventDefault();
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    this.activeReplacementSuggestionIndex =
+      (this.activeReplacementSuggestionIndex + direction + suggestions.length) % suggestions.length;
+  }
+
+  onReplacementDescriptionBlur(): void {
+    window.setTimeout(() => this.showReplacementSuggestions = false, 120);
+  }
+
   focusNextProductField(event: Event): void {
     event.preventDefault();
     if (!(event.target instanceof HTMLElement)) return;
@@ -209,8 +303,16 @@ export class ProductsPageComponent implements OnInit {
     const salePrice = Number(this.productForm.salePrice) || 0;
     const minimumPrice = Number(this.productForm.minimumPrice) || 0;
     const wholesalePrice = Number(this.productForm.wholesalePrice) || 0;
-    if (salePrice <= cost || minimumPrice <= cost || (wholesalePrice > 0 && wholesalePrice <= cost)) {
+    if (salePrice <= cost || minimumPrice <= cost || (this.productForm.wholesaleEnabled && wholesalePrice <= cost)) {
       this.productMessage = 'Los precios de venta, minimo y por mayor deben ser mayores que el costo.';
+      return;
+    }
+    if (this.productForm.wholesaleEnabled && Number(this.productForm.minimumWholesaleQuantity) < 1) {
+      this.productMessage = 'Indica la cantidad minima para la venta por mayor.';
+      return;
+    }
+    if (this.productForm.replacementEnabled && !this.productForm.replacementCode.trim()) {
+      this.productMessage = 'Busca y selecciona el producto que se usara como reemplazo.';
       return;
     }
     if (minimumPrice > salePrice) {
@@ -294,6 +396,10 @@ export class ProductsPageComponent implements OnInit {
     this.selectedProductId = product.id;
     this.productForm = { ...product };
     delete (this.productForm as Partial<ProductRecord>).id;
+    const replacementProduct = this.products.find((item) => item.code === product.replacementCode);
+    this.replacementDescriptionSearch = replacementProduct ? this.getReplacementProductDescription(replacementProduct) : '';
+    this.showReplacementSuggestions = false;
+    this.activeReplacementSuggestionIndex = 0;
   }
 
   private async loadProducts(): Promise<void> {

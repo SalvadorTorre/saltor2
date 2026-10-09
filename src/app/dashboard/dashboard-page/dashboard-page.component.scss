@@ -1,0 +1,26 @@
+.dashboard-header__company {
+  margin: 4px 0 0;
+  color: #52709b;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dashboard-header__pill {
+  border: 0;
+  cursor: pointer;
+}
+
+.dashboard-header__pill:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.dashboard-feedback {
+  margin: 0 0 16px;
+  color: #335b88;
+  font-size: 0.92rem;
+}
+
+.dashboard-feedback--error {
+  color: #b42318;
+}

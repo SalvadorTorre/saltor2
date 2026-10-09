@@ -49,6 +49,8 @@ export interface EditableInvoiceData extends InvoiceSaveData {
   dgiiCode: string;
   dgiiMessage: string;
   dgiiSentAt: string;
+  securityCode: string;
+  qrLink: string;
   dgiiResponse: unknown;
 }
 
@@ -58,6 +60,7 @@ interface InvoiceConsultationDatabaseRow {
   fecha_factura: string;
   cliente_nombre: string;
   ncf: string | null;
+  tipo_ncf: string | null;
   total: number | string;
   dgii_estado: DgiiInvoiceStatus | null;
   dgii_mensaje_respuesta: string | null;
@@ -116,9 +119,13 @@ export class InvoicesService {
   }
 
   async getInvoiceForEditing(invoiceId: number): Promise<EditableInvoiceData> {
+    if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) {
+      throw new Error('No se recibió un identificador válido para consultar la factura.');
+    }
+
     const { data: invoice, error: invoiceError } = await this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, cliente_id, cliente_nombre, cliente_rnc, cliente_telefono, cliente_correo, cliente_direccion, cliente_ciudad, fecha_factura, tipo_ncf, ncf, condicion_pago, forma_pago_codigo, notas, subtotal, itbis, total, dgii_track_id, dgii_codigo_respuesta, dgii_mensaje_respuesta, dgii_enviado_en, dgii_respuesta')
+      .select('id, numero_factura, cliente_id, cliente_nombre, cliente_rnc, cliente_telefono, cliente_correo, cliente_direccion, cliente_ciudad, fecha_factura, tipo_ncf, ncf, condicion_pago, forma_pago_codigo, notas, subtotal, itbis, total, dgii_track_id, dgii_codigo_respuesta, dgii_mensaje_respuesta, dgii_enviado_en, dgii_respuesta, codSeguridad, qr_link')
       .eq('id', invoiceId)
       .single();
     if (invoiceError) throw invoiceError;
@@ -137,6 +144,8 @@ export class InvoicesService {
       dgiiCode: invoice.dgii_codigo_respuesta ?? '',
       dgiiMessage: invoice.dgii_mensaje_respuesta ?? '',
       dgiiSentAt: invoice.dgii_enviado_en ?? '',
+      securityCode: invoice.codSeguridad ?? '',
+      qrLink: invoice.qr_link ?? '',
       dgiiResponse: invoice.dgii_respuesta ?? null,
       customerId: invoice.cliente_id,
       customerName: invoice.cliente_nombre ?? '',
@@ -185,6 +194,7 @@ export class InvoicesService {
     date: string;
     customer: string;
     ncf: string;
+    ncfType: string;
     total: number;
     status: string;
     dgiiStatus: DgiiInvoiceStatus;
@@ -192,7 +202,7 @@ export class InvoicesService {
   }>> {
     const { data, error } = await this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, cliente_nombre, ncf, total, estado, dgii_estado, dgii_mensaje_respuesta')
+      .select('id, numero_factura, fecha_factura, cliente_nombre, ncf, tipo_ncf, total, estado, dgii_estado, dgii_mensaje_respuesta')
       .order('id', { ascending: false });
 
     if (error) {
@@ -205,6 +215,7 @@ export class InvoicesService {
       date: row.fecha_factura,
       customer: row.cliente_nombre,
       ncf: row.ncf ?? '',
+      ncfType: row.tipo_ncf ?? '',
       total: Number(row.total),
       status: row.estado ?? 'Activa',
       dgiiStatus: row.dgii_estado ?? 'No enviado',

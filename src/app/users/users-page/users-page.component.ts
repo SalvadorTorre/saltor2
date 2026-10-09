@@ -27,6 +27,7 @@ export class UsersPageComponent implements OnInit {
 
   userEditorMode: 'create' | 'edit' = 'create';
   userMessage = 'Formulario listo para registrar un nuevo usuario en el sistema.';
+  userMessageType: 'info' | 'success' | 'error' = 'info';
   isLoadingUsers = false;
   isLoadingBranches = false;
   isSavingUser = false;
@@ -58,12 +59,16 @@ export class UsersPageComponent implements OnInit {
   }
 
   get canSaveUser(): boolean {
-    const { firstName, lastName, username, password, email, companyId, branch, role } = this.userForm;
+    const { firstName, lastName, username, password, confirmPassword, email, companyId, branch, role } = this.userForm;
     const hasRequiredData = Boolean(
       firstName.trim() && lastName.trim() && username.trim() && email.trim() && companyId && branch && role
     );
 
-    return hasRequiredData && (this.userEditorMode === 'edit' || password.length >= 6);
+    return hasRequiredData && (this.userEditorMode === 'edit' || (password.length >= 6 && password === confirmPassword));
+  }
+
+  get passwordMismatch(): boolean {
+    return Boolean(this.userForm.confirmPassword) && this.userForm.password !== this.userForm.confirmPassword;
   }
 
   get availableBranches(): string[] {
@@ -87,16 +92,43 @@ export class UsersPageComponent implements OnInit {
     void this.loadBranchesForCompany(this.userForm.companyId);
   }
 
+  normalizeUsername(): void {
+    this.userForm.username = this.userForm.username.trim().toUpperCase().replace(/\s+/g, '');
+  }
+
   async saveUser(): Promise<void> {
-    const { firstName, lastName, username, password, email, companyId, branch, role } = this.userForm;
+    this.normalizeUsername();
+    const { firstName, lastName, username, password, confirmPassword, email, companyId, branch, role } = this.userForm;
 
     if (!firstName.trim() || !lastName.trim() || !username.trim() || !email.trim() || !companyId || !branch || !role) {
-      this.userMessage = 'Completa identificacion, informacion personal, empresa, sucursal y rol antes de crear el usuario.';
+      const missingFields: string[] = [];
+      if (!firstName.trim() || !lastName.trim()) missingFields.push('nombre y apellido');
+      if (!username.trim()) missingFields.push('ID de usuario');
+      if (!email.trim()) missingFields.push('correo de contacto');
+      if (!companyId) missingFields.push('empresa');
+      if (!branch) missingFields.push('sucursal');
+      if (!role) missingFields.push('rol');
+      this.setUserMessage(`Completa los campos obligatorios: ${missingFields.join(', ')}.`, 'error');
+      return;
+    }
+
+    if (!/^[A-Z0-9._-]+$/.test(username)) {
+      this.setUserMessage('El ID de usuario solo puede contener letras, numeros, punto, guion y guion bajo.', 'error');
+      return;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      this.setUserMessage('Escribe un correo de contacto valido.', 'error');
       return;
     }
 
     if (this.userEditorMode === 'create' && password.length < 6) {
-      this.userMessage = 'La clave debe tener al menos 6 caracteres.';
+      this.setUserMessage('La clave debe tener al menos 6 caracteres.', 'error');
+      return;
+    }
+
+    if (this.userEditorMode === 'create' && password !== confirmPassword) {
+      this.setUserMessage('La confirmacion de la clave no coincide.', 'error');
       return;
     }
 
@@ -108,13 +140,13 @@ export class UsersPageComponent implements OnInit {
         this.data.users = [newUser, ...this.data.users.filter((user) => user.id !== newUser.id)];
         this.selectedUserId = newUser.id;
         this.loadUserIntoForm(newUser, 'edit');
-        this.userMessage = `Usuario ${newUser.fullName} creado correctamente con rol ${newUser.role}.`;
+        this.setUserMessage(`Usuario ${newUser.fullName} creado correctamente con rol ${newUser.role}.`, 'success');
         return;
       }
 
       const userId = this.selectedUserId ?? this.selectedUser?.id;
       if (!userId) {
-        this.userMessage = 'Selecciona un usuario antes de actualizar.';
+        this.setUserMessage('Selecciona un usuario antes de actualizar.', 'error');
         return;
       }
 
@@ -122,9 +154,9 @@ export class UsersPageComponent implements OnInit {
       this.data.users = this.data.users.map((user) => user.id === updatedUser.id ? updatedUser : user);
       this.selectedUserId = updatedUser.id;
       this.loadUserIntoForm(updatedUser, 'edit');
-      this.userMessage = `Usuario ${updatedUser.fullName} actualizado correctamente.`;
+      this.setUserMessage(`Usuario ${updatedUser.fullName} actualizado correctamente.`, 'success');
     } catch (error) {
-      this.userMessage = this.formatSupabaseError(error, 'No se pudo guardar el usuario.');
+      this.setUserMessage(this.formatSupabaseError(error, 'No se pudo guardar el usuario.'), 'error');
     } finally {
       this.isSavingUser = false;
     }
@@ -133,7 +165,12 @@ export class UsersPageComponent implements OnInit {
   resetUserForm(): void {
     this.userForm = this.createEmptyUserForm();
     this.userEditorMode = 'create';
-    this.userMessage = 'Completa los datos para agregar un nuevo usuario.';
+    this.setUserMessage('Completa los datos para agregar un nuevo usuario.');
+  }
+
+  private setUserMessage(message: string, type: 'info' | 'success' | 'error' = 'info'): void {
+    this.userMessage = message;
+    this.userMessageType = type;
   }
 
   selectUser(user: UserRecord): void {
@@ -201,6 +238,7 @@ export class UsersPageComponent implements OnInit {
       lastName: user.lastName,
       username: user.username,
       password: '',
+      confirmPassword: '',
       email: user.email,
       phone: user.phone,
       companyId: user.companyId,
@@ -216,6 +254,7 @@ export class UsersPageComponent implements OnInit {
       lastName: '',
       username: '',
       password: '',
+      confirmPassword: '',
       email: '',
       phone: '',
       companyId: null,

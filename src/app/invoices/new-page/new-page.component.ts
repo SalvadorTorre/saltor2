@@ -12,6 +12,10 @@ import { ClientsService } from '../../core/services/clients/clients.service';
 import { PaymentMethod, PaymentMethodsService } from '../../core/services/payment-methods/payment-methods.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { AuthService } from '../../core/services/auth/auth.service';
+import { CompaniesService } from '../../core/services/companies/companies.service';
+import * as QRCode from 'qrcode';
+import * as JsBarcodeModule from 'jsbarcode';
 
 interface InvoiceFormModelExtended extends InvoiceFormModel {
   customerPhone: string;
@@ -187,6 +191,8 @@ export class InvoiceNewPageComponent implements OnInit {
   readonly invoiceTableRowCount = 10;
   isSavingInvoice = false;
   isClearConfirmationVisible = false;
+  isPaymentConfirmationVisible = false;
+  paymentReceived = 0;
   isRncInvalid = false;
   isSendingDgii = false;
   isDgiiSendConfirmationVisible = false;
@@ -222,7 +228,9 @@ export class InvoiceNewPageComponent implements OnInit {
     private readonly clientsService: ClientsService,
     private readonly paymentMethodsService: PaymentMethodsService,
     private readonly ecfService: EcfService,
-    private readonly qzPrintService: QzPrintService
+    private readonly qzPrintService: QzPrintService,
+    private readonly auth: AuthService,
+    private readonly companiesService: CompaniesService
   ) {
     this.ncfTypes = this.toNcfOptions(this.data.ncfTypeList);
     this.startNewInvoice();
@@ -320,7 +328,17 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   get canSendToDgii(): boolean {
-    return !['Aceptado', 'Rechazado'].includes(this.dgiiStatus);
+    return this.requiresDgiiOnSave && !['Aceptado', 'Rechazado'].includes(this.dgiiStatus);
+  }
+
+  get requiresDgiiOnSave(): boolean {
+    const typeCode = this.invoiceForm.ncfType.match(/(?:^|\D)(31|44|45|46)(?:\D|$)/)?.[1];
+    return !!typeCode;
+  }
+
+  get saveInvoiceLabel(): string {
+    if (this.isSavingInvoice) return this.requiresDgiiOnSave ? 'Guardando y enviando...' : 'Guardando...';
+    return this.requiresDgiiOnSave ? 'Guardar y enviar a DGII' : 'Guardar';
   }
 
   get emptyInvoiceTableRows(): number[] {
@@ -535,7 +553,8 @@ export class InvoiceNewPageComponent implements OnInit {
 
   private applyProductPriceForQuantity(product: ProductRecord): void {
     const quantity = Number(this.lineEditorForm.quantity) || 0;
-    const appliesWholesale = product.minimumWholesaleQuantity > 0
+    const appliesWholesale = product.wholesaleEnabled
+      && product.minimumWholesaleQuantity > 0
       && quantity >= product.minimumWholesaleQuantity
       && product.wholesalePrice > 0;
     const price = appliesWholesale ? product.wholesalePrice : product.salePrice;
@@ -554,7 +573,8 @@ export class InvoiceNewPageComponent implements OnInit {
       if (!product) return line;
 
       const taxRate = this.getInvoiceTaxRate(product);
-      const usesWholesalePrice = product.minimumWholesaleQuantity > 0
+      const usesWholesalePrice = product.wholesaleEnabled
+        && product.minimumWholesaleQuantity > 0
         && line.quantity >= product.minimumWholesaleQuantity
         && product.wholesalePrice > 0;
       const normalPrice = usesWholesalePrice ? product.wholesalePrice : product.salePrice;
@@ -686,7 +706,8 @@ export class InvoiceNewPageComponent implements OnInit {
       this.lineEditorMessage = `La cantidad minima de venta de ${product.description} es ${product.minimumSaleQuantity}.`;
       return false;
     }
-    const isWholesaleSale = product.minimumWholesaleQuantity > 0
+    const isWholesaleSale = product.wholesaleEnabled
+      && product.minimumWholesaleQuantity > 0
       && product.wholesalePrice > 0
       && qty >= product.minimumWholesaleQuantity;
     const minimumAllowedPrice = this.getInvoiceUnitPrice(product, isWholesaleSale ? product.wholesalePrice : product.minimumPrice);
@@ -1096,6 +1117,38 @@ export class InvoiceNewPageComponent implements OnInit {
       return;
     }
 
+    this.invoiceForm.customerName = customerName;
+    this.paymentReceived = this.invoiceGrandTotal;
+    this.isPaymentConfirmationVisible = true;
+  }
+
+  cancelInvoicePaymentConfirmation(): void {
+    if (this.isSavingInvoice) return;
+    this.isPaymentConfirmationVisible = false;
+  }
+
+  get paymentChange(): number {
+    return Math.max(0, Number(this.paymentReceived || 0) - this.invoiceGrandTotal);
+  }
+
+  get paymentShortfall(): number {
+    return Math.max(0, this.invoiceGrandTotal - Number(this.paymentReceived || 0));
+  }
+
+  get isPaymentSufficient(): boolean {
+    return Number.isFinite(Number(this.paymentReceived)) && Number(this.paymentReceived) >= this.invoiceGrandTotal;
+  }
+
+  async confirmInvoiceSave(): Promise<void> {
+    if (this.isSavingInvoice || !this.isPaymentConfirmationVisible) return;
+    const paid = Number(this.paymentReceived);
+    if (!Number.isFinite(paid) || paid < this.invoiceGrandTotal) {
+      this.invoiceMessage = 'El monto pagado debe ser igual o mayor que el valor de la factura.';
+      return;
+    }
+
+    this.isPaymentConfirmationVisible = false;
+
     if (!this.invoiceForm.ncf) {
       const sequence = this.ncfSequences
         .filter((s) => s.status === 'Activa' && s.ncfType === this.invoiceForm.ncfType && s.total > 0)
@@ -1119,8 +1172,8 @@ export class InvoiceNewPageComponent implements OnInit {
     try {
       const invoiceData = {
         customerId: this.invoiceForm.customerId,
-        customerName,
-        rnc,
+        customerName: this.invoiceForm.customerName.trim(),
+        rnc: this.invoiceForm.rnc.trim(),
         customerPhone: this.invoiceForm.customerPhone,
         customerEmail: this.invoiceForm.customerEmail,
         customerAddress: this.invoiceForm.customerAddress,
@@ -1144,9 +1197,14 @@ export class InvoiceNewPageComponent implements OnInit {
       this.invoiceForm.invoiceNumber = savedInvoice.numero_factura;
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
-      this.invoiceMessage = this.editingExistingInvoiceId
-        ? `Factura ${savedInvoice.numero_factura} actualizada correctamente.`
-        : `Factura ${savedInvoice.numero_factura} guardada correctamente. Ahora puedes enviarla a DGII o imprimirla.`;
+      if (this.requiresDgiiOnSave) {
+        this.invoiceMessage = `Factura ${savedInvoice.numero_factura} guardada. Enviando a DGII...`;
+        await this.sendInvoiceToDgii(true);
+      } else {
+        this.invoiceMessage = this.editingExistingInvoiceId
+          ? `Factura ${savedInvoice.numero_factura} actualizada correctamente y marcada como No enviado.`
+          : `Factura ${savedInvoice.numero_factura} guardada correctamente y marcada como No enviado.`;
+      }
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo guardar la factura.');
     } finally {
@@ -1226,7 +1284,7 @@ export class InvoiceNewPageComponent implements OnInit {
     void this.sendInvoiceToDgii();
   }
 
-  private async sendInvoiceToDgii(): Promise<void> {
+  private async sendInvoiceToDgii(printAfterSend = false): Promise<void> {
     if (!this.savedInvoice || this.isSendingDgii) return;
     this.isSendingDgii = true;
     this.dgiiDialog = 'processing';
@@ -1241,6 +1299,9 @@ export class InvoiceNewPageComponent implements OnInit {
         ?? (hasDgiiError
           ? `La factura ${this.savedInvoice.numero_factura} no fue aceptada por DGII.`
           : `La factura ${this.savedInvoice.numero_factura} fue enviada a DGII.`);
+      if (printAfterSend && !hasDgiiError) {
+        await this.printInvoice();
+      }
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo enviar la factura a DGII.');
       this.dgiiDialog = 'error';
@@ -1262,6 +1323,14 @@ export class InvoiceNewPageComponent implements OnInit {
 
     const isAcceptedByDgii = this.dgiiStatus === 'Aceptado';
     const documentTitle = isAcceptedByDgii ? 'Factura electrónica' : 'Factura de consumo final';
+    const session = await this.auth.restoreSession();
+    const seller = session?.fullName ?? this.data.userName;
+    const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId) ?? this.data.companies[0];
+    const printDetail = await this.invoicesService.getInvoiceForEditing(savedInvoiceId);
+    const fiscalCodes = await this.createFiscalCodes(
+      printDetail.qrLink || `${this.savedInvoice.numero_factura}|${this.invoiceForm.ncf}|${this.invoiceGrandTotal.toFixed(2)}`,
+      this.savedInvoice.numero_factura
+    );
     const escape = (value: string | number | null | undefined): string => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -1271,23 +1340,17 @@ export class InvoiceNewPageComponent implements OnInit {
     const money = (value: number): string => `RD$${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const lines = this.invoiceLines.map((line) => {
       const priceWithoutTax = line.taxRate > 0 ? line.unitPrice / (1 + (line.taxRate / 100)) : line.unitPrice;
-      return `
-        <tr>
-          <td>${escape(this.getInvoiceProductCode(line.productId))}</td>
-          <td>${escape(line.description)}</td>
-          <td>${escape(line.quantity)}</td>
-          <td>${money(priceWithoutTax)}</td>
-          <td>${money(line.taxAmount)}</td>
-          <td>${money(line.lineTotal)}</td>
-        </tr>`;
+      return `<tr><td>${escape(this.getInvoiceProductCode(line.productId))} &nbsp; ${escape(line.quantity)} x ${money(priceWithoutTax)}<br><b>${escape(line.description)}</b></td><td>${money(line.taxAmount)}</td><td>${money(line.lineTotal)}</td></tr>`;
     }).join('');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(documentTitle)} ${escape(this.savedInvoice.numero_factura)}</title><style>
-      body{font-family:Arial,sans-serif;color:#111827;margin:34px}.head{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:16px}.title{font-size:22px;font-weight:700;color:#123b85}.muted{color:#4b5563;font-size:13px}.customer{margin:22px 0;line-height:1.6}table{border-collapse:collapse;width:100%;margin-top:18px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:13px}th{background:#eff6ff}.total{margin-left:auto;margin-top:20px;width:260px}.total div{display:flex;justify-content:space-between;padding:5px 0}.total strong{font-size:17px}.footer{border-top:1px solid #cbd5e1;margin-top:32px;padding-top:10px;font-size:12px;color:#64748b}</style></head><body>
-      <div class="head"><div><div class="title">${escape(documentTitle)}</div><div class="muted">No. ${escape(this.savedInvoice.numero_factura)}</div></div><div class="muted">Fecha: ${escape(this.invoiceForm.invoiceDate)}<br>NCF: ${escape(this.invoiceForm.ncf || 'N/A')}</div></div>
-      <div class="customer"><strong>Cliente:</strong> ${escape(this.invoiceForm.customerName)}<br><strong>RNC:</strong> ${escape(this.invoiceForm.rnc || 'Consumidor final')}<br><strong>Dirección:</strong> ${escape(this.invoiceForm.customerAddress)}</div>
-      <table><thead><tr><th>Código</th><th>Producto</th><th>Cant.</th><th>Precio sin ITBIS</th><th>ITBIS</th><th>Total</th></tr></thead><tbody>${lines}</tbody></table>
+      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(2),th:nth-child(3),td:nth-child(2),td:nth-child(3){text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:28mm;height:28mm;display:block;margin:0 auto 5px}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
+      <div class="head"><div class="company">${escape(company?.legalName || company?.tradeName || session?.companyName || this.data.companyName)}</div><div class="muted">RNC: ${escape(company?.rnc || 'N/D')}</div><div class="muted">${escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${escape(company?.phone || 'N/D')}</div></div>
+      <div class="document-data"><div><span>No. Factura:</span>${escape(this.savedInvoice.numero_factura)}</div><div><span>Fecha:</span>${escape(this.invoiceForm.invoiceDate)}</div><div><span>e-NCF:</span>${escape(this.invoiceForm.ncf || 'N/A')}</div></div>
+      <div class="receipt-type">${escape(this.receiptDocumentType(this.invoiceForm.ncfType || documentTitle))}</div>
+      <div class="customer"><strong>Cliente:</strong> ${escape(this.invoiceForm.customerName)}<br><strong>RNC/Cédula:</strong> ${escape(this.invoiceForm.rnc || 'Consumidor final')}<br><strong>Dirección:</strong> ${escape(this.invoiceForm.customerAddress || 'N/D')}<br><strong>Teléfono:</strong> ${escape(this.invoiceForm.customerPhone || 'N/D')}<br><strong>Vendedor:</strong> ${escape(seller)}</div>
+      <table><thead><tr><th>DESCRIPCIÓN</th><th>ITBIS</th><th>VALOR</th></tr></thead><tbody>${lines}</tbody></table>
       <div class="total"><div><span>Subtotal</span><span>${money(this.invoiceSubtotal)}</span></div><div><span>ITBIS</span><span>${money(this.invoiceTaxTotal)}</span></div><div><strong>Total</strong><strong>${money(this.invoiceGrandTotal)}</strong></div></div>
-      <div class="footer">Estado DGII: ${escape(this.dgiiStatus)}${this.savedInvoice.dgii_track_id ? `<br>Track ID: ${escape(this.savedInvoice.dgii_track_id)}` : ''}</div>
+      <div class="fiscal">${fiscalCodes.qr ? `<img class="qr" src="${fiscalCodes.qr}" alt="Código QR">` : ''}<p><b>Código de seguridad:</b> ${escape(printDetail.securityCode || 'Pendiente')}</p><p><b>Fecha firma digital:</b> ${escape(printDetail.dgiiSentAt || 'Pendiente')}</p>${fiscalCodes.barcode ? `<img class="barcode" src="${fiscalCodes.barcode}" alt="Código de barras"><p>${escape(this.savedInvoice.numero_factura)}</p>` : ''}</div>
       <script>window.onload=function(){window.print();};<\/script></body></html>`;
     const result = await this.qzPrintService.printHtml(html, `${documentTitle} ${this.savedInvoice.numero_factura}`);
     if (result === 'unavailable') {
@@ -1445,6 +1508,27 @@ export class InvoiceNewPageComponent implements OnInit {
 
   private findRncRecord(rnc: string): RncRecord | undefined {
     return this.data.rncRecords.find((record) => record.rnc.trim().toLowerCase() === rnc.trim().toLowerCase());
+  }
+
+  private receiptDocumentType(value: string): string {
+    const type = value.toLowerCase();
+    if (type.includes('31') || type.includes('credito fiscal') || type.includes('crédito fiscal')) return 'Factura de Crédito Fiscal';
+    if (type.includes('32') || type.includes('consumo')) return 'Factura de Consumo Electrónica';
+    return value.replace(/^\s*\d{2}\s*-\s*/, '').trim() || 'Factura';
+  }
+
+  private async createFiscalCodes(qrValue: string, barcodeValue: string): Promise<{ qr: string; barcode: string }> {
+    try {
+      const canvas = document.createElement('canvas');
+      const barcode = (JsBarcodeModule as any).default ?? JsBarcodeModule;
+      barcode(canvas, barcodeValue, { format: 'CODE128', displayValue: false, margin: 0, width: 1.25, height: 42 });
+      return {
+        qr: await QRCode.toDataURL(qrValue, { width: 150, margin: 1 }),
+        barcode: canvas.toDataURL('image/png')
+      };
+    } catch {
+      return { qr: '', barcode: '' };
+    }
   }
 
   private formatSupabaseError(error: unknown, fallback: string): string {

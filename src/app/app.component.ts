@@ -2,6 +2,7 @@ import { Component, HostListener, OnInit } from '@angular/core';
 import { AppDataService } from './app-data.service';
 import { ViewMode, NavigationItem, ModuleItem } from './app.models';
 import { ActiveUserSession, AuthService } from './core/services/auth/auth.service';
+import { DisplayPreferencesService } from './core/services/display-preferences/display-preferences.service';
 
 @Component({
   selector: 'app-root',
@@ -11,10 +12,16 @@ import { ActiveUserSession, AuthService } from './core/services/auth/auth.servic
 export class AppComponent implements OnInit {
   isCheckingSession = true;
   activeUser: ActiveUserSession | null = null;
+  isLogoutMenuOpen = false;
 
-  constructor(public data: AppDataService, private readonly auth: AuthService) {}
+  constructor(
+    public data: AppDataService,
+    private readonly auth: AuthService,
+    private readonly displayPreferences: DisplayPreferencesService
+  ) {}
 
   async ngOnInit(): Promise<void> {
+    this.displayPreferences.apply(this.displayPreferences.getProfile());
     this.activeUser = await this.auth.restoreSession();
     this.isCheckingSession = false;
   }
@@ -31,7 +38,6 @@ export class AppComponent implements OnInit {
   set expandedSections(v: Record<string, boolean>) { this.data.expandedSections = v; }
 
   get maintenanceLinks(): NavigationItem[] { return [
-    { label: 'Productos', icon: 'box' },
     { label: 'Clientes', icon: 'users' },
     { label: 'Suplidores', icon: 'truck' }
   ]; }
@@ -45,16 +51,16 @@ export class AppComponent implements OnInit {
   ]; }
 
   get modules(): ModuleItem[] { return [
-    { label: 'Facturacion', icon: 'file-text', key: 'facturacion', children: ['Nueva Factura', 'Historial', 'Consulta de Facturas'] },
+    { label: 'Facturacion', icon: 'file-text' },
     { label: 'Cotizacion', icon: 'clipboard' },
-    { label: 'Caja', icon: 'wallet', key: 'caja', children: ['Apertura', 'Cierre', 'Movimientos'] },
+    { label: 'Caja', icon: 'wallet', key: 'caja', children: ['Apertura', 'Cierre', 'Historico'] },
     {
       label: 'Contabilidad', icon: 'calculator', key: 'accounting', children: [
         'Facturas pendientes', 'Rep. 607', 'e-NCF', 'Nota de crédito',
         'Gastos menores', 'Cuentas por cobrar', 'Rep. 606', 'Compra informal E41'
       ]
     },
-    { label: 'Reporte', icon: 'chart' }
+    { label: 'Reporte', icon: 'chart', key: 'reports', children: ['Venta por productos', 'Rep. ventas'] }
   ]; }
 
   onLoggedIn(user: ActiveUserSession): void {
@@ -62,21 +68,59 @@ export class AppComponent implements OnInit {
   }
 
   async logout(): Promise<void> {
-    await this.auth.signOut();
-    this.activeUser = null;
+    this.isLogoutMenuOpen = false;
+    try {
+      await this.auth.signOut();
+    } finally {
+      // Siempre vuelve a la pantalla de acceso, aun si el servidor no responde.
+      this.activeUser = null;
+    }
   }
 
-  activeView: ViewMode = 'company';
+  toggleLogoutMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    this.isLogoutMenuOpen = !this.isLogoutMenuOpen;
+  }
+
+  @HostListener('document:click')
+  closeLogoutMenu(): void {
+    this.isLogoutMenuOpen = false;
+  }
+
+  activeView: ViewMode = 'dashboard';
   activeSettingsLabel = 'Empresa';
-  activeMaintenanceLabel = 'Productos';
+  activeMaintenanceLabel = '';
   activeModuleLabel = '';
   activeModuleChild = '';
+  activeTopSection = 'dashboard';
+
+  get activeTopModule(): ModuleItem | null {
+    return this.modules.find((item) => item.key === this.activeTopSection && Boolean(item.children?.length)) ?? null;
+  }
+
+  selectTopSection(section: 'dashboard' | 'maintenance' | 'settings'): void {
+    this.activeTopSection = section;
+    if (section === 'dashboard') {
+      this.showDashboard();
+    }
+  }
+
+  selectTopModule(item: ModuleItem): void {
+    if (item.children?.length) {
+      this.activeTopSection = item.key ?? '';
+      return;
+    }
+
+    this.activeTopSection = item.key ?? '';
+    this.selectStandaloneModule(item);
+  }
 
   toggleSection(section: string): void {
     this.expandedSections[section] = !this.expandedSections[section];
   }
 
   showDashboard(): void {
+    this.activeTopSection = 'dashboard';
     this.activeView = 'dashboard';
     this.activeModuleLabel = '';
     this.activeModuleChild = '';
@@ -105,8 +149,16 @@ export class AppComponent implements OnInit {
       this.activeView = 'cash_closing';
       return;
     }
-    if (module.label === 'Caja' && child === 'Movimientos') {
+    if (module.label === 'Caja' && child === 'Historico') {
       this.activeView = 'cash_movements';
+      return;
+    }
+    if (module.label === 'Reporte' && child === 'Venta por productos') {
+      this.activeView = 'report';
+      return;
+    }
+    if (module.label === 'Reporte' && child === 'Rep. ventas') {
+      this.activeView = 'report_invoices';
       return;
     }
     if (module.label === 'Contabilidad') {
@@ -127,6 +179,7 @@ export class AppComponent implements OnInit {
   selectStandaloneModule(item: ModuleItem): void {
     this.activeModuleLabel = item.label;
     this.activeModuleChild = '';
+    if (item.label === 'Facturacion') { this.activeView = 'invoice_new'; return; }
     if (item.label === 'Cotizacion') { this.activeView = 'quotation'; return; }
     if (item.label === 'Contabilidad') { this.activeView = 'accounting'; return; }
     if (item.label === 'Reporte') { this.activeView = 'report'; }
@@ -137,9 +190,16 @@ export class AppComponent implements OnInit {
     this.activeSettingsLabel = '';
     this.activeModuleLabel = '';
     this.activeModuleChild = '';
-    if (item.label === 'Productos') { this.activeView = 'products'; return; }
     if (item.label === 'Clientes') { this.activeView = 'clients'; return; }
     if (item.label === 'Suplidores') { this.activeView = 'suppliers'; }
+  }
+
+  selectInventoryItem(item: 'Productos' | 'Entrada de producto'): void {
+    this.activeMaintenanceLabel = item;
+    this.activeSettingsLabel = '';
+    this.activeModuleLabel = '';
+    this.activeModuleChild = '';
+    this.activeView = item === 'Productos' ? 'products' : 'product_entries';
   }
 
   selectSettingsItem(item: NavigationItem): void {
@@ -164,7 +224,7 @@ export class AppComponent implements OnInit {
 
   isStandaloneModuleActive(item: ModuleItem): boolean {
     const moduleViews: Record<string, ViewMode> = {
-      Cotizacion: 'quotation', Contabilidad: 'accounting', Reporte: 'report'
+      Facturacion: 'invoice_new', Cotizacion: 'quotation', Contabilidad: 'accounting', Reporte: 'report'
     };
     return this.activeModuleLabel === item.label && this.activeView === moduleViews[item.label];
   }

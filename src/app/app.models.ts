@@ -31,6 +31,7 @@ export interface UserFormModel {
   lastName: string;
   username: string;
   password: string;
+  confirmPassword: string;
   email: string;
   phone: string;
   companyId: number | null;
@@ -39,7 +40,7 @@ export interface UserFormModel {
   status: 'Activo' | 'Inactivo';
 }
 
-export interface UserRecord extends Omit<UserFormModel, 'password'> {
+export interface UserRecord extends Omit<UserFormModel, 'password' | 'confirmPassword'> {
   id: number;
   authUserId: string | null;
   fullName: string;
@@ -137,9 +138,11 @@ export interface ProductRecord {
   cost: number;
   salePrice: number;
   minimumPrice: number;
+  wholesaleEnabled: boolean;
   wholesalePrice: number;
   minimumSaleQuantity: number;
   minimumWholesaleQuantity: number;
+  replacementEnabled: boolean;
   replacementCode: string;
   exemptItbis: boolean;
   taxValue: number;
@@ -245,6 +248,7 @@ export type ViewMode =
   | 'rnc'
   | 'settings_other'
   | 'products'
+  | 'product_entries'
   | 'clients'
   | 'suppliers'
   | 'invoice_new'
@@ -255,4 +259,5 @@ export type ViewMode =
   | 'cash_closing'
   | 'cash_movements'
   | 'accounting'
-  | 'report';
+  | 'report'
+  | 'report_invoices';

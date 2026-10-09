@@ -277,6 +277,14 @@
         <p class="field-help">Todos los reportes usarán este formato. QZ Tray imprime en la impresora predeterminada de Windows.</p>
 
         <label class="field">
+          <span>Resolucion de pantalla</span>
+          <select name="displayProfile" [(ngModel)]="preferences.displayProfile" (ngModelChange)="previewDisplayProfile()">
+            <option *ngFor="let profile of displayProfileOptions" [value]="profile.value">{{ profile.label }}</option>
+          </select>
+        </label>
+        <p class="field-help">{{ displayProfileDescription }}</p>
+
+        <label class="field">
           <span>Tipo NCF por defecto</span>
           <select name="defaultNcfType" [(ngModel)]="preferences.defaultNcfType">
             <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>

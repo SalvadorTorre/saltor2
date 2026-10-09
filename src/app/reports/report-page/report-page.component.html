@@ -1,21 +1,35 @@
-<section class="dashboard-content standalone-module-content">
-  <div class="dashboard-header company-header">
-    <div>
-      <p class="dashboard-header__eyebrow">Reporte</p>
-      <h2>Reportes</h2>
-      <p class="company-header__copy">Consulta indicadores, listados y resumenes operativos del sistema.</p>
+<section class="sales-report">
+  <header class="sales-report__header"><div class="sales-report__header-icon">↗</div><div><h2>{{ title }}</h2><p>{{ subtitle }}</p></div></header>
+  <section class="sales-report__filters">
+    <div class="sales-report__filter-heading"><span>⌕</span><div><h3>Filtros de búsqueda</h3><p>{{ mode === 'invoices' ? 'Selecciona un período y opcionalmente filtra por cliente.' : 'Selecciona un período y opcionalmente filtra por categoría, producto o cliente.' }}</p></div></div>
+    <div class="sales-report__period"><label>Período</label><div class="sales-report__period-buttons"><button *ngFor="let option of periods" type="button" [class.is-active]="period === option.value" (click)="setPeriod(option.value)">{{ option.label }}</button></div></div>
+    <div class="sales-report__fields">
+      <label *ngIf="mode === 'products'">Categoría<select [(ngModel)]="category"><option value="all">Todas las categorías</option><option *ngFor="let item of categories" [value]="item">{{ item }}</option></select></label>
+      <label class="sales-report__product-field" *ngIf="mode === 'products' && period === 'custom'">Descripción del producto<input [(ngModel)]="productDescription" type="search" autocomplete="off" placeholder="Escriba para buscar producto..."><div class="sales-report__suggestions" *ngIf="productSuggestions.length"><button type="button" *ngFor="let product of productSuggestions" (click)="selectProduct(product)">{{ product }}</button></div></label>
+      <label [class.sales-report__client-field]="period === 'custom'">Cliente<input [(ngModel)]="client" type="search" placeholder="Nombre del cliente..."></label>
+      <label *ngIf="period === 'custom'">Desde<input [(ngModel)]="dateFrom" type="date"></label>
+      <label *ngIf="period === 'custom'">Hasta<input [(ngModel)]="dateTo" type="date"></label>
     </div>
-    <div class="company-header__actions">
-      <div class="dashboard-header__pill">Modulo Reportes</div>
-    </div>
-  </div>
-
-  <section class="panel standalone-module-panel">
-    <div class="panel__header company-panel-header">
-      <div>
-        <h3>Reportes</h3>
-        <p>Esta opcion ya esta separada como modulo individual. Aqui puedes agregar sus formularios, tablas y acciones especificas.</p>
-      </div>
+    <div class="sales-report__actions"><button class="sales-report__query" type="button" (click)="loadReport()">⌕ Consultar ventas</button><button class="sales-report__clear" type="button" (click)="clearFilters()">↻ Limpiar</button></div>
+  </section>
+  <p class="sales-report__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <section class="sales-report__metrics">
+    <article><span>Ingresos totales</span><strong>{{ formatMoney(totalRevenue) }}</strong><i class="income">$</i></article>
+    <article><span>Unidades vendidas</span><strong>{{ totalUnits | number:'1.0-2' }}</strong><i class="units">□</i></article>
+    <article><span>Venta promedio</span><strong>{{ formatMoney(averageSale) }}</strong><i class="average">↗</i></article>
+    <article><span>Transacciones</span><strong>{{ transactions }}</strong><i class="transactions">≡</i></article>
+  </section>
+  <section class="sales-report__results">
+    <div class="sales-report__results-header"><h3>Resultados <span>({{ mode === 'invoices' ? invoiceRows.length : filteredRows.length }} registros)</span></h3><div class="sales-report__export-actions"><button type="button" (click)="exportPdf()" [disabled]="!filteredRows.length">⇩ Exportar PDF</button><button type="button" (click)="exportExcel()" [disabled]="!filteredRows.length">⇩ Exportar Excel</button></div></div>
+    <div class="sales-report__table-wrap">
+      <table *ngIf="mode === 'products'"><thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Categoría</th><th class="numeric">Cant.</th><th class="numeric">Precio unit.</th><th class="numeric">Total</th></tr></thead><tbody>
+        <tr *ngFor="let row of filteredRows"><td>{{ formatDate(row.date) }}</td><td class="product">{{ row.product }}</td><td>{{ row.client }}</td><td><span class="category">{{ row.category }}</span></td><td class="numeric">{{ row.quantity | number:'1.0-2' }}</td><td class="numeric">{{ formatMoney(row.unitPrice) }}</td><td class="numeric total">{{ formatMoney(row.total) }}</td></tr>
+        <tr *ngIf="isLoading"><td colspan="7" class="empty">Cargando ventas...</td></tr><tr *ngIf="!isLoading && !filteredRows.length"><td colspan="7" class="empty">No hay ventas para los filtros seleccionados.</td></tr>
+      </tbody></table>
+      <table *ngIf="mode === 'invoices'"><thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th class="numeric">Productos</th><th class="numeric">Cant.</th><th class="numeric">Total</th></tr></thead><tbody>
+        <tr *ngFor="let row of invoiceRows"><td>{{ formatDate(row.date) }}</td><td class="product">{{ row.invoiceNumber }}</td><td>{{ row.client }}</td><td class="numeric">{{ row.products }}</td><td class="numeric">{{ row.quantity | number:'1.0-2' }}</td><td class="numeric total">{{ formatMoney(row.total) }}</td></tr>
+        <tr *ngIf="isLoading"><td colspan="6" class="empty">Cargando ventas...</td></tr><tr *ngIf="!isLoading && !invoiceRows.length"><td colspan="6" class="empty">No hay facturas para los filtros seleccionados.</td></tr>
+      </tbody></table>
     </div>
   </section>
 </section>

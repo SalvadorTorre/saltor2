@@ -15,8 +15,8 @@
       </div>
 
       <form (ngSubmit)="login()" #loginForm="ngForm">
-        <label for="login-email">Correo electrónico</label>
-        <input id="login-email" type="email" name="email" [(ngModel)]="email" required autocomplete="email">
+        <label for="login-user-id">ID de usuario</label>
+        <input id="login-user-id" type="text" name="userId" [(ngModel)]="userId" required autocomplete="username">
 
         <label for="login-password">Clave</label>
         <input id="login-password" type="password" name="password" [(ngModel)]="password" required autocomplete="current-password">
@@ -25,9 +25,6 @@
         <p *ngIf="confirmationMessage" class="login-success" role="status">{{ confirmationMessage }}</p>
         <button type="submit" [disabled]="isLoading || loginForm.invalid">
           {{ isLoading ? 'Verificando...' : 'Entrar' }}
-        </button>
-        <button type="button" class="resend-button" [disabled]="isLoading || !email.trim()" (click)="resendConfirmation()">
-          Reenviar correo de confirmación
         </button>
       </form>
     </ng-container>

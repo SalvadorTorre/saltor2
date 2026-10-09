@@ -5,6 +5,7 @@ import { AppDataService } from '../../app-data.service';
 import { DigitalCertificateMetadata, DigitalCertificatesService } from '../../core/services/digital-certificates/digital-certificates.service';
 import { EcfConfigService, EcfConfiguration } from '../../core/services/ecf/ecf-config.service';
 import { CompanyPrintSettingsService, PrintPaper } from '../../core/services/printing/company-print-settings.service';
+import { DisplayPreferencesService, DisplayProfile } from '../../core/services/display-preferences/display-preferences.service';
 
 export interface OtherPreferences {
   primaryColor: string;
@@ -29,6 +30,7 @@ export interface OtherPreferences {
   defaultNcfType: string;
   defaultPaymentMethod: string;
   printPaper: PrintPaper;
+  displayProfile: DisplayProfile;
 }
 
 @Component({
@@ -83,6 +85,13 @@ export class SettingsOtherPageComponent implements OnInit {
 
   readonly pageSizeOptions = [10, 25, 50, 100];
 
+  readonly displayProfileOptions: Array<{ value: DisplayProfile; label: string; description: string }> = [
+    { value: 'auto', label: 'Automatico', description: 'Usa el tamaño disponible del navegador.' },
+    { value: '1366x768', label: '1360 x 768', description: 'Optimiza espacios, tablas y formularios para pantallas HD.' },
+    { value: '1440x900', label: '1440 x 900', description: 'Distribución equilibrada para pantallas de escritorio.' },
+    { value: '1920x1080', label: '1920 x 1080', description: 'Aprovecha pantallas Full HD.' }
+  ];
+
   preferences: OtherPreferences = {
     primaryColor: '#2563eb',
     secondaryColor: '#64748b',
@@ -105,7 +114,8 @@ export class SettingsOtherPageComponent implements OnInit {
     printFooterText: 'Gracias por su preferencia',
     defaultNcfType: '02 - Consumo',
     defaultPaymentMethod: 'Contado',
-    printPaper: 'carta'
+    printPaper: 'carta',
+    displayProfile: 'auto'
   };
 
   private originalPreferences: OtherPreferences = { ...this.preferences };
@@ -124,17 +134,24 @@ export class SettingsOtherPageComponent implements OnInit {
     public data: AppDataService,
     private readonly digitalCertificatesService: DigitalCertificatesService,
     private readonly ecfConfigService: EcfConfigService,
-    private readonly companyPrintSettings: CompanyPrintSettingsService
+    private readonly companyPrintSettings: CompanyPrintSettingsService,
+    private readonly displayPreferences: DisplayPreferencesService
   ) {}
 
   ngOnInit(): void {
     void this.loadCertificate();
     void this.loadEcfConfiguration();
     void this.loadPrintPaper();
+    this.preferences.displayProfile = this.displayPreferences.getProfile();
+    this.originalPreferences = { ...this.preferences };
   }
 
   get certificateIsExpired(): boolean {
     return !!this.certificateMetadata && new Date(this.certificateMetadata.validUntil) < new Date();
+  }
+
+  get displayProfileDescription(): string {
+    return this.displayProfileOptions.find((profile) => profile.value === this.preferences.displayProfile)?.description ?? '';
   }
 
   onCertificateFileSelected(event: Event): void {
@@ -183,6 +200,7 @@ export class SettingsOtherPageComponent implements OnInit {
   async saveOtherSettings(): Promise<void> {
     try {
       await this.companyPrintSettings.savePaper(this.preferences.printPaper);
+      this.displayPreferences.save(this.preferences.displayProfile);
     } catch (error) {
       this.otherMessage = error instanceof Error ? error.message : 'No se pudo guardar el tipo de papel de la empresa.';
       return;
@@ -193,6 +211,7 @@ export class SettingsOtherPageComponent implements OnInit {
 
   resetOtherSettings(): void {
     this.preferences = { ...this.originalPreferences };
+    this.displayPreferences.apply(this.preferences.displayProfile);
     this.otherMessage = 'Preferencias restauradas a los ultimos valores guardados.';
   }
 
@@ -219,9 +238,15 @@ export class SettingsOtherPageComponent implements OnInit {
       printFooterText: 'Gracias por su preferencia',
       defaultNcfType: '02 - Consumo',
       defaultPaymentMethod: 'Contado',
-      printPaper: 'carta'
+      printPaper: 'carta',
+      displayProfile: 'auto'
     };
+    this.displayPreferences.apply(this.preferences.displayProfile);
     this.otherMessage = 'Preferencias restauradas a valores por defecto. Recuerda guardar los cambios.';
+  }
+
+  previewDisplayProfile(): void {
+    this.displayPreferences.apply(this.preferences.displayProfile);
   }
 
   updateCurrencySymbol(): void {

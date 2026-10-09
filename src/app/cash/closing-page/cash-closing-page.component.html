@@ -1,21 +1,15 @@
-<section class="dashboard-content standalone-module-content">
-  <div class="dashboard-header company-header">
-    <div>
-      <p class="dashboard-header__eyebrow">Caja</p>
-      <h2>Cierre de Caja</h2>
-      <p class="company-header__copy">Valida ingresos, diferencias y cierre operativo de la jornada.</p>
-    </div>
-    <div class="company-header__actions">
-      <div class="dashboard-header__pill">Modulo Cierre</div>
-    </div>
+<section class="cash-closing">
+  <header class="closing-header"><div><h2>Cierre de Caja</h2><p>Ultimo cierre: <b>{{ lastClosing }}</b><span>{{ branch }}</span></p></div><div class="closing-actions"><label>Desde<input [(ngModel)]="fromInvoice" (change)="loadPendingInvoices()" name="fromInvoice"></label><label>Hasta<input [(ngModel)]="toInvoice" (change)="loadPendingInvoices()" name="toInvoice"></label><button class="closing-actions__pdf" type="button" (click)="exportPdf()">PDF</button><button class="closing-actions__confirm" type="button" [disabled]="isLoading" (click)="confirmClosing()">Confirmar Cierre</button></div></header>
+  <section class="closing-totals"><article class="total-card total-card--cash"><span>Efectivo</span><strong>{{ money(cashTotal) }}</strong></article><article class="total-card total-card--cards"><span>Tarjetas de credito/debito</span><strong>{{ money(cardsTotal) }}</strong></article><article class="total-card total-card--transfer"><span>Deposito transferencia/cheques</span><strong>{{ money(depositsTotal) }}</strong></article><article class="total-card total-card--pending"><span>Pendiente de pago</span><strong>{{ money(pendingTotal) }}</strong></article><article class="total-card total-card--credit"><span>Credito</span><strong>{{ money(creditTotal) }}</strong></article><article class="total-card total-card--total"><span>Total</span><strong>{{ money(total) }}</strong></article></section>
+  <main class="closing-detail"><div class="closing-detail__heading"><h3>Detalle de movimientos pendientes de cierre</h3><span>{{ movements.length }} facturas pendientes</span></div><div class="closing-table-wrap"><table><thead><tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Forma de pago</th><th class="number">Valor</th></tr></thead><tbody><tr *ngFor="let movement of movements"><td><b>{{ movement.invoice }}</b></td><td>{{ movement.date }}</td><td>{{ movement.client }}</td><td><span class="type-badge">{{ movement.type }}</span></td><td class="payment">{{ movement.payment }}</td><td class="number"><b>{{ money(movement.value) }}</b></td></tr><tr *ngIf="!isLoading && !movements.length"><td class="closing-empty" colspan="6">No hay facturas pendientes en este rango.</td></tr><tr *ngIf="isLoading"><td class="closing-empty" colspan="6">Consultando facturas...</td></tr></tbody></table></div><p class="closing-feedback closing-feedback--error" *ngIf="errorMessage">{{ errorMessage }}</p><p class="closing-feedback" *ngIf="formMessage">{{ formMessage }}</p></main>
+  <div class="closing-modal-backdrop" *ngIf="showConfirmation" (click)="cancelConfirmation()">
+    <section class="closing-modal" role="dialog" aria-modal="true" aria-labelledby="closing-modal-title" (click)="$event.stopPropagation()">
+      <div class="closing-modal__warning">!</div><h2 id="closing-modal-title">Confirmar cierre de caja</h2>
+      <div class="closing-modal__summary"><div><p><span>Empresa</span><b>CENTRAL PRUEBA</b></p><p><span>Sucursal</span><b>CENTRAL PRUEBA</b></p><p><span>Codigo sucursal</span><b>38</b></p><p><span>Cajero</span><b>-</b></p></div><div><p><span>Fecha</span><b>6/10/2026, 8:00:01 p. m.</b></p><p><span>Factura inicial</span><b>{{ fromInvoice }}</b></p><p><span>Factura final</span><b>{{ toInvoice }}</b></p><p><span>Facturas</span><b>{{ movements.length }}</b></p></div></div>
+      <div class="closing-modal__totals"><div><p><span>Efectivo</span><b>RD${{ money(cashTotal) }}</b></p><p><span>Tarjetas</span><b>RD${{ money(cardsTotal) }}</b></p><p><span>Deposito/transferencia</span><b>RD${{ money(depositsTotal) }}</b></p><p><span>Cheques</span><b>RD$0.00</b></p></div><div><p><span>Credito pendiente</span><b>RD${{ money(creditTotal) }}</b></p><p><span>Pendiente de pago</span><b>RD${{ money(pendingTotal) }}</b></p><p><span>Valores cobrados</span><b>RD${{ money(collectedTotal) }}</b></p><p><span>Valores no cobrados</span><b>RD${{ money(uncollectedTotal) }}</b></p></div></div>
+      <div class="closing-modal__grand-total"><b>Total del cierre</b><strong>RD${{ money(total) }}</strong></div><p class="closing-modal__hint">Se incluiran {{ movements.length }} facturas en este cierre.</p>
+      <label class="closing-modal__note">Nota del cierre<textarea [(ngModel)]="closingNote" name="closingNote" maxlength="255" placeholder="Escriba una nota (opcional)"></textarea><small>Maximo 255 caracteres</small></label>
+      <div class="closing-modal__actions"><button class="closing-modal__accept" type="button" [disabled]="isSaving" (click)="completeClosing()">{{ isSaving ? 'Guardando...' : 'Confirmar e imprimir 80 mm' }}</button><button class="closing-modal__cancel" type="button" [disabled]="isSaving" (click)="cancelConfirmation()">Cancelar</button></div>
+    </section>
   </div>
-
-  <section class="panel standalone-module-panel">
-    <div class="panel__header company-panel-header">
-      <div>
-        <h3>Cierre de Caja</h3>
-        <p>Esta opcion ya esta separada como modulo individual. Aqui puedes agregar sus formularios, tablas y acciones especificas.</p>
-      </div>
-    </div>
-  </section>
 </section>

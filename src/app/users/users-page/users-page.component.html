@@ -99,11 +99,12 @@
 
           <div class="user-step-card__grid">
             <label class="field field--icon">
-              <span>ID de Usuario</span>
+              <span>ID de Usuario para iniciar sesión</span>
               <div class="input-shell">
                 <span class="input-shell__icon">#</span>
-                <input type="text" name="userUsername" [(ngModel)]="userForm.username" placeholder="JPEREZ" />
+                <input type="text" name="userUsername" [(ngModel)]="userForm.username" (blur)="normalizeUsername()" placeholder="JPEREZ" maxlength="50" required />
               </div>
+              <small>Debe ser único. El usuario iniciará sesión con este ID y su clave.</small>
             </label>
 
             <label class="field field--icon">
@@ -123,11 +124,12 @@
             </label>
 
             <label class="field field--icon">
-              <span>Correo Electronico</span>
+              <span>Correo de contacto</span>
               <div class="input-shell">
                 <span class="input-shell__icon">@</span>
-                <input type="email" name="userEmail" [(ngModel)]="userForm.email" placeholder="juan.perez@empresa.com" />
+                <input type="email" name="userEmail" [(ngModel)]="userForm.email" placeholder="juan.perez@empresa.com" required />
               </div>
+              <small>Se usa para confirmar y recuperar la cuenta; no se usa para iniciar sesión.</small>
             </label>
 
             <label class="field field--icon">
@@ -148,12 +150,21 @@
 
           <div class="user-step-card__grid">
             <label class="field field--icon">
-              <span>Clave</span>
+              <span>Clave inicial</span>
               <div class="input-shell">
                 <span class="input-shell__icon">*</span>
-                <input type="password" name="userPassword" [(ngModel)]="userForm.password" [placeholder]="userEditorMode === 'create' ? 'Minimo 6 caracteres' : 'La clave se administra en el acceso'" />
+                <input type="password" name="userPassword" [(ngModel)]="userForm.password" [disabled]="userEditorMode === 'edit'" [required]="userEditorMode === 'create'" [placeholder]="userEditorMode === 'create' ? 'Mínimo 6 caracteres' : 'La clave se conserva sin cambios'" />
               </div>
-              <small>La clave se guarda de forma protegida en Supabase Auth.</small>
+              <small>{{ userEditorMode === 'create' ? 'La clave se guarda de forma protegida en Supabase Auth.' : 'Por seguridad, la clave no se muestra ni se modifica desde esta pantalla.' }}</small>
+            </label>
+
+            <label class="field field--icon" *ngIf="userEditorMode === 'create'">
+              <span>Confirmar clave</span>
+              <div class="input-shell">
+                <span class="input-shell__icon">*</span>
+                <input type="password" name="userConfirmPassword" [(ngModel)]="userForm.confirmPassword" required placeholder="Repita la clave" />
+              </div>
+              <small *ngIf="passwordMismatch" class="field-error">Las claves no coinciden.</small>
             </label>
           </div>
         </div>
@@ -219,8 +230,11 @@
         </div>
 
         <div class="company-form__actions">
+          <p class="user-form__feedback" [class.user-form__feedback--error]="userMessageType === 'error'" [class.user-form__feedback--success]="userMessageType === 'success'" role="status">
+            {{ userMessage }}
+          </p>
           <button class="secondary-action" type="button" (click)="resetUserForm()">Cancelar</button>
-          <button class="primary-action" type="submit" [disabled]="isSavingUser || !canSaveUser">
+          <button class="primary-action" type="submit" [disabled]="isSavingUser">
             {{ isSavingUser ? 'Guardando...' : (userEditorMode === 'create' ? 'Guardar usuario' : 'Actualizar usuario') }}
           </button>
         </div>

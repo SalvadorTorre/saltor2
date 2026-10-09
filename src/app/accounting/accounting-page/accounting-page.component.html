@@ -757,7 +757,6 @@
           <main class="e41-form-shell">
             <button type="button" class="e41__back" (click)="cancelE41()">←&nbsp; Volver a la lista</button>
             <header class="e41-form__intro"><h1>{{ e41Mode === 'view' ? 'Consulta de Comprobante de Compra E41' : e41Mode === 'edit' ? 'Editar Comprobante de Compra E41' : 'Comprobante de Compra E41' }}</h1></header>
-
             <form class="e41-form" (ngSubmit)="saveE41('Borrador')">
               <fieldset class="e41-form__fieldset" [disabled]="e41Mode === 'view'">
               <div class="e41-form__top-panels">

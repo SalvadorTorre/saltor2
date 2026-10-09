@@ -39,6 +39,20 @@ export class SuppliersService {
     return (data ?? []).map((row: SupplierRow) => this.fromRow(row));
   }
 
+  async searchSuppliers(search: string): Promise<SupplierRecord[]> {
+    const term = search.trim();
+    if (!term) return [];
+    const { data, error } = await this.supabase.client
+      .from(this.table)
+      .select('*')
+      .eq('estado', 'Activo')
+      .or(`nombre_comercial.ilike.%${term}%,numero_documento.ilike.%${term}%`)
+      .order('nombre_comercial', { ascending: true })
+      .limit(8);
+    if (error) throw error;
+    return (data ?? []).map((row: SupplierRow) => this.fromRow(row));
+  }
+
   async createSupplier(form: SupplierFormModel, lastOrder: string): Promise<SupplierRecord> {
     const { data, error } = await this.supabase.client
       .from(this.table)

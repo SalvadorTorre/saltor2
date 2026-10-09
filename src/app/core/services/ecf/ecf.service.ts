@@ -28,10 +28,32 @@ export class EcfService {
   }
 
   async sendInvoice(invoiceId: number): Promise<InvoiceRow> {
+    if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) {
+      throw new Error('No se recibió una factura válida para enviar a DGII.');
+    }
+
     const { data, error } = await this.supabase.client.functions.invoke('enviar-ecf', { body: { invoiceId } });
     if (error) await this.throwFunctionError(error);
     if (data?.error) throw new Error(data.error);
-    return data as InvoiceRow;
+    if (!data || typeof data !== 'object') {
+      throw new Error('El servicio e-CF no devolvió el resultado del envío.');
+    }
+
+    const response = data as InvoiceRow;
+    if (response.dgii_estado) return response;
+
+    // Algunos despliegues devuelven solo el mensaje. Recuperar el estado
+    // persistido evita que la pantalla quede mostrando “No enviado”.
+    const { data: persisted, error: persistedError } = await this.supabase.client
+      .from('facturas')
+      .select('id, numero_factura, ncf, dgii_estado, dgii_track_id, dgii_codigo_respuesta, dgii_mensaje_respuesta, dgii_enviado_en, impreso_en')
+      .eq('id', invoiceId)
+      .maybeSingle();
+    if (persistedError) throw persistedError;
+    if (!persisted?.dgii_estado) {
+      throw new Error('El envío terminó sin devolver un estado DGII. Revisa los registros de la función enviar-ecf.');
+    }
+    return persisted as InvoiceRow;
   }
 
   async sendCreditNote(creditNoteId: number): Promise<{ id: number; encf: string; dgii_estado: string; dgii_track_id?: string | null; dgii_codigo_seguridad?: string | null; dgii_mensaje_respuesta?: string }> {

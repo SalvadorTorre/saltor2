@@ -1,21 +1,42 @@
-<section class="dashboard-content standalone-module-content">
-  <div class="dashboard-header company-header">
-    <div>
-      <p class="dashboard-header__eyebrow">Caja</p>
-      <h2>Movimientos de Caja</h2>
-      <p class="company-header__copy">Controla entradas, salidas y ajustes realizados durante el turno.</p>
+<section class="cash-history">
+  <header class="cash-history__header">
+    <div class="cash-history__intro">
+      <p class="cash-history__eyebrow">Caja</p>
+      <h2>Historico de cierres</h2>
+      <span>Consulta, revisa e imprime los cierres registrados para esta sucursal.</span>
     </div>
-    <div class="company-header__actions">
-      <div class="dashboard-header__pill">Modulo Movimientos</div>
-    </div>
-  </div>
+    <button class="cash-history__refresh" type="button" [disabled]="isLoading" (click)="loadHistory()"><span aria-hidden="true">↻</span>{{ isLoading ? 'Actualizando...' : 'Actualizar' }}</button>
+  </header>
 
-  <section class="panel standalone-module-panel">
-    <div class="panel__header company-panel-header">
-      <div>
-        <h3>Movimientos de Caja</h3>
-        <p>Esta opcion ya esta separada como modulo individual. Aqui puedes agregar sus formularios, tablas y acciones especificas.</p>
-      </div>
+  <section class="cash-history__summary" aria-label="Resumen del historico">
+    <article><span>Cierres registrados</span><strong>{{ records.length }}</strong><small>En esta sucursal</small></article>
+    <article><span>Total cerrado</span><strong>{{ money(totalClosed) }}</strong><small>Incluye todos los cierres</small></article>
+    <article><span>Efectivo registrado</span><strong>{{ money(totalCash) }}</strong><small>Acumulado en cierres</small></article>
+    <article><span>Credito pendiente</span><strong>{{ money(totalCredit) }}</strong><small>Facturas a credito</small></article>
+  </section>
+
+  <section class="cash-history__workspace">
+    <div class="cash-history__toolbar">
+      <div><h3>Listado de cierres</h3><p>{{ filteredRecords.length }} {{ filteredRecords.length === 1 ? 'registro encontrado' : 'registros encontrados' }}</p></div>
+      <label class="cash-history__search"><span aria-hidden="true">⌕</span><input [(ngModel)]="searchTerm" type="search" placeholder="Buscar cierre, cajero o factura"></label>
     </div>
+    <div class="cash-history__table-wrap">
+      <table>
+        <thead><tr><th>Cierre</th><th>Fecha y hora</th><th>Cajero</th><th>Rango de facturas</th><th class="numeric">Facturas</th><th class="numeric">Efectivo</th><th class="numeric">Credito</th><th class="numeric">Total</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let record of filteredRecords">
+            <td><span class="cash-history__id">#{{ record.id }}</span><small>{{ record.branchName }}</small></td>
+            <td><b>{{ record.closedAt | date:'dd/MM/yyyy' }}</b><small>{{ record.closedAt | date:'hh:mm a' }}</small></td>
+            <td>{{ record.cashierName || 'Sin cajero' }}</td>
+            <td><span class="cash-history__range">{{ record.fromInvoice }}<i>→</i>{{ record.toInvoice }}</span></td>
+            <td class="numeric">{{ record.invoices }}</td><td class="numeric">{{ money(record.cash) }}</td><td class="numeric">{{ money(record.credit) }}</td>
+            <td class="numeric cash-history__total">{{ money(record.total) }}</td><td><span class="cash-history__status" [class.cash-history__status--void]="record.status === 'Anulado'">{{ record.status }}</span></td>
+          </tr>
+          <tr *ngIf="isLoading"><td colspan="9" class="cash-history__empty">Consultando el historico de cierres...</td></tr>
+          <tr *ngIf="!isLoading && !filteredRecords.length"><td colspan="9" class="cash-history__empty"><strong>{{ records.length ? 'No hay resultados para esa busqueda.' : 'Aun no hay cierres registrados.' }}</strong><span>{{ records.length ? 'Prueba con otro numero, cajero o factura.' : 'Los cierres confirmados apareceran aqui.' }}</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p *ngIf="errorMessage" class="cash-history__error">{{ errorMessage }}</p>
   </section>
 </section>

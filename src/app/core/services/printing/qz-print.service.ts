@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as qzModule from 'qz-tray';
 import { CompanyPrintSettingsService, PrintPaper } from './company-print-settings.service';
+import { SupabaseService } from '../supabase/supabase.service';
 
 export type PrintResult = 'qz' | 'browser' | 'unavailable';
 
@@ -8,8 +9,12 @@ export type PrintResult = 'qz' | 'browser' | 'unavailable';
 export class QzPrintService {
   private readonly qz: any = (qzModule as any).default ?? qzModule;
   private connecting: Promise<boolean> | null = null;
+  private signingConfigured = false;
 
-  constructor(private readonly companyPrintSettings: CompanyPrintSettingsService) {}
+  constructor(
+    private readonly companyPrintSettings: CompanyPrintSettingsService,
+    private readonly supabase: SupabaseService
+  ) {}
 
   isActive(): boolean {
     try {
@@ -25,6 +30,13 @@ export class QzPrintService {
 
     this.connecting = (async () => {
       try {
+        // QZ Tray puede imprimir con una autorización manual mientras se habilita
+        // la firma del certificado. No se debe regresar al navegador por eso.
+        try {
+          await this.configureSigning();
+        } catch {
+          // La conexión continúa; QZ Tray solicitará autorización si es necesario.
+        }
         await Promise.race([
           this.qz.websocket.connect({ retries: 0, delay: 0 }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('QZ Tray no respondió')), 1800))
@@ -38,6 +50,24 @@ export class QzPrintService {
     })();
 
     return this.connecting;
+  }
+
+  private async configureSigning(): Promise<void> {
+    if (this.signingConfigured || !this.qz?.security) return;
+    const { data, error } = await this.supabase.client.functions.invoke('qz-sign', { body: { action: 'certificate' } });
+    if (error || !data?.certificate) throw error ?? new Error('No se recibió el certificado de QZ Tray.');
+
+    this.qz.security.setCertificatePromise((resolve: (certificate: string) => void) => resolve(data.certificate));
+    this.qz.security.setSignatureAlgorithm?.('SHA512');
+    this.qz.security.setSignaturePromise((toSign: string) => (resolve: (signature: string) => void, reject: (error: Error) => void) => {
+      this.supabase.client.functions.invoke('qz-sign', { body: { toSign } })
+        .then(({ data: response, error: signingError }: any) => {
+          if (signingError || !response?.signature) reject(signingError ?? new Error('No se recibió la firma de QZ Tray.'));
+          else resolve(response.signature);
+        })
+        .catch(reject);
+    });
+    this.signingConfigured = true;
   }
 
   async printHtml(html: string, title: string, popupSize = 'width=850,height=700'): Promise<PrintResult> {

@@ -1,7 +1,6 @@
 <section class="dashboard-content product-content" *ngIf="activeView === 'products'">
   <div class="dashboard-header company-header">
     <div>
-      <p class="dashboard-header__eyebrow">Mantenimiento</p>
       <h2>Inventario</h2>
       <p class="company-header__copy">Gestion de productos con control de stock, precios, ubicacion y margenes de venta.</p>
     </div>
@@ -11,7 +10,7 @@
     </div>
   </div>
 
-  <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
+  <!-- <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
     <button
       *ngFor="let item of maintenanceLinks"
       class="maintenance-tab"
@@ -19,7 +18,7 @@
       [class.maintenance-tab--active]="activeMaintenanceLabel === item.label">
       {{ item.label }}
     </button>
-  </div>
+  </div> -->
 
   <div class="product-kpi-grid">
     <article class="product-kpi-card product-kpi-card--accent">
@@ -135,23 +134,27 @@
         <form class="company-form" (ngSubmit)="saveProduct()">
           <fieldset class="product-editor-modal__fields" [disabled]="isProductReadOnly">
           <div class="company-form__grid">
-            <label class="field"><span>Codigo producto</span><input type="text" name="productCode" [(ngModel)]="productForm.code" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Descripcion</span><input type="text" name="productDescription" [(ngModel)]="productForm.description" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Unidad</span><input type="text" name="productUnit" [(ngModel)]="productForm.unit" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Categoria</span><input type="text" name="productCategory" [(ngModel)]="productForm.category" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Ubicacion</span><input type="text" name="productLocation" [(ngModel)]="productForm.location" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Marca</span><input type="text" name="productBrand" [(ngModel)]="productForm.brand" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Tipo</span><input type="text" name="productType" [(ngModel)]="productForm.type" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Tamano</span><input type="text" name="productSize" [(ngModel)]="productForm.size" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Existencia</span><input type="number" name="productStock" [(ngModel)]="productForm.stock" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Existencia minima</span><input type="number" name="productMinimumStock" [(ngModel)]="productForm.minimumStock" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Costo</span><input type="number" name="productCost" [(ngModel)]="productForm.cost" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Precio ventas</span><input type="number" name="productSalePrice" [(ngModel)]="productForm.salePrice" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--code"><span>Codigo producto</span><input type="text" name="productCode" [(ngModel)]="productForm.code" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--description"><span>Descripcion</span><input type="text" name="productDescription" [(ngModel)]="productForm.description" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--unit"><span>Unidad</span><input type="text" name="productUnit" [(ngModel)]="productForm.unit" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--category"><span>Categoria</span><input type="text" name="productCategory" [(ngModel)]="productForm.category" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--location"><span>Ubicacion</span><input type="text" name="productLocation" [(ngModel)]="productForm.location" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--brand"><span>Marca</span><input type="text" name="productBrand" [(ngModel)]="productForm.brand" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--type"><span>Tipo</span><input type="text" name="productType" [(ngModel)]="productForm.type" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--size"><span>Tamano</span><input type="text" name="productSize" [(ngModel)]="productForm.size" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--stock"><span>Existencia</span><input type="number" name="productStock" [(ngModel)]="productForm.stock" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--minimum-stock"><span>Existencia minima</span><input type="number" name="productMinimumStock" [(ngModel)]="productForm.minimumStock" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--cost"><span>Costo</span><input type="number" name="productCost" [(ngModel)]="productForm.cost" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--sale-price"><span>Precio ventas</span><input type="number" name="productSalePrice" [(ngModel)]="productForm.salePrice" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field"><span>Precio minimo</span><input type="number" name="productMinimumPrice" [(ngModel)]="productForm.minimumPrice" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Cantidad minima de venta</span><input type="number" min="1" step="1" name="productMinimumSaleQuantity" [(ngModel)]="productForm.minimumSaleQuantity" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Venta al por mayor</span><input type="number" name="productWholesalePrice" [(ngModel)]="productForm.wholesalePrice" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Cantidad minima por mayor</span><input type="number" name="productWholesaleQuantity" [(ngModel)]="productForm.minimumWholesaleQuantity" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field"><span>Codigo reemplazo</span><input type="text" name="productReplacementCode" [(ngModel)]="productForm.replacementCode" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field"><span>Cant. minima venta</span><input type="number" min="1" step="1" name="productMinimumSaleQuantity" [(ngModel)]="productForm.minimumSaleQuantity" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-wholesale-toggle"><span>Venta por mayor</span><span class="product-wholesale-toggle__control"><input type="checkbox" name="productWholesaleEnabled" [(ngModel)]="productForm.wholesaleEnabled" (ngModelChange)="onWholesaleEnabledChange()" /><b>{{ productForm.wholesaleEnabled ? 'Si' : 'No' }}</b></span></label>
+            <ng-container *ngIf="productForm.wholesaleEnabled">
+              <label class="field"><span>Prec. venta por mayor</span><input type="number" name="productWholesalePrice" [(ngModel)]="productForm.wholesalePrice" (keydown.enter)="focusNextProductField($event)" /></label>
+              <label class="field"><span>Cantidad minima por mayor</span><input type="number" min="1" step="1" name="productWholesaleQuantity" [(ngModel)]="productForm.minimumWholesaleQuantity" (keydown.enter)="focusNextProductField($event)" /></label>
+            </ng-container>
+            <label class="field product-replacement-toggle"><span>Reemplazo</span><span class="product-wholesale-toggle__control"><input type="checkbox" name="productReplacementEnabled" [(ngModel)]="productForm.replacementEnabled" (ngModelChange)="onReplacementEnabledChange()" /><b>{{ productForm.replacementEnabled ? 'Si' : 'No' }}</b></span></label>
+            <label class="field product-replacement-search" *ngIf="productForm.replacementEnabled"><span>Desc. reemplazo</span><input type="text" name="productReplacementDescription" [(ngModel)]="replacementDescriptionSearch" (ngModelChange)="onReplacementDescriptionChange()" (focus)="showReplacementSuggestions = true; activeReplacementSuggestionIndex = 0" (blur)="onReplacementDescriptionBlur()" (keydown)="onReplacementSuggestionKeydown($event)" placeholder="Escribe descripcion o codigo del producto" autocomplete="off" /><div class="product-suggestions product-replacement-results" *ngIf="replacementCandidates.length" role="listbox"><button type="button" class="product-suggestion" *ngFor="let product of replacementCandidates; let index = index" [class.product-suggestion--active]="isActiveReplacementSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectReplacementProduct(product)"><span class="product-suggestion__main"><strong>{{ getReplacementProductDescription(product) }}</strong><small>Código: {{ product.code }}</small></span><span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span></button></div></label>
             <label class="field"><span>Exento ITBIS</span><select name="productExemptItbis" [(ngModel)]="productForm.exemptItbis" (keydown.enter)="focusNextProductField($event)"><option [ngValue]="false">No</option><option [ngValue]="true">Si</option></select></label>
             <label class="field"><span>Valor impuesto</span><input type="number" name="productTaxValue" [(ngModel)]="productForm.taxValue" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field"><span>Estado</span><select name="productStatus" [(ngModel)]="productForm.status" (keydown.enter)="focusNextProductField($event)"><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option><option value="Agotado">Agotado</option></select></label>
@@ -195,8 +198,8 @@
               <p><strong>Costo:</strong> RD${{ productForm.cost | number:'1.2-2' }}</p>
               <p><strong>Precio venta:</strong> RD${{ productForm.salePrice | number:'1.2-2' }}</p>
               <p><strong>Precio minimo:</strong> RD${{ productForm.minimumPrice | number:'1.2-2' }}</p>
-              <p><strong>Cantidad minima de venta:</strong> {{ productForm.minimumSaleQuantity }}</p>
-              <p><strong>Precio por mayor:</strong> RD${{ productForm.wholesalePrice | number:'1.2-2' }}</p>
+              <p><strong>Cant. minima venta:</strong> {{ productForm.minimumSaleQuantity }}</p>
+              <p *ngIf="productForm.wholesaleEnabled"><strong>Precio por mayor:</strong> RD${{ productForm.wholesalePrice | number:'1.2-2' }}</p>
               <p><strong>Impuesto:</strong> {{ productForm.taxValue }}%</p>
               <p><strong>Estado:</strong> {{ productForm.status }}</p>
             </div>

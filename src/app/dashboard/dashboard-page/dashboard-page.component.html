@@ -3,9 +3,13 @@
     <div>
       <p class="dashboard-header__eyebrow">Resumen general</p>
       <h2>Dashboard Comercial</h2>
+      <p class="dashboard-header__company">{{ companyName }}</p>
     </div>
-    <div class="dashboard-header__pill">Actualizado hoy</div>
+    <button class="dashboard-header__pill" type="button" (click)="loadDashboard()" [disabled]="isLoading">{{ isLoading ? 'Actualizando...' : ('Actualizado ' + (updatedAt || 'ahora')) }}</button>
   </div>
+
+  <p *ngIf="errorMessage" class="dashboard-feedback dashboard-feedback--error">{{ errorMessage }}</p>
+  <p *ngIf="isLoading" class="dashboard-feedback">Cargando información de la empresa...</p>
 
   <div class="stats-grid">
     <article *ngFor="let stat of statCards" class="stat-card" [class]="'stat-card stat-card--' + stat.tone">

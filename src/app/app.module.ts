@@ -15,6 +15,7 @@ import { NcfTypePageComponent } from './ncf/ncf-type-page/ncf-type-page.componen
 import { RncPageComponent } from './rnc/rnc-page/rnc-page.component';
 import { SettingsOtherPageComponent } from './settings/other-page/other-page.component';
 import { ProductsPageComponent } from './products/products-page/products-page.component';
+import { ProductEntriesPageComponent } from './products/entries-page/product-entries-page.component';
 import { ClientsPageComponent } from './clients/clients-page/clients-page.component';
 import { SuppliersPageComponent } from './suppliers/suppliers-page/suppliers-page.component';
 import { InvoiceNewPageComponent } from './invoices/new-page/new-page.component';
@@ -46,6 +47,7 @@ import { LoginPageComponent } from './login/login-page.component';
     RncPageComponent,
     SettingsOtherPageComponent,
     ProductsPageComponent,
+    ProductEntriesPageComponent,
     ClientsPageComponent,
     SuppliersPageComponent,
     InvoiceNewPageComponent,

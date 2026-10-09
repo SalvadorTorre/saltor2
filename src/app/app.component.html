@@ -3,49 +3,56 @@
 <app-login-page *ngIf="!isCheckingSession && !activeUser" (loggedIn)="onLoggedIn($event)"></app-login-page>
 
 <div *ngIf="!isCheckingSession && activeUser" class="dashboard-shell">
-  <aside class="sidebar" aria-label="Menu principal">
-    <div class="brand">
-      <div class="brand__logo">
-        <img src="assets/logosaltor.jpg" alt="Logo de SaltorSystem">
-      </div>
-      <div>
-        <h1>SaltorSystem</h1>
-        <p>Panel administrativo</p>
-      </div>
+  <header class="topbar">
+    <div class="topbar__system-brand">
+      <strong>{{ companyName }}</strong>
     </div>
 
+    <nav class="topbar__navigation" aria-label="Menu de modulos">
+      <button class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === 'dashboard'" (click)="selectTopSection('dashboard')">
+        <span class="topbar__nav-icon">⌂</span> Inicio
+      </button>
+      <button class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === 'maintenance'" (click)="selectTopSection('maintenance')">
+        <span class="topbar__nav-icon">⚙</span> Mantenimiento
+      </button>
+      <button class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === 'settings'" (click)="selectTopSection('settings')">
+        <span class="topbar__nav-icon">☷</span> Configuracion
+      </button>
+      <button *ngFor="let item of modules" class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === item.key" (click)="selectTopModule(item)">
+        <span class="topbar__nav-icon"><ng-container [ngTemplateOutlet]="moduleIcon" [ngTemplateOutletContext]="{ icon: item.icon }"></ng-container></span>{{ item.label }}
+      </button>
+    </nav>
+
+    <div class="topbar__meta">
+      <div class="topbar__user">
+        <div class="topbar__avatar">{{ userInitials }}</div>
+        <div><strong>{{ userName }}</strong><p>{{ userEmail }}</p></div>
+      </div>
+      <div class="topbar__date">{{ todayLabel }}</div>
+      <div class="topbar__logout-menu" (click)="$event.stopPropagation()">
+        <button class="topbar__logout" type="button" (click)="toggleLogoutMenu($event)" [attr.aria-expanded]="isLogoutMenuOpen" aria-haspopup="menu">Salir <span aria-hidden="true">▾</span></button>
+        <div *ngIf="isLogoutMenuOpen" class="topbar__logout-dropdown" role="menu">
+          <div class="topbar__logout-dropdown-title">Sesion actual</div>
+          <button type="button" role="menuitem" (click)="logout()">Cerrar sesion</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <aside class="sidebar" aria-label="Menu principal">
     <nav class="sidebar-nav">
       <section class="menu-group">
-        <button class="menu-item" type="button" [class.menu-item--active]="activeView === 'dashboard'" (click)="showDashboard()">
-          <span class="menu-item__icon">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 13h7V4H4zm0 7h7v-5H4zm9 0h7V11h-7zm0-18v7h7V2z" />
-            </svg>
-          </span>
-          <span class="menu-item__label">Inicio</span>
-        </button>
-      </section>
-
-      <section class="menu-group">
-        <div class="submenu-card">
+        <div *ngIf="activeTopSection === 'maintenance'" class="submenu-card">
           <div class="submenu-card__header">
-            <button class="menu-item menu-item--compact" type="button" (click)="toggleSection('maintenance')">
-              <span class="menu-item__icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 2 4 6v12l8 4 8-4V6zm0 2.2 5.7 2.85L12 9.9 6.3 7.05zM6 8.7l5 2.5v8.2l-5-2.5zm7 10.7v-8.2l5-2.5v8.2z" />
-                </svg>
-              </span>
-              <span class="menu-item__label">Mantenimiento</span>
-            </button>
-            <span class="submenu-card__arrow" [class.submenu-card__arrow--expanded]="expandedSections['maintenance']">v</span>
+            <span class="sidebar-submenu-title">Mantenimiento</span>
           </div>
 
-          <div *ngIf="expandedSections['maintenance']" class="submenu-card__body">
+          <div class="submenu-card__body">
             <button
               *ngFor="let item of maintenanceLinks"
               class="submenu-item"
               type="button"
-              [class.submenu-item--active]="activeMaintenanceLabel === item.label && (activeView === 'products' || activeView === 'clients' || activeView === 'suppliers')"
+              [class.submenu-item--active]="activeMaintenanceLabel === item.label && (activeView === 'clients' || activeView === 'suppliers')"
               (click)="selectMaintenanceItem(item)">
               <span class="submenu-item__icon">
                 <ng-container [ngSwitch]="item.icon">
@@ -62,23 +69,35 @@
               </span>
               <span>{{ item.label }}</span>
             </button>
+
+            <div class="inventory-submenu">
+              <button class="submenu-item inventory-submenu__trigger" type="button" (click)="toggleSection('inventory')">
+                <span class="submenu-item__icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 2 4 6v12l8 4 8-4V6zm0 2.2 5.7 2.85L12 9.9 6.3 7.05zM6 8.7l5 2.5v8.2l-5-2.5zm7 10.7v-8.2l5-2.5v8.2z" />
+                  </svg>
+                </span>
+                <span>Inventario</span>
+                <span class="inventory-submenu__arrow" [class.inventory-submenu__arrow--expanded]="expandedSections['inventory']">v</span>
+              </button>
+              <div *ngIf="expandedSections['inventory']" class="inventory-submenu__body">
+                <button class="submenu-item" type="button" [class.submenu-item--active]="activeMaintenanceLabel === 'Productos' && activeView === 'products'" (click)="selectInventoryItem('Productos')">
+                  <span class="submenu-item__icon">-</span><span>Productos</span>
+                </button>
+                <button class="submenu-item" type="button" [class.submenu-item--active]="activeMaintenanceLabel === 'Entrada de producto' && activeView === 'product_entries'" (click)="selectInventoryItem('Entrada de producto')">
+                  <span class="submenu-item__icon">-</span><span>Entrada de producto</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="submenu-card">
+        <div *ngIf="activeTopSection === 'settings'" class="submenu-card">
           <div class="submenu-card__header">
-            <button class="menu-item menu-item--compact" type="button" (click)="toggleSection('settings')">
-              <span class="menu-item__icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m19.14 12.94.04-.94-.04-.94 2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94L14.4 2.8a.49.49 0 0 0-.49-.4h-3.82a.49.49 0 0 0-.49.4L9.24 5.3a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.82a.5.5 0 0 0 .12.64l2.03 1.58-.04.96.04.94-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.05.7 1.63.94l.36 2.5a.49.49 0 0 0 .49.4h3.82a.49.49 0 0 0 .49-.4l.36-2.5c.58-.24 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5" />
-                </svg>
-              </span>
-              <span class="menu-item__label">Configuracion</span>
-            </button>
-            <span class="submenu-card__arrow" [class.submenu-card__arrow--expanded]="expandedSections['settings']">v</span>
+            <span class="sidebar-submenu-title">Configuracion</span>
           </div>
 
-          <div *ngIf="expandedSections['settings']" class="submenu-card__body">
+          <div class="submenu-card__body">
             <button
               *ngFor="let item of settingsLinks"
               class="submenu-item"
@@ -113,20 +132,18 @@
         </div>
       </section>
 
-      <section class="menu-group menu-group--modules">
-        <ng-container *ngFor="let item of modules">
-          <div *ngIf="item.children?.length; else singleModule" class="submenu-card">
+      <section *ngIf="activeTopModule as item" class="menu-group menu-group--modules">
+          <div class="submenu-card">
             <div class="submenu-card__header">
-              <button class="menu-item menu-item--compact" type="button" (click)="toggleSection(item.key!)">
+              <div class="sidebar-submenu-title">
                 <span class="menu-item__icon">
                   <ng-container [ngTemplateOutlet]="moduleIcon" [ngTemplateOutletContext]="{ icon: item.icon }"></ng-container>
                 </span>
-                <span class="menu-item__label">{{ item.label }}</span>
-              </button>
-              <span class="submenu-card__arrow" [class.submenu-card__arrow--expanded]="expandedSections[item.key!]">v</span>
+                <span>{{ item.label }}</span>
+              </div>
             </div>
 
-            <div *ngIf="expandedSections[item.key!]" class="submenu-card__body">
+            <div class="submenu-card__body">
               <button
                 *ngFor="let child of item.children"
                 class="submenu-item"
@@ -142,46 +159,17 @@
               </button>
             </div>
           </div>
-
-          <ng-template #singleModule>
-            <button
-              class="menu-item"
-              type="button"
-              [class.menu-item--active]="isStandaloneModuleActive(item)"
-              (click)="selectStandaloneModule(item)">
-              <span class="menu-item__icon">
-                <ng-container [ngTemplateOutlet]="moduleIcon" [ngTemplateOutletContext]="{ icon: item.icon }"></ng-container>
-              </span>
-              <span class="menu-item__label">{{ item.label }}</span>
-              <span class="menu-item__arrow">></span>
-            </button>
-          </ng-template>
-        </ng-container>
       </section>
     </nav>
+
+    <div class="sidebar__system-brand">
+      <img src="assets/logosaltor.jpg" alt="Logo de SaltorSystem">
+      <div><strong>SaltorSystem</strong><span>Panel administrativo</span></div>
+    </div>
 
   </aside>
 
   <main class="workspace-area" aria-label="Vista previa">
-    <header class="topbar">
-      <div class="topbar__brand">
-        <span class="topbar__company">{{ companyName }}</span>
-      </div>
-
-      <div class="topbar__meta">
-        <div class="topbar__user">
-          <div class="topbar__avatar">{{ userInitials }}</div>
-          <div>
-            <strong>{{ userName }}</strong>
-            <p>{{ userEmail }}</p>
-          </div>
-        </div>
-
-        <div class="topbar__date">{{ todayLabel }}</div>
-        <button class="topbar__logout" type="button" (click)="logout()">Salir</button>
-      </div>
-    </header>
-
     <ng-container *ngIf="activeView === 'dashboard'">
       <app-dashboard-page></app-dashboard-page>
     </ng-container>
@@ -200,6 +188,10 @@
 
     <ng-container *ngIf="activeView === 'products'">
       <app-products-page></app-products-page>
+    </ng-container>
+
+    <ng-container *ngIf="activeView === 'product_entries'">
+      <app-product-entries-page></app-product-entries-page>
     </ng-container>
 
     <ng-container *ngIf="activeView === 'rnc'">
@@ -256,6 +248,10 @@
 
     <ng-container *ngIf="activeView === 'report'">
       <app-report-page></app-report-page>
+    </ng-container>
+
+    <ng-container *ngIf="activeView === 'report_invoices'">
+      <app-report-page mode="invoices"></app-report-page>
     </ng-container>
   </main>
 </div>
