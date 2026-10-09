@@ -26,8 +26,9 @@ Deno.serve(async (request) => {
     const body = await request.json();
     if (!body.password || !body.fileBase64 || !body.metadata?.fileName) return result({ error: 'Faltan datos del certificado.' }, 400);
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'myappdb' } });
-    const { data: user } = await admin.from('usuarios').select('empresa_id').eq('auth_usuario_id', session.user.id).eq('estado', 'Activo').single();
+    const { data: user } = await admin.from('usuarios').select('empresa_id, rol').eq('auth_usuario_id', session.user.id).eq('estado', 'Activo').single();
     if (!user) return result({ error: 'El usuario no tiene una empresa activa.' }, 403);
+    if (user.rol !== 'Administrador') return result({ error: 'Solo un administrador puede cargar el certificado digital.' }, 403);
     const metadata = body.metadata;
     const { data, error } = await admin.rpc('guardar_certificado_firma_digital_servidor', {
       p_empresa_id: user.empresa_id, p_nombre_archivo: metadata.fileName, p_tipo_archivo: body.fileType || 'application/x-pkcs12',

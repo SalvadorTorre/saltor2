@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -26,6 +28,17 @@ Deno.serve(async (req: Request) => {
 
   const body = await req.json().catch(() => ({}));
   if (body.action === 'certificate') return new Response(JSON.stringify({ certificate }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+  // Solo usuarios con sesión activa pueden firmar: sin esta verificación cualquier
+  // sitio podría usar la llave privada para imprimir en equipos que confían en ella.
+  const authorization = req.headers.get('Authorization') ?? '';
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!authorization.startsWith('Bearer ') || !supabaseUrl || !anonKey) return new Response(JSON.stringify({ error: 'Sesión no válida' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: authData, error: authError } = await userClient.auth.getUser();
+  if (authError || !authData.user) return new Response(JSON.stringify({ error: 'Sesión no válida' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
   if (typeof body.toSign !== 'string' || !body.toSign) return new Response(JSON.stringify({ error: 'Solicitud de firma inválida' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   try {

@@ -42,13 +42,20 @@ export class AppComponent implements OnInit {
     { label: 'Suplidores', icon: 'truck' }
   ]; }
 
-  get settingsLinks(): NavigationItem[] { return [
-    { label: 'Empresa', icon: 'building' },
-    { label: 'Usuarios', icon: 'users' },
-    { label: 'Tipo de NCF', icon: 'tag' },
-    { label: 'RNC', icon: 'id' },
-    { label: 'Otros', icon: 'sliders' }
-  ]; }
+  get isAdmin(): boolean { return this.activeUser?.role === 'Administrador'; }
+
+  get settingsLinks(): NavigationItem[] {
+    // La base de datos ya bloquea estas escrituras a quien no es administrador;
+    // aquí solo se ocultan para no mostrar pantallas que fallarían al guardar.
+    const adminOnly = new Set(['Empresa', 'Usuarios']);
+    return [
+      { label: 'Empresa', icon: 'building' },
+      { label: 'Usuarios', icon: 'users' },
+      { label: 'Tipo de NCF', icon: 'tag' },
+      { label: 'RNC', icon: 'id' },
+      { label: 'Otros', icon: 'sliders' }
+    ].filter((item) => this.isAdmin || !adminOnly.has(item.label));
+  }
 
   get modules(): ModuleItem[] { return [
     { label: 'Facturacion', icon: 'file-text' },

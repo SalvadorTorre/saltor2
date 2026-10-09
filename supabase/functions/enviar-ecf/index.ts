@@ -14,6 +14,25 @@ const timestampFromResponse = (value: unknown): string | null => {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
+// Agrupa las líneas por tasa de ITBIS como lo exige el formato e-CF de la DGII:
+// 18 % -> I1 (IndicadorFacturacion 1), 16 % -> I2 (2), sin ITBIS -> exento (4).
+// Una línea sin monto de ITBIS (exenta o régimen especial) se declara exenta.
+type TaxLine = { base: number; tax: number; rate: number };
+const BILLING_INDICATOR: Record<number, string> = { 18: '1', 16: '2', 0: '4' };
+function effectiveRate(rate: number, tax: number): number {
+  if (tax <= 0) return 0;
+  if (rate !== 18 && rate !== 16) throw new Error(`Tasa de ITBIS ${rate}% no soportada por e-CF (solo 18%, 16% o exento).`);
+  return rate;
+}
+function taxTotals(lines: TaxLine[]): Record<string, string> {
+  const sum = (rate: number, key: 'base' | 'tax') => lines.filter((line) => line.rate === rate).reduce((total, line) => total + line[key], 0);
+  const i1 = sum(18, 'base'); const i2 = sum(16, 'base'); const exento = sum(0, 'base');
+  const t1 = sum(18, 'tax'); const t2 = sum(16, 'tax');
+  const totals: Record<string, string> = { MontoExento: decimal(exento), MontoGravadoTotal: decimal(i1 + i2), TotalITBIS: decimal(t1 + t2) };
+  if (i1 > 0) Object.assign(totals, { MontoGravadoI1: decimal(i1), ITBIS1: '18', TotalITBIS1: decimal(t1) });
+  if (i2 > 0) Object.assign(totals, { MontoGravadoI2: decimal(i2), ITBIS2: '16', TotalITBIS2: decimal(t2) });
+  return totals;
+}
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 function byteaToBase64(value: string): string { const hex = value.startsWith('\\x') ? value.slice(2) : value; let binary = ''; for (let i = 0; i < hex.length; i += 2) binary += String.fromCharCode(Number.parseInt(hex.slice(i, i + 2), 16)); return btoa(binary); }
 function base64ToBytes(value: string): Uint8Array { return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)); }
@@ -43,7 +62,7 @@ Deno.serve(async (request) => {
       admin.from('empresas').select('rnc, razon_social, direccion').eq('id', user.empresa_id).single(),
       admin.from('ecf_configuraciones').select('ambiente, url_base, tipo_ingreso, persistir_certificado').eq('empresa_id', user.empresa_id).single(),
       admin.from('certificados_firma_digital').select('archivo, clave_cifrada').eq('empresa_id', user.empresa_id).single(),
-      admin.from('factura_detalles').select('id, descripcion, cantidad, precio_unitario, total_linea, tasa_itbis').eq('factura_id', invoice.id).order('id')
+      admin.from('factura_detalles').select('id, descripcion, cantidad, precio_unitario, total_linea, tasa_itbis, monto_itbis').eq('factura_id', invoice.id).order('id')
     ]);
     if (!lines?.length) return json({ error: 'La factura no tiene detalles para transmitir.' }, 400);
     if (!company?.rnc || !company.razon_social) return json({ error: 'Completa el RNC y la razón social de la empresa.' }, 400);
@@ -57,21 +76,25 @@ Deno.serve(async (request) => {
     if (!sequenceExpiry) throw new Error('La secuencia NCF no tiene una fecha de vencimiento válida.');
     const sequenceAlert = sequence?.mensaje_alerta as string | null | undefined;
 
+    const taxLines: TaxLine[] = lines.map((line: Record<string, unknown>) => {
+      const tax = Number(line.monto_itbis ?? 0);
+      return { base: Number(line.total_linea ?? 0) - tax, tax, rate: effectiveRate(Number(line.tasa_itbis ?? 0), tax) };
+    });
     const issueDate = new Date(`${invoice.fecha_factura}T12:00:00`).toLocaleDateString('en-GB').replaceAll('/', '-');
     const sequenceExpiryDate = new Date(`${sequenceExpiry}T12:00:00`).toLocaleDateString('en-GB').replaceAll('/', '-');
-    const scenario: Record<string, string> = { Version: '1.0', TipoeCF: tipoEcf, ENCF: encf, FechaVencimientoSecuencia: sequenceExpiryDate, RNCEmisor: company.rnc, RazonSocialEmisor: company.razon_social, DireccionEmisor: company.direccion ?? '', FechaEmision: issueDate, TipoIngresos: config.tipo_ingreso, TipoPago: String(invoice.forma_pago_codigo ?? 1), RNCComprador: invoice.cliente_rnc ?? '', RazonSocialComprador: invoice.cliente_nombre ?? '', MontoExento: '0.00', MontoGravadoTotal: decimal(invoice.subtotal), MontoGravadoI1: decimal(invoice.subtotal), ITBIS1: '18', TotalITBIS: decimal(invoice.itbis), TotalITBIS1: decimal(invoice.itbis), MontoTotal: decimal(invoice.total) };
+    const scenario: Record<string, string> = { Version: '1.0', TipoeCF: tipoEcf, ENCF: encf, FechaVencimientoSecuencia: sequenceExpiryDate, RNCEmisor: company.rnc, RazonSocialEmisor: company.razon_social, DireccionEmisor: company.direccion ?? '', FechaEmision: issueDate, TipoIngresos: config.tipo_ingreso, TipoPago: String(invoice.forma_pago_codigo ?? 1), RNCComprador: invoice.cliente_rnc ?? '', RazonSocialComprador: invoice.cliente_nombre ?? '', ...taxTotals(taxLines), MontoTotal: decimal(invoice.total) };
     if (config.ambiente === 'TEST') scenario.CasoPrueba = `${company.rnc}${encf}`;
     lines.forEach((line: Record<string, unknown>, index: number) => {
       const n = index + 1;
-      const rate = Number(line.tasa_itbis ?? 0);
+      const { base, rate } = taxLines[index];
       const divisor = rate > 0 ? 1 + (rate / 100) : 1;
       scenario[`NumeroLinea[${n}]`] = String(n);
-      scenario[`IndicadorFacturacion[${n}]`] = '1';
+      scenario[`IndicadorFacturacion[${n}]`] = BILLING_INDICATOR[rate];
       scenario[`NombreItem[${n}]`] = String(line.descripcion ?? 'ITEM');
       scenario[`IndicadorBienoServicio[${n}]`] = '1';
       scenario[`CantidadItem[${n}]`] = decimal(line.cantidad);
       scenario[`PrecioUnitarioItem[${n}]`] = decimal(Number(line.precio_unitario ?? 0) / divisor);
-      scenario[`MontoItem[${n}]`] = decimal(Number(line.total_linea ?? 0) / divisor);
+      scenario[`MontoItem[${n}]`] = decimal(base);
     });
     const endpoint = `${String(config.url_base).replace(/\/+$/, '')}/api/${String(config.ambiente).toLowerCase()}/test-body-direct-cert`;
     const requestJson = { scenarios: [scenario] };

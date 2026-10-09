@@ -38,7 +38,7 @@ Deno.serve(async (request: Request) => {
   const { data: profile, error: profileError } = await admin
     .from('usuarios')
     .select('correo, auth_usuario_id')
-    .ilike('nombre_usuario', idUsuario)
+    .ilike('nombre_usuario', idUsuario.replace(/[\\%_]/g, '\\$&'))
     .eq('estado', 'Activo')
     .maybeSingle();
 
