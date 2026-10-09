@@ -33,7 +33,11 @@ export class LoginPageComponent implements OnInit {
         this.companies = await this.auth.getCompanies();
       }
     } catch {
-      this.errorMessage = 'No se puede leer la cuenta. En Supabase habilite el esquema myappdb en Settings > API > Exposed schemas.';
+      // Desde la seguridad multiempresa el visitante sin sesión no puede leer
+      // usuarios ni empresas, así que esta consulta falla siempre en una
+      // instalación ya configurada.  Se muestra el login normal; cualquier
+      // problema real aparecerá al intentar entrar.
+      this.showInitialSetup = false;
     }
   }
 

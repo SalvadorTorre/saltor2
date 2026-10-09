@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { SupplierFormModel, SupplierRecord } from '../../../app.models';
 import { SupabaseService } from '../supabase/supabase.service';
+import { ilikeAnyColumn } from '../../utils/postgrest-filters';
 
 interface SupplierRow {
   id: number;
@@ -46,7 +47,7 @@ export class SuppliersService {
       .from(this.table)
       .select('*')
       .eq('estado', 'Activo')
-      .or(`nombre_comercial.ilike.%${term}%,numero_documento.ilike.%${term}%`)
+      .or(ilikeAnyColumn(['nombre_comercial', 'numero_documento'], term))
       .order('nombre_comercial', { ascending: true })
       .limit(8);
     if (error) throw error;

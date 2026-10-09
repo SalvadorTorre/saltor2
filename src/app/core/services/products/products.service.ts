@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ProductFormModel, ProductRecord } from '../../../app.models';
 import { SupabaseService } from '../supabase/supabase.service';
+import { ilikeAnyColumn } from '../../utils/postgrest-filters';
 
 interface ProductRow {
   id: number;
@@ -91,7 +92,7 @@ export class ProductsService {
       .from(this.table)
       .select('*')
       .neq('estado', 'Inactivo')
-      .or(`codigo.ilike.%${term}%,descripcion.ilike.%${term}%`)
+      .or(ilikeAnyColumn(['codigo', 'descripcion'], term))
       .order('descripcion', { ascending: true })
         .limit(50);
     if (error) throw error;
