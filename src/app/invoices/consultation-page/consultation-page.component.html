@@ -39,7 +39,7 @@
       <div *ngFor="let invoice of filteredInvoices" class="invoice-consultation-table__row invoice-consultation-table__row--data">
         <span>{{ invoice.date | date:'dd/MM/yyyy' }}</span>
         <strong>{{ invoice.number }}</strong>
-        <span>{{ invoice.customer }}</span>
+        <span>{{ invoice.customer }}<small *ngIf="invoice.seller" class="invoice-consultation-seller">Vendió: {{ invoice.seller }}</small></span>
         <span>{{ invoice.ncf || 'N/A' }}</span>
         <span>{{ invoice.ncfType || 'N/A' }}</span>
         <strong>RD${{ invoice.total | number:'1.2-2' }}</strong>

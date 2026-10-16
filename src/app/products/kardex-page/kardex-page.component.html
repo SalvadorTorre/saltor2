@@ -1,0 +1,122 @@
+<section class="kdx">
+  <header class="kdx__header">
+    <div>
+      <p class="kdx__eyebrow">Inventario</p>
+      <h2>Kardex y ajustes</h2>
+      <span>Historial de movimientos por producto: ventas, entradas, anulaciones y ajustes.</span>
+    </div>
+  </header>
+
+  <p *ngIf="errorMessage" class="kdx__error">{{ errorMessage }}</p>
+
+  <section class="kdx__picker">
+    <label class="kdx__search">
+      <span>Producto</span>
+      <input type="search" [(ngModel)]="productSearch" (focus)="showSuggestions = true" (input)="showSuggestions = true"
+             placeholder="Escribe código o descripción" autocomplete="off">
+      <div class="kdx__suggestions" *ngIf="showSuggestions && suggestions.length" role="listbox">
+        <button type="button" *ngFor="let p of suggestions" (mousedown)="$event.preventDefault()" (click)="selectProduct(p)">
+          <span><b>{{ p.code }}</b> · {{ p.description }}</span><small [class.kdx__red]="p.stock < 0">Existencia: {{ num(p.stock) }}</small>
+        </button>
+      </div>
+    </label>
+    <label><span>Desde</span><input type="date" [(ngModel)]="from" (change)="loadMovements()"></label>
+    <label><span>Hasta</span><input type="date" [(ngModel)]="to" (change)="loadMovements()"></label>
+    <button type="button" class="kdx__btn kdx__btn--ghost" *ngIf="from || to" (click)="clearDates()">Quitar fechas</button>
+  </section>
+
+  <section class="kdx__alerts" *ngIf="negativeProducts.length || lowProducts.length">
+    <div *ngIf="negativeProducts.length">
+      <strong class="kdx__red">Existencia negativa ({{ negativeProducts.length }})</strong>
+      <button type="button" class="kdx__chip kdx__chip--neg" *ngFor="let p of negativeProducts" (click)="selectProduct(p)">{{ p.code }} · {{ p.description }} ({{ num(p.stock) }})</button>
+    </div>
+    <div *ngIf="lowProducts.length">
+      <strong class="kdx__amber">Bajo el mínimo ({{ lowProducts.length }})</strong>
+      <button type="button" class="kdx__chip" *ngFor="let p of lowProducts" (click)="selectProduct(p)">{{ p.code }} · {{ p.description }} ({{ num(p.stock) }} / mín. {{ num(p.minimumStock) }})</button>
+    </div>
+  </section>
+
+  <ng-container *ngIf="selected; else pickFirst">
+    <section class="kdx__kpis">
+      <article [class.kdx__kpi--neg]="selected.stock < 0"><span>Existencia actual</span><strong>{{ num(selected.stock) }}</strong><small>{{ selected.unit }}</small></article>
+      <article><span>Entradas</span><strong class="kdx__green">+{{ num(totalIn) }}</strong><small>En el período</small></article>
+      <article><span>Salidas</span><strong class="kdx__red">−{{ num(totalOut) }}</strong><small>En el período</small></article>
+      <article><span>Movimientos</span><strong>{{ movements.length }}</strong><small>Costo actual {{ money(selected.cost) }}</small></article>
+    </section>
+
+    <section class="kdx__workspace">
+      <div class="kdx__toolbar">
+        <h3>{{ selected.code }} · {{ selected.description }}</h3>
+        <div class="kdx__actions">
+          <button type="button" class="kdx__btn kdx__btn--ghost" [disabled]="!movements.length" (click)="exportCsv()">Exportar Excel (CSV)</button>
+          <button type="button" class="kdx__btn" *ngIf="isAdmin" (click)="openAdjust()">Ajustar existencia</button>
+        </div>
+      </div>
+      <div class="kdx__table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Documento</th><th class="n">Entrada</th><th class="n">Salida</th><th class="n">Existencia</th><th class="n">Costo</th><th>Usuario</th><th>Notas</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let m of newestFirst">
+              <td>{{ m.date | date:'dd/MM/yyyy' }}<small>{{ m.date | date:'hh:mm a' }}</small></td>
+              <td><span class="kdx__type kdx__type--{{ typeTone(m.type) }}">{{ m.type }}</span></td>
+              <td>{{ m.document || '—' }}</td>
+              <td class="n kdx__green">{{ m.quantity > 0 ? num(m.quantity) : '' }}</td>
+              <td class="n kdx__red">{{ m.quantity < 0 ? num(-m.quantity) : '' }}</td>
+              <td class="n"><b [class.kdx__red]="m.after < 0">{{ num(m.after) }}</b><small>antes {{ num(m.before) }}</small></td>
+              <td class="n">{{ money(m.cost) }}</td>
+              <td>{{ m.userName || '—' }}</td>
+              <td>{{ m.notes }}</td>
+            </tr>
+            <tr *ngIf="isLoading"><td colspan="9" class="kdx__empty">Consultando…</td></tr>
+            <tr *ngIf="!isLoading && !movements.length"><td colspan="9" class="kdx__empty">Sin movimientos en este período.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="kdx__workspace kdx__prices" *ngIf="isAdmin">
+      <div class="kdx__toolbar"><h3>Historial de costo y precios</h3></div>
+      <div class="kdx__table-wrap">
+        <table class="kdx__table--compact">
+          <thead><tr><th>Fecha</th><th>Usuario</th><th>Campo</th><th class="n">Antes</th><th class="n">Después</th><th class="n">Cambio</th></tr></thead>
+          <tbody>
+            <ng-container *ngFor="let h of priceRows">
+              <tr>
+                <td>{{ h.date | date:'dd/MM/yyyy' }}<small>{{ h.date | date:'hh:mm a' }}</small></td>
+                <td>{{ h.user || '—' }}</td>
+                <td>{{ h.field }}</td>
+                <td class="n">{{ h.before }}</td>
+                <td class="n"><b>{{ h.after }}</b></td>
+                <td class="n" [class.kdx__red]="(h.pct ?? 0) < 0" [class.kdx__green]="(h.pct ?? 0) > 0">{{ h.pct === null ? '' : ((h.pct > 0 ? '+' : '') + (h.pct | number:'1.0-1') + '%') }}</td>
+              </tr>
+            </ng-container>
+            <tr *ngIf="!priceRows.length"><td colspan="6" class="kdx__empty">{{ priceMessage }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+  <ng-template #pickFirst><p class="kdx__placeholder">Busca un producto para ver su kardex.</p></ng-template>
+
+  <!-- Ajuste -->
+  <div class="kdx-modal" *ngIf="isAdjustOpen && selected" (click)="isAdjustOpen = false">
+    <form class="kdx-modal__panel" (click)="$event.stopPropagation()" (ngSubmit)="saveAdjust()" role="dialog" aria-labelledby="kdx-adjust-title">
+      <header class="kdx-modal__head"><h3 id="kdx-adjust-title">Ajustar existencia</h3><button type="button" aria-label="Cerrar" (click)="isAdjustOpen = false">×</button></header>
+      <p class="kdx-modal__product"><b>{{ selected.code }} · {{ selected.description }}</b><span>Existencia actual: {{ num(selected.stock) }}</span></p>
+      <fieldset class="kdx-modal__modes">
+        <legend>Tipo de ajuste</legend>
+        <label><input type="radio" name="mode" value="conteo" [(ngModel)]="adjustMode"> Conteo físico <small>Fija la existencia contada</small></label>
+        <label><input type="radio" name="mode" value="entrada" [(ngModel)]="adjustMode"> Entrada <small>Suma unidades</small></label>
+        <label><input type="radio" name="mode" value="salida" [(ngModel)]="adjustMode"> Salida <small>Merma, rotura, consumo</small></label>
+      </fieldset>
+      <label class="kdx-modal__field"><span>{{ adjustMode === 'conteo' ? 'Cantidad contada' : 'Cantidad' }}</span><input type="number" name="qty" min="0" step="0.01" [(ngModel)]="adjustQuantity"></label>
+      <label class="kdx-modal__field"><span>Motivo</span><input name="reason" [(ngModel)]="adjustReason" placeholder="Ej.: conteo físico de fin de mes"></label>
+      <p class="kdx-modal__preview" *ngIf="adjustPreview !== null">Nueva existencia: <b [class.kdx__red]="adjustPreview < 0">{{ num(adjustPreview) }}</b></p>
+      <p *ngIf="adjustError" class="kdx__error">{{ adjustError }}</p>
+      <footer class="kdx-modal__actions">
+        <button type="button" class="kdx__btn kdx__btn--ghost" (click)="isAdjustOpen = false">Cancelar</button>
+        <button type="submit" class="kdx__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : 'Registrar ajuste' }}</button>
+      </footer>
+    </form>
+  </div>
+</section>

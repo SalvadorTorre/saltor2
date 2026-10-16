@@ -65,6 +65,7 @@ interface InvoiceConsultationDatabaseRow {
   dgii_estado: DgiiInvoiceStatus | null;
   dgii_mensaje_respuesta: string | null;
   estado?: string | null;
+  usuario_nombre?: string | null;
 }
 
 interface InvoiceDetailDatabaseRow {
@@ -76,6 +77,22 @@ interface InvoiceDetailDatabaseRow {
   tasa_itbis: number | string;
   monto_itbis: number | string;
   total_linea: number | string;
+}
+
+export interface PendingCollectionInvoice {
+  id: number;
+  number: string;
+  date: string;
+  createdAt: string;
+  customerId: number | null;
+  customerName: string;
+  rnc: string;
+  ncfType: string;
+  condition: 'Contado' | 'Credito';
+  subtotal: number;
+  tax: number;
+  total: number;
+  seller: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -113,8 +130,34 @@ export class InvoicesService {
     return savedInvoice;
   }
 
-  async cancelInvoice(invoiceId: number): Promise<void> {
-    const { error } = await this.supabase.client.rpc('anular_factura', { p_factura_id: invoiceId });
+  async cancelInvoice(invoiceId: number, cancellationType = 4, reason = ''): Promise<void> {
+    const { error } = await this.supabase.client.rpc('anular_factura', {
+      p_factura_id: invoiceId,
+      p_tipo_anulacion: cancellationType,
+      p_motivo: reason
+    });
+    if (error) throw error;
+  }
+
+  /** Facturas guardadas por los vendedores que esperan cobro en caja. */
+  async getPendingCollection(branchId?: number | null): Promise<PendingCollectionInvoice[]> {
+    let query = this.supabase.client.from('facturas')
+      .select('id, numero_factura, fecha_factura, creado_en, cliente_id, cliente_nombre, cliente_rnc, tipo_ncf, condicion_pago, subtotal, itbis, total, usuario_nombre, idsucursal')
+      .eq('estado', 'Pendiente de cobro').order('creado_en', { ascending: true }).limit(300);
+    if (branchId) query = query.eq('idsucursal', branchId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      id: Number(r['id']), number: String(r['numero_factura'] ?? ''), date: String(r['fecha_factura'] ?? ''), createdAt: String(r['creado_en'] ?? ''),
+      customerId: (r['cliente_id'] as number | null) ?? null, customerName: String(r['cliente_nombre'] ?? ''), rnc: String(r['cliente_rnc'] ?? ''),
+      ncfType: String(r['tipo_ncf'] ?? ''), condition: r['condicion_pago'] === 'Credito' ? 'Credito' : 'Contado',
+      subtotal: Number(r['subtotal'] ?? 0), tax: Number(r['itbis'] ?? 0), total: Number(r['total'] ?? 0), seller: String(r['usuario_nombre'] ?? '')
+    }));
+  }
+
+  /** La cajera cobra: la factura pasa a Emitida con la forma de pago elegida. */
+  async collectInvoice(invoiceId: number, paymentMethodCode: number): Promise<void> {
+    const { error } = await this.supabase.client.rpc('cobrar_factura', { p_factura_id: invoiceId, p_forma_pago_codigo: paymentMethodCode });
     if (error) throw error;
   }
 
@@ -199,10 +242,11 @@ export class InvoicesService {
     status: string;
     dgiiStatus: DgiiInvoiceStatus;
     dgiiMessage: string;
+    seller: string;
   }>> {
     const { data, error } = await this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, cliente_nombre, ncf, tipo_ncf, total, estado, dgii_estado, dgii_mensaje_respuesta')
+      .select('id, numero_factura, fecha_factura, cliente_nombre, ncf, tipo_ncf, total, estado, dgii_estado, dgii_mensaje_respuesta, usuario_nombre')
       .order('id', { ascending: false });
 
     if (error) {
@@ -219,7 +263,8 @@ export class InvoicesService {
       total: Number(row.total),
       status: row.estado ?? 'Activa',
       dgiiStatus: row.dgii_estado ?? 'No enviado',
-      dgiiMessage: row.dgii_mensaje_respuesta ?? ''
+      dgiiMessage: row.dgii_mensaje_respuesta ?? '',
+      seller: row.usuario_nombre ?? ''
     }));
   }
 }

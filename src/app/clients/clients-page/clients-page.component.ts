@@ -4,16 +4,16 @@ import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
 import { ClientRecord, ClientFormModel } from '../../app.models';
 import { ClientsService } from '../../core/services/clients/clients.service';
+import { MaintenanceTabsComponent } from '../../shared/maintenance-tabs.component';
 
 @Component({
   selector: 'app-clients-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MaintenanceTabsComponent],
   templateUrl: './clients-page.component.html',
   styleUrls: ['./clients-page.component.scss']
 })
 export class ClientsPageComponent implements OnInit {
-  activeView = 'clients';
   clientSearch = '';
   clientCategoryFilter = 'all';
   clientStatusFilter = 'all';
@@ -24,13 +24,7 @@ export class ClientsPageComponent implements OnInit {
   isSavingClient = false;
   clientEditorMode: 'create' | 'edit' = 'create';
   selectedClientId: number | null = null;
-  activeMaintenanceLabel = 'Clientes';
 
-  readonly maintenanceLinks = [
-    { label: 'Productos', icon: 'box' },
-    { label: 'Clientes', icon: 'users' },
-    { label: 'Suplidores', icon: 'truck' }
-  ];
 
   get clients(): ClientRecord[] {
     return this.data.clients;

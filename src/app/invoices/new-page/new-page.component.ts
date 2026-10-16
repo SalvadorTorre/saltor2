@@ -12,8 +12,11 @@ import { ClientsService } from '../../core/services/clients/clients.service';
 import { PaymentMethod, PaymentMethodsService } from '../../core/services/payment-methods/payment-methods.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { BillingMode, CompanyBillingModeService } from '../../core/services/printing/company-billing-mode.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { CompaniesService } from '../../core/services/companies/companies.service';
+import { ReceivablesService } from '../../core/services/receivables/receivables.service';
+import Swal from 'sweetalert2';
 import * as QRCode from 'qrcode';
 import * as JsBarcodeModule from 'jsbarcode';
 
@@ -230,7 +233,9 @@ export class InvoiceNewPageComponent implements OnInit {
     private readonly ecfService: EcfService,
     private readonly qzPrintService: QzPrintService,
     private readonly auth: AuthService,
-    private readonly companiesService: CompaniesService
+    private readonly companiesService: CompaniesService,
+    private readonly receivablesService: ReceivablesService,
+    private readonly billingModeService: CompanyBillingModeService
   ) {
     this.ncfTypes = this.toNcfOptions(this.data.ncfTypeList);
     this.startNewInvoice();
@@ -242,6 +247,7 @@ export class InvoiceNewPageComponent implements OnInit {
     void this.loadRncRecords();
     void this.loadClients();
     void this.loadPaymentMethods();
+    void this.billingModeService.getMode().then((mode) => this.billingMode = mode);
     this.startNewInvoice();
     this.restoreQuotationDraft();
     this.focusRncField();
@@ -331,12 +337,17 @@ export class InvoiceNewPageComponent implements OnInit {
     return this.requiresDgiiOnSave && !['Aceptado', 'Rechazado'].includes(this.dgiiStatus);
   }
 
+  /** Modo de la empresa: en "Caja" la factura se guarda pendiente y se cobra en Caja → Cobro de facturas. */
+  billingMode: BillingMode = 'Directo';
+  get isCashierMode(): boolean { return this.billingMode === 'Caja'; }
+
   get requiresDgiiOnSave(): boolean {
     const typeCode = this.invoiceForm.ncfType.match(/(?:^|\D)(31|44|45|46)(?:\D|$)/)?.[1];
     return !!typeCode;
   }
 
   get saveInvoiceLabel(): string {
+    if (this.isCashierMode) return this.isSavingInvoice ? 'Enviando a caja...' : 'Guardar y enviar a caja';
     if (this.isSavingInvoice) return this.requiresDgiiOnSave ? 'Guardando y enviando...' : 'Guardando...';
     return this.requiresDgiiOnSave ? 'Guardar y enviar a DGII' : 'Guardar';
   }
@@ -393,6 +404,17 @@ export class InvoiceNewPageComponent implements OnInit {
 
   isActiveProductSuggestion(index: number): boolean {
     return index === this.activeProductSuggestionIndex;
+  }
+
+  /** Aviso de qué producto rebaja el inventario cuando el elegido tiene reemplazo. */
+  get lineEditorInventoryNotice(): string {
+    const product = this.getProductById(this.lineEditorForm.productId);
+    const replacementCode = product?.replacementEnabled ? product.replacementCode.trim() : '';
+    if (!product || !replacementCode) return '';
+    const target = this.products.find((p) => p.id !== product.id && p.code.trim().toLowerCase() === replacementCode.toLowerCase());
+    return target
+      ? `El inventario se rebajará del código de reemplazo ${target.code} (${target.description}).`
+      : `El código de reemplazo ${replacementCode} no existe; corrígelo en Productos antes de facturar.`;
   }
 
   resetLineEditor(): void {
@@ -1057,6 +1079,65 @@ export class InvoiceNewPageComponent implements OnInit {
     this.updateInvoiceLine(lineId, patch);
   }
 
+  /** Venta a crédito: condición "Credito" o forma de pago 4. */
+  get isCreditSale(): boolean {
+    return this.invoiceForm.paymentMethod === 'Credito' || Number(this.paymentMethodCode) === 4;
+  }
+
+  /** Mantiene sincronizadas la condición y la forma de pago 4 (venta a crédito). */
+  onInvoiceConditionChange(): void {
+    if (this.invoiceForm.paymentMethod === 'Credito') {
+      this.paymentMethodCode = 4;
+    } else if (Number(this.paymentMethodCode) === 4) {
+      this.paymentMethodCode = 1;
+    }
+  }
+
+  onInvoicePaymentMethodChange(): void {
+    if (Number(this.paymentMethodCode) === 4) {
+      this.invoiceForm.paymentMethod = 'Credito';
+    } else if (this.invoiceForm.paymentMethod === 'Credito') {
+      this.invoiceForm.paymentMethod = 'Contado';
+    }
+  }
+
+  /**
+   * Antes de una venta a crédito avisa si el cliente tiene facturas vencidas o
+   * pasaría su límite.  Devuelve false si el usuario decide no continuar.
+   */
+  private async confirmCreditSale(client: ClientRecord): Promise<boolean> {
+    let pending: Awaited<ReturnType<ReceivablesService['getInvoices']>> = [];
+    try {
+      pending = await this.receivablesService.getInvoices({ clientId: client.id });
+    } catch {
+      return true; // si no se puede consultar, no se bloquea la venta
+    }
+    if (this.editingExistingInvoiceId) {
+      pending = pending.filter((invoice) => invoice.id !== this.editingExistingInvoiceId);
+    }
+    const money = (v: number) => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(v || 0);
+    const balance = pending.reduce((t, i) => t + i.balance, 0);
+    const overdue = pending.filter((i) => i.daysOverdue > 0);
+    const overdueAmount = overdue.reduce((t, i) => t + i.balance, 0);
+    const newBalance = balance + this.invoiceGrandTotal;
+    const overLimit = client.creditLimit > 0 && newBalance > client.creditLimit;
+    if (!overdue.length && !overLimit) return true;
+
+    const reasons: string[] = [];
+    if (overdue.length) reasons.push(`Tiene ${overdue.length} factura${overdue.length === 1 ? '' : 's'} vencida${overdue.length === 1 ? '' : 's'} por ${money(overdueAmount)}.`);
+    if (overLimit) reasons.push(`Con esta factura su saldo sería ${money(newBalance)} y su límite de crédito es ${money(client.creditLimit)}.`);
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: `Crédito de ${client.fullName}`,
+      html: reasons.map((r) => `<p style="margin:6px 0">${r}</p>`).join('') + `<p style="margin:10px 0 0"><b>Saldo actual: ${money(balance)}</b></p>`,
+      showCancelButton: true,
+      confirmButtonText: 'Facturar de todas formas',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#b42318'
+    });
+    return result.isConfirmed;
+  }
+
   async saveInvoice(): Promise<void> {
     if (this.isSavingInvoice) return;
     if (this.invoiceSaved) {
@@ -1118,6 +1199,33 @@ export class InvoiceNewPageComponent implements OnInit {
     }
 
     this.invoiceForm.customerName = customerName;
+
+    if (this.isCreditSale) {
+      if (!matchedClient) {
+        this.invoiceMessage = 'Las ventas a crédito requieren un cliente registrado en Clientes.';
+        return;
+      }
+      this.invoiceForm.paymentMethod = 'Credito';
+      this.paymentMethodCode = 4;
+      if (!(await this.confirmCreditSale(matchedClient))) {
+        this.invoiceMessage = 'Venta a crédito cancelada.';
+        return;
+      }
+      // Una venta a crédito no se cobra al facturar: se guarda sin pedir el monto pagado.
+      this.paymentReceived = 0;
+      this.isPaymentConfirmationVisible = true;
+      await this.confirmInvoiceSave();
+      return;
+    }
+
+    // Cobro en caja: no se confirma el pago aquí; la cajera cobra e imprime.
+    if (this.isCashierMode) {
+      this.paymentReceived = 0;
+      this.isPaymentConfirmationVisible = true;
+      await this.confirmInvoiceSave();
+      return;
+    }
+
     this.paymentReceived = this.invoiceGrandTotal;
     this.isPaymentConfirmationVisible = true;
   }
@@ -1142,14 +1250,14 @@ export class InvoiceNewPageComponent implements OnInit {
   async confirmInvoiceSave(): Promise<void> {
     if (this.isSavingInvoice || !this.isPaymentConfirmationVisible) return;
     const paid = Number(this.paymentReceived);
-    if (!Number.isFinite(paid) || paid < this.invoiceGrandTotal) {
+    if (!this.isCashierMode && !this.isCreditSale && (!Number.isFinite(paid) || paid < this.invoiceGrandTotal)) {
       this.invoiceMessage = 'El monto pagado debe ser igual o mayor que el valor de la factura.';
       return;
     }
 
     this.isPaymentConfirmationVisible = false;
 
-    if (!this.invoiceForm.ncf) {
+    if (!this.invoiceForm.ncf && !this.isCashierMode) {
       const sequence = this.ncfSequences
         .filter((s) => s.status === 'Activa' && s.ncfType === this.invoiceForm.ncfType && s.total > 0)
         .find((s) => s.used < s.total);
@@ -1197,6 +1305,16 @@ export class InvoiceNewPageComponent implements OnInit {
       this.invoiceForm.invoiceNumber = savedInvoice.numero_factura;
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
+      if (this.isCashierMode) {
+        const number = savedInvoice.numero_factura;
+        const edited = !!this.editingExistingInvoiceId;
+        this.clearInvoice(true);
+        this.invoiceMessage = edited
+          ? `Factura ${number} actualizada. Sigue pendiente de cobro en caja.`
+          : `Factura ${number} enviada a caja. La cajera la cobra e imprime en Caja → Cobro de facturas.`;
+        void Swal.fire({ icon: 'success', title: `Factura ${number} enviada a caja`, timer: 1800, showConfirmButton: false, toast: true, position: 'top-end' });
+        return;
+      }
       if (this.requiresDgiiOnSave) {
         this.invoiceMessage = `Factura ${savedInvoice.numero_factura} guardada. Enviando a DGII...`;
         await this.sendInvoiceToDgii(true);
@@ -1343,8 +1461,8 @@ export class InvoiceNewPageComponent implements OnInit {
       return `<tr><td>${escape(this.getInvoiceProductCode(line.productId))} &nbsp; ${escape(line.quantity)} x ${money(priceWithoutTax)}<br><b>${escape(line.description)}</b></td><td>${money(line.taxAmount)}</td><td>${money(line.lineTotal)}</td></tr>`;
     }).join('');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(documentTitle)} ${escape(this.savedInvoice.numero_factura)}</title><style>
-      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(2),th:nth-child(3),td:nth-child(2),td:nth-child(3){text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:28mm;height:28mm;display:block;margin:0 auto 5px}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
-      <div class="head"><div class="company">${escape(company?.legalName || company?.tradeName || session?.companyName || this.data.companyName)}</div><div class="muted">RNC: ${escape(company?.rnc || 'N/D')}</div><div class="muted">${escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${escape(company?.phone || 'N/D')}</div></div>
+      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(2),th:nth-child(3),td:nth-child(2),td:nth-child(3){text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:28mm;height:28mm;display:block;margin:0 auto 5px}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
+      <div class="head">${company?.logoUrl ? `<img class="logo" src="${escape(company.logoUrl)}" alt="">` : ''}<div class="company">${escape(company?.legalName || company?.tradeName || session?.companyName || this.data.companyName)}</div><div class="muted">RNC: ${escape(company?.rnc || 'N/D')}</div><div class="muted">${escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${escape(company?.phone || 'N/D')}</div></div>
       <div class="document-data"><div><span>No. Factura:</span>${escape(this.savedInvoice.numero_factura)}</div><div><span>Fecha:</span>${escape(this.invoiceForm.invoiceDate)}</div><div><span>e-NCF:</span>${escape(this.invoiceForm.ncf || 'N/A')}</div></div>
       <div class="receipt-type">${escape(this.receiptDocumentType(this.invoiceForm.ncfType || documentTitle))}</div>
       <div class="customer"><strong>Cliente:</strong> ${escape(this.invoiceForm.customerName)}<br><strong>RNC/Cédula:</strong> ${escape(this.invoiceForm.rnc || 'Consumidor final')}<br><strong>Dirección:</strong> ${escape(this.invoiceForm.customerAddress || 'N/D')}<br><strong>Teléfono:</strong> ${escape(this.invoiceForm.customerPhone || 'N/D')}<br><strong>Vendedor:</strong> ${escape(seller)}</div>

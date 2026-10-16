@@ -11,16 +11,7 @@
     </div>
   </div>
 
-  <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
-    <button
-      *ngFor="let item of maintenanceLinks"
-      class="maintenance-tab"
-      type="button"
-      [class.maintenance-tab--active]="activeMaintenanceLabel === item.label"
-      (click)="selectMaintenanceItem(item)">
-      {{ item.label }}
-    </button>
-  </div>
+  <app-maintenance-tabs></app-maintenance-tabs>
 
   <div class="supplier-kpi-grid">
     <article class="supplier-kpi-card supplier-kpi-card--accent">

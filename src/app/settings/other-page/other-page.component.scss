@@ -83,6 +83,90 @@
   line-height: 1.45;
 }
 
+.qz-status {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.qz-status--active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.qz-status--inactive {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.qz-downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.qz-download {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    border-color: #2563eb;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+  }
+}
+
+.qz-download--recommended {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.qz-download__os {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.qz-download__detail {
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.qz-download__meta {
+  color: #64748b;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.qz-download__badge {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.qz-steps {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
 @media (max-width: 800px) {
   .certificate-upload-grid,
   .certificate-details {

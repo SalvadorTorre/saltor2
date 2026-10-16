@@ -5,6 +5,7 @@ import { AppDataService } from '../../app-data.service';
 import { Company, CompanyFormModel } from '../../app.models';
 import { CompaniesService } from '../../core/services/companies/companies.service';
 import { BranchesService, BranchFormModel, BranchRecord } from '../../core/services/branches/branches.service';
+import { CompanyBrandingService, imageFileToLogo } from '../../core/services/company-branding/company-branding.service';
 
 type CompanyEditorMode = 'create' | 'edit';
 
@@ -34,11 +35,61 @@ export class CompanyPageComponent implements OnInit {
   constructor(
     public data: AppDataService,
     private readonly companiesService: CompaniesService,
-    private readonly branchesService: BranchesService
+    private readonly branchesService: BranchesService,
+    private readonly branding: CompanyBrandingService
   ) {}
+
+  // ---- Logo de la empresa ----------------------------------------------------
+  isSavingLogo = false;
+  logoMessage = '';
+  logoError = false;
+
+  get currentLogo(): string | null {
+    return this.companyEditorMode === 'edit' ? this.selectedCompany?.logoUrl ?? null : null;
+  }
+
+  async onLogoSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    await this.saveLogo(async () => imageFileToLogo(file));
+  }
+
+  async removeLogo(): Promise<void> {
+    await this.saveLogo(async () => null);
+  }
+
+  private async saveLogo(produce: () => Promise<string | null>): Promise<void> {
+    const companyId = this.selectedCompanyId ?? this.selectedCompany?.id;
+    if (!companyId || this.companyEditorMode !== 'edit') {
+      this.logoError = true;
+      this.logoMessage = 'Guarda la empresa primero y luego agrega su logo.';
+      return;
+    }
+    this.isSavingLogo = true;
+    this.logoMessage = '';
+    this.logoError = false;
+    try {
+      const logo = await produce();
+      await this.companiesService.updateLogo(companyId, logo);
+      this.data.companies = this.companies.map((c) => c.id === companyId ? { ...c, logoUrl: logo } : c);
+      this.branding.update(companyId, logo);
+      this.logoMessage = logo ? 'Logo guardado. Ya aparece en la barra y en las facturas.' : 'Logo quitado.';
+    } catch (error) {
+      this.logoError = true;
+      this.logoMessage = this.formatSupabaseError(error, 'No se pudo guardar el logo.');
+    } finally {
+      this.isSavingLogo = false;
+    }
+  }
+
+  /** Solo el dueño del sistema puede crear o eliminar empresas. */
+  isPlatformOwner = false;
 
   ngOnInit(): void {
     void this.loadCompanies();
+    void this.companiesService.isPlatformOwner().then((value) => this.isPlatformOwner = value);
   }
 
   get companies(): Company[] {
@@ -73,6 +124,10 @@ export class CompanyPageComponent implements OnInit {
   }
 
   startCreateCompany(): void {
+    if (!this.isPlatformOwner) {
+      this.companyMessage = 'Solo el dueño del sistema puede crear empresas nuevas.';
+      return;
+    }
     this.companyEditorMode = 'create';
     this.companyForm = this.createEmptyCompanyForm();
     this.companyMessage = 'Completa los datos para agregar una nueva empresa.';
@@ -87,6 +142,10 @@ export class CompanyPageComponent implements OnInit {
     this.isSavingCompany = true;
     try {
       const lastUpdate = this.formatTimestamp();
+      if (this.companyEditorMode === 'create' && !this.isPlatformOwner) {
+        this.companyMessage = 'Solo el dueño del sistema puede crear empresas nuevas. Selecciona tu empresa para editarla.';
+        return;
+      }
       if (this.companyEditorMode === 'create') {
         const company = await this.companiesService.createCompany(this.companyForm, lastUpdate);
         this.data.companies = [company, ...this.companies.filter((item) => item.id !== company.id)];
@@ -310,6 +369,8 @@ export class CompanyPageComponent implements OnInit {
   }
 
   private formatSupabaseError(error: unknown, fallback: string): string {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === '42501') return `${fallback} No tienes permiso para esta acción.`;
     if (error && typeof error === 'object' && 'message' in error) {
       return `${fallback} ${(error as { message?: string }).message ?? ''}`.trim();
     }

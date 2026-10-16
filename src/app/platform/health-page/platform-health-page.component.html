@@ -1,0 +1,40 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Salud de las empresas</h2>
+      <span>Uso del sistema, comprobantes en la DGII, secuencias NCF, certificado digital, suscripción y soporte de cada empresa.</span>
+    </div>
+    <div class="pf__header-actions"><button type="button" class="pf__btn" (click)="load()" [disabled]="isLoading">{{ isLoading ? 'Revisando…' : 'Revisar de nuevo' }}</button></div>
+  </header>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="pf__kpis" *ngIf="companies.length">
+    <article class="is-ok"><span>Sin problemas</span><b>{{ counts.ok }}</b><small>empresa(s)</small></article>
+    <article class="is-warn"><span>Con advertencias</span><b>{{ counts.warn }}</b><small>revisar pronto</small></article>
+    <article style="border-left-color:#e11d48"><span>Con problemas</span><b>{{ counts.bad }}</b><small>atender ya</small></article>
+  </section>
+
+  <section class="hl">
+    <article *ngFor="let c of companies" class="hl__card" [ngClass]="'is-' + c.nivel">
+      <div class="hl__head">
+        <div><h3>{{ c.nombre_comercial }}</h3><small>{{ c.rnc ? 'RNC ' + c.rnc : 'Sin RNC' }}</small></div>
+        <span class="pf__state" [ngClass]="c.nivel === 'ok' ? 'is-ok' : c.nivel === 'warn' ? 'is-warn' : 'is-bad'">{{ c.nivel === 'ok' ? 'Bien' : c.nivel === 'warn' ? 'Revisar' : 'Problemas' }}</span>
+      </div>
+      <ul class="hl__checks">
+        <li *ngFor="let k of c.checks"><span class="hl__dot" [ngClass]="'is-' + k.nivel"></span><b>{{ k.area }}</b><span>{{ k.texto }}</span></li>
+      </ul>
+      <div class="hl__actions">
+        <a class="pf__btn pf__btn--ghost" routerLink="/plataforma/soporte" [queryParams]="{ empresa: c.id }">Soporte</a>
+        <a class="pf__btn pf__btn--ghost" routerLink="/plataforma/avisos">Enviar aviso</a>
+        <button type="button" class="pf__btn" (click)="exportCompany(c)" [disabled]="exporting === c.id">{{ exporting === c.id ? 'Exportando…' : 'Exportar datos' }}</button>
+      </div>
+      <div class="hl__export" *ngIf="tablesOf(c.id).length">
+        Bajar en Excel (CSV):
+        <ul><li *ngFor="let t of tablesOf(c.id)"><button type="button" (click)="downloadTable(c, t.key)">{{ label(t.key) }} ({{ t.rows }})</button></li></ul>
+      </div>
+    </article>
+  </section>
+  <p class="pf__empty" *ngIf="!companies.length && !isLoading && !errorMessage">No hay empresas.</p>
+</section>

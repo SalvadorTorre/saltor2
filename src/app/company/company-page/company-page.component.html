@@ -7,7 +7,7 @@
     </div>
     <div class="company-header__actions">
       <div class="dashboard-header__pill">Modulo Empresa</div>
-      <button class="primary-action" type="button" (click)="startCreateCompany()">+ Nueva empresa</button>
+      <button *ngIf="isPlatformOwner" class="primary-action" type="button" (click)="startCreateCompany()">+ Nueva empresa</button>
     </div>
   </div>
 
@@ -75,10 +75,21 @@
 
       <form class="company-form" (ngSubmit)="saveCompany()">
         <div class="company-form__hero">
-          <div class="company-form__logo">EMP</div>
-          <div>
+          <div class="company-form__logo" [class.company-form__logo--image]="currentLogo">
+            <img *ngIf="currentLogo; else noLogo" [src]="currentLogo" alt="Logo de la empresa">
+            <ng-template #noLogo>EMP</ng-template>
+          </div>
+          <div class="company-logo__info">
             <strong>{{ companyForm.tradeName || 'Nueva empresa' }}</strong>
-            <p>Prepara la identidad principal, datos fiscales y contacto.</p>
+            <p>{{ companyEditorMode === 'edit' ? 'Logo de la empresa: aparece en la barra superior y en las facturas impresas.' : 'Guarda la empresa y luego agrega su logo.' }}</p>
+            <div class="company-logo__actions" *ngIf="companyEditorMode === 'edit'">
+              <label class="company-logo__btn" [class.is-disabled]="isSavingLogo">
+                <input type="file" accept="image/png,image/jpeg,image/webp" (change)="onLogoSelected($event)" [disabled]="isSavingLogo" hidden>
+                {{ isSavingLogo ? 'Guardando…' : (currentLogo ? 'Cambiar logo' : 'Subir logo') }}
+              </label>
+              <button *ngIf="currentLogo" type="button" class="company-logo__btn company-logo__btn--ghost" (click)="removeLogo()" [disabled]="isSavingLogo">Quitar</button>
+            </div>
+            <small *ngIf="logoMessage" class="company-logo__msg" [class.is-error]="logoError">{{ logoMessage }}</small>
           </div>
         </div>
 
@@ -196,7 +207,7 @@
           <button class="ghost-action" type="button" (click)="toggleSelectedCompanyStatus()">
             {{ selected.status === 'Activa' ? 'Desactivar empresa' : 'Activar empresa' }}
           </button>
-          <button class="ghost-action" type="button" (click)="deleteCompany(selected)">Eliminar empresa</button>
+          <button *ngIf="isPlatformOwner" class="ghost-action" type="button" (click)="deleteCompany(selected)">Eliminar empresa</button>
         </div>
       </div>
     </section>

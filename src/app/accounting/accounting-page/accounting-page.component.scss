@@ -313,3 +313,42 @@
 @media (max-width: 920px) { .e41__metrics { grid-template-columns: 1fr; }.e41__filters { align-items: stretch; flex-direction: column; }.e41__status-filters { flex-wrap: wrap; }.e41__table-wrap { overflow-x: auto; }.e41__table { min-width: 760px; } }
 @media (max-width: 900px) { .e41-form__top-panels, .e41-form__bottom-panels { grid-template-columns: 1fr; }.e41-form__bottom-panels .e41-form__summary { height: auto; } }
 @media (max-width: 620px) { .e41 { margin-left: -10px; margin-right: -10px; }.e41__sticky { top: 78px; }.e41__header { align-items: flex-start; gap: 14px; padding: 14px 16px; }.e41__tabs { overflow-x: auto; padding: 9px 16px; }.e41__tabs button { font-size: 13px; white-space: nowrap; }.e41__new { white-space: nowrap; }.e41__content { margin-top: 20px; padding: 0 14px 40px; }.e41-form-shell { padding: 20px 14px 40px; }.e41-form__section > header { align-items: flex-start; flex-wrap: wrap; }.e41-form__header-fields { margin-left: 0; order: 3; width: 100%; }.e41-form__header-fields label, .e41-form__header-fields label:first-child input, .e41-form__header-fields input { min-width: 0; width: 100%; }.e41-form__header-fields label { flex: 1; }.e41-form__grid--two, .e41-form__top-panels .e41-form__grid { grid-template-columns: 1fr; }.e41-form__top-panels .e41-form__grid label, .e41-form__top-panels .e41-form__wide, .e41-form__amount-fields label { grid-template-columns: 1fr !important; }.e41-form__amount-fields { padding: 22px; }.e41-form__wide { grid-column: auto; }.e41-form__actions { flex-wrap: wrap; }.e41-form__actions button { flex: 1; min-width: 145px; } }
+
+/* Notas de crédito en teléfonos */
+@media (max-width: 700px) {
+  .credit-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .credit-dgii-panel__metrics { grid-template-columns: 1fr; }
+}
+
+/* Una columna que pueda encogerse: con 1fr la columna crecía hasta el ancho
+   de la tabla de gastos (más de 1000px) y desbordaba la pantalla. */
+@media (max-width: 1100px) {
+  .expclean__body { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .credit-sticky { position: static; }
+}
+
+/* Gastos menores: el encabezado de la tabla estaba fuera del bloque que se
+   desliza; ahora se desliza toda la tarjeta y encabezado y filas van juntos. */
+@media (max-width: 1100px) {
+  .expclean__card { overflow-x: auto; }
+  .expclean__card h2, .expclean__card > p { position: sticky; left: 0; }
+  .expclean__thead, .expclean__rowline { min-width: 990px; }
+  .expclean__metric { min-width: 0; }
+  .expclean__metric strong { font-size: clamp(20px, 2.7vw, 30px); white-space: nowrap; }
+}
+
+@media (max-width: 720px) {
+  .expclean__card { padding: 18px 14px; }
+}
+
+/* En teléfono .fiscal-main usa 9px de relleno; los márgenes negativos de
+   escritorio (-14px / -10px) hacían sobresalir estas secciones. */
+@media (max-width: 600px) {
+  .credit-page-header, .purchase606, .e41 { margin-left: -9px; margin-right: -9px; }
+}

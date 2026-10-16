@@ -39,3 +39,10 @@
 .invoice-payment-confirmation__actions { padding: 18px 30px 24px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e8eff6; }.invoice-payment-confirmation__actions button { min-height: 44px; padding-inline: 19px; font-size: 14px; }.invoice-payment-confirmation__actions .primary-action:disabled { opacity: .55; cursor: not-allowed; }
 @keyframes invoice-payment-enter { from { opacity: 0; transform: translateY(9px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 520px) { .invoice-payment-confirmation { padding: 12px; }.invoice-payment-confirmation__details { grid-template-columns: 1fr; padding: 18px; }.invoice-payment-confirmation__paid { grid-column: auto; }.invoice-payment-confirmation__actions { padding: 13px 18px 18px; }.invoice-payment-confirmation__actions button { flex: 1; padding-inline: 8px; } }
+
+/* En tabletas y teléfonos el encabezado fijo ocupaba media pantalla. */
+@media (max-width: 900px) {
+  .invoice-sticky-header { position: static; margin: 0 0 16px; padding: 10px 0; }
+}
+
+.line-editor-notice { margin: 6px 0 0; padding: 6px 10px; border-radius: 6px; background: #eef5ff; color: #1d4f91; font-size: 13px; font-weight: 600; }

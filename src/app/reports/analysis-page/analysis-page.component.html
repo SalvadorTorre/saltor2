@@ -1,0 +1,236 @@
+<section class="sa">
+  <header class="sa__header">
+    <p class="sa__eyebrow">Reportes</p>
+    <h2>Análisis de ventas</h2>
+    <span>Formas de pago, clientes, categorías, márgenes, vendedores y comparación con el período anterior.</span>
+  </header>
+
+  <section class="sa__filters">
+    <div class="sa__periods">
+      <button *ngFor="let option of periods" type="button" [class.is-active]="period === option.value" (click)="setPeriod(option.value)">{{ option.label }}</button>
+    </div>
+    <div class="sa__range" *ngIf="period === 'custom'">
+      <label>Desde<input type="date" [(ngModel)]="dateFrom"></label>
+      <label>Hasta<input type="date" [(ngModel)]="dateTo"></label>
+      <button type="button" class="sa__btn" (click)="load()" [disabled]="isLoading">Consultar</button>
+    </div>
+    <small class="sa__range-label">{{ periodLabel }}<ng-container *ngIf="prev"> · comparado con {{ formatDate(prev.desde) }} al {{ formatDate(prev.hasta) }}</ng-container></small>
+  </section>
+
+  <p class="sa__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p class="sa__loading" *ngIf="isLoading && !data">Calculando…</p>
+
+  <ng-container *ngIf="data as d">
+    <div [class.sa__dim]="isLoading">
+      <!-- KPIs -->
+      <section class="sa__kpis">
+        <article>
+          <span>Ventas totales</span><strong>{{ money(d.resumen.total) }}</strong>
+          <small *ngIf="prev; else noCmp" [class.up]="(change(d.resumen.total, prev.total) ?? 0) > 0" [class.down]="(change(d.resumen.total, prev.total) ?? 0) < 0">{{ changeText(d.resumen.total, prev.total) }}</small>
+        </article>
+        <article>
+          <span>Facturas</span><strong>{{ d.resumen.facturas | number }}</strong>
+          <small *ngIf="prev; else noCmp">Anterior: {{ prev.facturas | number }}</small>
+        </article>
+        <article>
+          <span>Ticket promedio</span><strong>{{ money(averageTicket) }}</strong>
+          <small *ngIf="prev; else noCmp">Anterior: {{ money(prevAverage) }}</small>
+        </article>
+        <article>
+          <span>Margen bruto</span><strong [class.sa__red]="grossMargin < 0">{{ money(grossMargin) }}</strong>
+          <small>{{ grossMarginPct | number:'1.0-1' }}% de la venta neta<ng-container *ngIf="prev"> · ant. {{ money(prevMargin) }}</ng-container></small>
+        </article>
+        <article>
+          <span>Venta neta / ITBIS</span><strong>{{ money(d.resumen.neto) }}</strong>
+          <small>ITBIS {{ money(d.resumen.itbis) }}</small>
+        </article>
+        <article>
+          <span>Contado / crédito</span><strong>{{ money(d.resumen.contado) }}</strong>
+          <small>Crédito {{ money(d.resumen.credito) }} ({{ creditPct | number:'1.0-1' }}%)</small>
+        </article>
+        <article>
+          <span>Unidades vendidas</span><strong>{{ d.resumen.unidades | number:'1.0-2' }}</strong>
+          <small>{{ d.resumen.clientes }} clientes distintos</small>
+        </article>
+        <article>
+          <span>Devoluciones (NC)</span><strong>{{ money(creditNotesTotal) }}</strong>
+          <small>{{ creditNotesPct | number:'1.0-1' }}% de las ventas</small>
+        </article>
+      </section>
+      <ng-template #noCmp><small>Sin comparación (elige un período)</small></ng-template>
+
+      <p class="sa__note" *ngIf="d.resumen.lineas_costo_estimado || d.resumen.lineas_sin_costo">
+        ⓘ El margen es aproximado:
+        <ng-container *ngIf="d.resumen.lineas_costo_estimado">{{ d.resumen.lineas_costo_estimado }} línea(s) son de facturas anteriores al registro del costo y usan el costo actual del producto</ng-container><ng-container *ngIf="d.resumen.lineas_costo_estimado && d.resumen.lineas_sin_costo">; </ng-container>
+        <ng-container *ngIf="d.resumen.lineas_sin_costo">{{ d.resumen.lineas_sin_costo }} línea(s) no tienen costo</ng-container>.
+      </p>
+
+      <!-- Tendencia -->
+      <section class="sa__card">
+        <div class="sa__card-head"><h3>Ventas por {{ trendIsMonthly ? 'mes' : 'día' }}</h3></div>
+        <div class="sa__columns" *ngIf="trend.length; else empty">
+          <div class="sa__col" *ngFor="let bar of trend" [title]="bar.label + ': ' + money(bar.value) + ' · ' + bar.hint">
+            <div class="sa__col-track"><div class="sa__col-fill" [style.height.%]="bar.pct"></div></div>
+            <span>{{ bar.label }}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="sa__grid">
+        <!-- Forma de pago -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Por forma de pago</h3></div>
+          <ng-container *ngTemplateOutlet="bars; context: { $implicit: paymentBars }"></ng-container>
+        </section>
+        <!-- Vendedores -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Por vendedor</h3></div>
+          <ng-container *ngTemplateOutlet="bars; context: { $implicit: sellerBars }"></ng-container>
+          <p class="sa__hint" *ngIf="sellerBars.length === 1 && sellerBars[0].label === 'Sin registrar'">Las facturas anteriores al registro del vendedor aparecen como "Sin registrar".</p>
+        </section>
+        <!-- Día de la semana -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Por día de la semana</h3><small>Mejor día: <b>{{ bestWeekday }}</b></small></div>
+          <ng-container *ngTemplateOutlet="bars; context: { $implicit: weekdayBars }"></ng-container>
+        </section>
+        <!-- Hora -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Por hora del día</h3><small>Hora pico: <b>{{ bestHour }}</b></small></div>
+          <ng-container *ngTemplateOutlet="bars; context: { $implicit: hourBars }"></ng-container>
+        </section>
+      </div>
+
+      <!-- Categorías -->
+      <section class="sa__card">
+        <div class="sa__card-head"><h3>Por categoría</h3><small>Montos sin ITBIS</small></div>
+        <div class="sa__table-wrap">
+          <table>
+            <thead><tr><th>Categoría</th><th class="n">Cantidad</th><th class="n">Venta neta</th><th class="n">% venta</th><th class="n">Costo</th><th class="n">Margen</th><th class="n">Margen %</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let row of categories"><td>{{ row.nombre }}</td><td class="n">{{ row.cantidad | number:'1.0-2' }}</td><td class="n">{{ money(row.neto) }}</td><td class="n">{{ row.share | number:'1.0-1' }}%</td><td class="n">{{ money(row.costo) }}</td><td class="n" [class.sa__red]="row.margen < 0">{{ money(row.margen) }}</td><td class="n" [class.sa__red]="row.pct < 0">{{ row.pct | number:'1.0-1' }}%</td></tr>
+              <tr *ngIf="!categories.length"><td colspan="7" class="sa__empty">Sin ventas en el período.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Productos y margen -->
+      <section class="sa__card">
+        <div class="sa__card-head">
+          <h3>Productos y margen <small *ngIf="losingProducts" class="sa__badge">{{ losingProducts }} con pérdida</small></h3>
+          <div class="sa__head-actions">
+            <label>Ordenar por
+              <select [(ngModel)]="productSort">
+                <option value="neto">Venta</option><option value="margen">Margen</option><option value="pct">Margen %</option><option value="cantidad">Cantidad</option>
+              </select>
+            </label>
+            <button type="button" class="sa__btn sa__btn--ghost" (click)="exportProducts()" [disabled]="!productCount">Exportar Excel (CSV)</button>
+          </div>
+        </div>
+        <div class="sa__table-wrap">
+          <table>
+            <thead><tr><th>Código</th><th>Producto</th><th class="n">Cantidad</th><th class="n">Venta neta</th><th class="n">Costo</th><th class="n">Margen</th><th class="n">Margen %</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let row of products" [class.sa__row-loss]="row.margen < 0">
+                <td>{{ row.codigo }}</td>
+                <td>{{ row.nombre }}<small *ngIf="row.costo_estimado" title="Incluye líneas con costo estimado"> · costo estimado</small></td>
+                <td class="n">{{ row.cantidad | number:'1.0-2' }}</td><td class="n">{{ money(row.neto) }}</td><td class="n">{{ money(row.costo) }}</td>
+                <td class="n" [class.sa__red]="row.margen < 0">{{ money(row.margen) }}</td><td class="n" [class.sa__red]="row.pct < 0">{{ row.pct | number:'1.0-1' }}%</td>
+              </tr>
+              <tr *ngIf="!products.length"><td colspan="7" class="sa__empty">Sin ventas en el período.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="sa__more" *ngIf="productCount > 15" (click)="showAllProducts = !showAllProducts">{{ showAllProducts ? 'Ver solo los primeros 15' : 'Ver los ' + productCount + ' productos' }}</button>
+      </section>
+
+      <div class="sa__grid">
+        <!-- Mayor vs detalle -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Al por mayor vs al detalle</h3></div>
+          <div class="sa__table-wrap">
+            <table class="sa__compact">
+              <thead><tr><th>Tipo</th><th class="n">Unidades</th><th class="n">Venta neta</th><th class="n">% venta</th><th class="n">Margen %</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let row of wholesale"><td>{{ row.tipo }}</td><td class="n">{{ row.cantidad | number:'1.0-2' }}</td><td class="n">{{ money(row.neto) }}</td><td class="n">{{ row.share | number:'1.0-1' }}%</td><td class="n" [class.sa__red]="row.pct < 0">{{ row.pct | number:'1.0-1' }}%</td></tr>
+                <tr *ngIf="!wholesale.length"><td colspan="5" class="sa__empty">Sin ventas.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="sa__hint">Se cuenta como "por mayor" la línea vendida al precio por mayor del producto con la cantidad mínima.</p>
+        </section>
+
+        <!-- Cotizaciones -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Conversión de cotizaciones</h3></div>
+          <div class="sa__quote">
+            <div class="sa__ring" [style.--p]="quoteConversion"><strong>{{ quoteConversion | number:'1.0-0' }}%</strong></div>
+            <ul>
+              <li><span>Cotizaciones</span><b>{{ d.cotizaciones.cantidad }} · {{ money(d.cotizaciones.total) }}</b></li>
+              <li><span>Facturadas</span><b>{{ d.cotizaciones.facturadas }} · {{ money(d.cotizaciones.total_facturado) }}</b></li>
+              <li><span>Vencidas sin facturar</span><b [class.sa__red]="d.cotizaciones.vencidas">{{ d.cotizaciones.vencidas }}</b></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- Clientes -->
+      <section class="sa__card">
+        <div class="sa__card-head">
+          <h3>Mejores clientes</h3>
+          <button type="button" class="sa__btn sa__btn--ghost" (click)="exportClients()" [disabled]="!clients.length">Exportar Excel (CSV)</button>
+        </div>
+        <div class="sa__table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Cliente</th><th>RNC / Cédula</th><th class="n">Facturas</th><th class="n">Total</th><th class="n">% ventas</th><th>Última compra</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let row of clients; let i = index"><td>{{ i + 1 }}</td><td>{{ row.nombre }}</td><td>{{ row.rnc || '—' }}</td><td class="n">{{ row.facturas }}</td><td class="n">{{ money(row.total) }}</td><td class="n">{{ row.share | number:'1.0-1' }}%</td><td>{{ formatDate(row.ultima_compra) }}</td></tr>
+              <tr *ngIf="!clients.length"><td colspan="7" class="sa__empty">Sin ventas en el período.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="sa__grid">
+        <!-- Notas de crédito -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Notas de crédito por motivo</h3></div>
+          <div class="sa__table-wrap">
+            <table class="sa__compact">
+              <thead><tr><th>Motivo</th><th>Tipo</th><th class="n">Cant.</th><th class="n">Total</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let row of d.notas_credito"><td>{{ row.motivo }}</td><td><small>{{ row.codigo }}</small></td><td class="n">{{ row.cantidad }}</td><td class="n">{{ money(row.total) }}</td></tr>
+                <tr *ngIf="!d.notas_credito.length"><td colspan="4" class="sa__empty">Sin notas de crédito en el período.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Reemplazos -->
+        <section class="sa__card">
+          <div class="sa__card-head"><h3>Ventas con código de reemplazo</h3></div>
+          <div class="sa__table-wrap">
+            <table class="sa__compact">
+              <thead><tr><th>Vendido</th><th>Rebajó de</th><th class="n">Cant.</th><th class="n">Venta neta</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let row of d.reemplazos"><td>{{ row.codigo }} · {{ row.nombre }}</td><td>{{ row.rebaja_de || '—' }}</td><td class="n">{{ row.cantidad | number:'1.0-2' }}</td><td class="n">{{ money(row.neto) }}</td></tr>
+                <tr *ngIf="!d.reemplazos.length"><td colspan="4" class="sa__empty">Sin ventas por reemplazo en el período.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </ng-container>
+
+  <ng-template #bars let-items>
+    <div class="sa__bars" *ngIf="items.length; else empty">
+      <div class="sa__bar" *ngFor="let bar of items">
+        <div class="sa__bar-label"><span>{{ bar.label }}</span><b>{{ money(bar.value) }}</b></div>
+        <div class="sa__bar-track"><div class="sa__bar-fill" [style.width.%]="bar.pct"></div></div>
+        <small *ngIf="bar.hint">{{ bar.hint }}</small>
+      </div>
+    </div>
+  </ng-template>
+  <ng-template #empty><p class="sa__empty">Sin datos en el período.</p></ng-template>
+</section>

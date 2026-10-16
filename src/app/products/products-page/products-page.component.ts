@@ -13,7 +13,6 @@ import { ProductsService } from '../../core/services/products/products.service';
   styleUrls: ['./products-page.component.scss']
 })
 export class ProductsPageComponent implements OnInit {
-  activeView = 'products';
   productSearch = '';
   productCategoryFilter = 'all';
   productStatusFilter = 'all';

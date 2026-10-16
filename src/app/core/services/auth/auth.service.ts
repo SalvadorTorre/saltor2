@@ -1,6 +1,4 @@
 import { Injectable } from '@angular/core';
-import { createClient } from '@supabase/supabase-js';
-import { environment } from '../../../../environments/environment';
 import { SupabaseService } from '../supabase/supabase.service';
 
 export interface ActiveUserSession {
@@ -14,21 +12,6 @@ export interface ActiveUserSession {
   branch: string;
   branchId: number;
   role: string;
-}
-
-export interface LoginCompany {
-  id: number;
-  name: string;
-}
-
-export interface InitialAdminForm {
-  firstName: string;
-  lastName: string;
-  username: string;
-  email: string;
-  password: string;
-  companyId: number | null;
-  branch: string;
 }
 
 interface UserProfileRow {
@@ -47,14 +30,27 @@ interface UserProfileRow {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly activeUserKey = 'saltor.activeUser';
-  private readonly registrationClient = createClient(environment.supabase.url, environment.supabase.anonKey, {
-    db: { schema: environment.supabase.schema },
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-  });
+  private restoring: Promise<ActiveUserSession | null> | null = null;
+
+  /** Usuario con sesión activa; null antes de iniciar sesión o después de salir. */
+  currentUser: ActiveUserSession | null = null;
 
   constructor(private readonly supabase: SupabaseService) {}
 
-  async restoreSession(): Promise<ActiveUserSession | null> {
+  get isAdmin(): boolean {
+    return this.currentUser?.role === 'Administrador';
+  }
+
+  /**
+   * Restaura la sesión guardada una sola vez; la pantalla principal y las
+   * guardas de ruta esperan la misma promesa.
+   */
+  restoreSession(): Promise<ActiveUserSession | null> {
+    this.restoring ??= this.loadStoredSession();
+    return this.restoring;
+  }
+
+  private async loadStoredSession(): Promise<ActiveUserSession | null> {
     const { data, error } = await this.supabase.client.auth.getSession();
     if (error || !data.session?.user) {
       this.clearStoredUser();
@@ -73,7 +69,12 @@ export class AuthService {
     const { data, error } = await this.supabase.client.functions.invoke('iniciar-sesion-usuario', {
       body: { idUsuario: username.trim(), clave: password }
     });
-    if (error) throw error;
+    if (error) {
+      // La función devuelve el motivo en el cuerpo (p. ej. "ID de usuario o clave incorrectos.").
+      const context = (error as { context?: { json?: () => Promise<{ error?: string }>; status?: number } }).context;
+      const detail = await context?.json?.().catch(() => null);
+      throw new Error(detail?.error || 'No se pudo iniciar sesión. Verifica tu conexión e intenta de nuevo.');
+    }
 
     const session = data?.session;
     if (!session?.access_token || !session?.refresh_token) {
@@ -92,104 +93,10 @@ export class AuthService {
   }
 
   async signOut(): Promise<void> {
+    this.currentUser = null;
+    this.restoring = Promise.resolve(null);
     await this.supabase.client.auth.signOut();
     this.clearStoredUser();
-  }
-
-  async resendConfirmation(email: string): Promise<void> {
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail) {
-      throw new Error('Escriba su correo electrónico para reenviar la confirmación.');
-    }
-
-    const { error } = await this.registrationClient.auth.resend({
-      type: 'signup',
-      email: normalizedEmail,
-      options: { emailRedirectTo: this.confirmationRedirectUrl() }
-    });
-
-    if (error) {
-      throw error;
-    }
-  }
-
-  async hasRegisteredUsers(): Promise<boolean> {
-    const { count, error } = await this.supabase.client
-      .from('usuarios')
-      .select('codusuario', { count: 'exact', head: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return (count ?? 0) > 0;
-  }
-
-  async getCompanies(): Promise<LoginCompany[]> {
-    const { data, error } = await this.supabase.client
-      .from('empresas')
-      .select('id, nombre_comercial')
-      .eq('estado', 'Activa')
-      .order('nombre_comercial');
-
-    if (error) {
-      throw error;
-    }
-
-    return (data ?? []).map((company: { id: number; nombre_comercial: string }) => ({
-      id: company.id,
-      name: company.nombre_comercial
-    }));
-  }
-
-  async registerInitialAdmin(form: InitialAdminForm): Promise<ActiveUserSession> {
-    if (await this.hasRegisteredUsers()) {
-      throw new Error('Ya existe un usuario. Inicie sesión con su ID de usuario y clave.');
-    }
-    if (!form.companyId) {
-      throw new Error('Seleccione la empresa del administrador.');
-    }
-
-    const { data, error } = await this.registrationClient.auth.signUp({
-      email: form.email.trim(),
-      password: form.password,
-      options: {
-        emailRedirectTo: this.confirmationRedirectUrl(),
-        data: {
-          nombre_usuario: form.username.trim(),
-          empresa_id: form.companyId,
-          rol: 'Administrador'
-        }
-      }
-    });
-
-    if (error || !data.user) {
-      throw error ?? new Error('No se pudo crear la cuenta inicial.');
-    }
-
-    const firstName = form.firstName.trim();
-    const lastName = form.lastName.trim();
-    const { error: profileError } = await this.supabase.client.from('usuarios').insert({
-      nombre: firstName,
-      apellido: lastName,
-      nombre_completo: `${firstName} ${lastName}`.trim(),
-      nombre_usuario: form.username.trim(),
-      correo: form.email.trim(),
-      telefono: null,
-      empresa_id: form.companyId,
-      sucursal: form.branch.trim() || 'Principal',
-      rol: 'Administrador',
-      estado: 'Activo',
-      avatar: `${firstName[0] ?? ''}${lastName[0] ?? ''}`.toUpperCase(),
-      ultima_actualizacion: new Date().toISOString(),
-      auth_usuario_id: data.user.id
-    });
-
-    if (profileError) {
-      throw profileError;
-    }
-
-    return this.signIn(form.email, form.password);
   }
 
   private async loadActiveUser(authUserId: string): Promise<ActiveUserSession> {
@@ -224,6 +131,8 @@ export class AuthService {
       role: profile.rol
     };
 
+    this.currentUser = activeUser;
+    this.restoring = Promise.resolve(activeUser);
     localStorage.setItem(this.activeUserKey, JSON.stringify(activeUser));
     await this.supabase.client
       .from('usuarios')
@@ -231,10 +140,6 @@ export class AuthService {
       .eq('codusuario', profile.codusuario);
 
     return activeUser;
-  }
-
-  private confirmationRedirectUrl(): string {
-    return document.baseURI;
   }
 
   private clearStoredUser(): void {

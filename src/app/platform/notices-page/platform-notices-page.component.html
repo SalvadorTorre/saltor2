@@ -1,0 +1,49 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Avisos a los usuarios</h2>
+      <span>Mensajes que aparecen arriba de la pantalla a los usuarios de una empresa o de todas: mantenimientos, cambios de la DGII, novedades.</span>
+    </div>
+  </header>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <form class="pf-form pf-form--pay" (ngSubmit)="save()">
+    <label class="pf-form__wide">Título<input name="titulo" type="text" [(ngModel)]="form.titulo" maxlength="120" placeholder="Ej.: Mantenimiento programado el sábado de 10:00 p. m. a 11:00 p. m." data-case="native" required></label>
+    <label class="pf-form__wide">Detalle (opcional)<textarea name="msg" rows="2" [(ngModel)]="form.mensaje" data-case="native"></textarea></label>
+    <label>Para<select name="emp" [(ngModel)]="form.empresa_id"><option [ngValue]="null">Todas las empresas</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select></label>
+    <label>Nivel<select name="nivel" [(ngModel)]="form.nivel"><option>Información</option><option>Advertencia</option><option>Urgente</option></select></label>
+    <label style="display:flex; align-items:center; gap:8px; align-self:end; height:40px"><input name="activo" type="checkbox" [(ngModel)]="form.activo"> Activo</label>
+    <label>Mostrar desde<input name="desde" type="date" [(ngModel)]="form.desde" required></label>
+    <label>Hasta (vacío = sin fin)<input name="hasta" type="date" [(ngModel)]="form.hasta"></label>
+    <div class="pf-form__wide pf-form__actions">
+      <small>{{ form.id ? 'Editando aviso.' : 'Cada usuario puede ocultar el aviso con la ×; vuelve a salir si lo editas.' }}</small>
+      <span style="display:flex; gap:8px">
+        <button type="button" class="pf__btn pf__btn--ghost" *ngIf="form.id" (click)="reset()">Cancelar</button>
+        <button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : (form.id ? 'Guardar cambios' : 'Publicar aviso') }}</button>
+      </span>
+    </div>
+  </form>
+
+  <section class="pf__table-wrap">
+    <table class="pf__table" style="min-width:720px">
+      <thead><tr><th>Aviso</th><th>Para</th><th>Nivel</th><th>Fechas</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let n of notices" [class.is-void]="status(n) === 'Terminado' || !n.activo">
+          <td><b>{{ n.titulo }}</b><small>{{ n.mensaje }}</small></td>
+          <td>{{ companyName(n.empresa_id) }}</td>
+          <td><span class="pf__state" [ngClass]="levelClass(n.nivel)">{{ n.nivel }}</span></td>
+          <td>{{ date(n.desde) }} – {{ n.hasta ? date(n.hasta) : 'sin fin' }}</td>
+          <td><span class="pf__state" [ngClass]="statusClass(status(n))">{{ status(n) }}</span></td>
+          <td class="pf__row-actions">
+            <button type="button" (click)="edit(n)">Editar</button>
+            <button type="button" (click)="toggle(n)">{{ n.activo ? 'Desactivar' : 'Activar' }}</button>
+            <button type="button" class="is-danger" (click)="remove(n)">Eliminar</button>
+          </td>
+        </tr>
+        <tr *ngIf="!notices.length && !isLoading"><td colspan="6" class="pf__empty">No hay avisos.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</section>

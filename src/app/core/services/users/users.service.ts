@@ -1,7 +1,5 @@
 import { Injectable } from '@angular/core';
-import { createClient } from '@supabase/supabase-js';
 import { UserFormModel, UserRecord } from '../../../app.models';
-import { environment } from '../../../../environments/environment';
 import { SupabaseService } from '../supabase/supabase.service';
 
 interface UserRow {
@@ -24,13 +22,6 @@ interface UserRow {
 @Injectable({ providedIn: 'root' })
 export class UsersService {
   private readonly table = 'usuarios';
-  private readonly registrationClient = createClient(environment.supabase.url, environment.supabase.anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false
-    }
-  });
 
   constructor(private readonly supabase: SupabaseService) {}
 
@@ -48,18 +39,41 @@ export class UsersService {
   }
 
   async createUser(form: UserFormModel, lastUpdate: string): Promise<UserRecord> {
-    const authUserId = await this.createAuthUser(form);
-    const { data, error } = await this.supabase.client
-      .from(this.table)
-      .insert({ ...this.toProfileRow(form, lastUpdate), auth_usuario_id: authUserId })
-      .select('*')
-      .single();
+    // La cuenta de acceso y el perfil se crean juntos en el servidor; si el
+    // perfil falla, la cuenta se elimina y el correo queda libre.
+    const { data, error } = await this.supabase.client.functions.invoke('crear-usuario', {
+      body: {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        username: form.username,
+        email: form.email,
+        password: form.password,
+        phone: form.phone,
+        companyId: form.companyId,
+        branch: form.branch,
+        role: form.role,
+        status: form.status,
+        lastUpdate
+      }
+    });
 
     if (error) {
-      throw error;
+      const response = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+      const detail = await response?.json?.().catch(() => null);
+      throw new Error(detail?.error || 'No se pudo crear el usuario.');
     }
 
     return this.fromRow(data as UserRow);
+  }
+
+  /** Pone una clave nueva (solo administradores; se cambia en Supabase Auth, no se guarda aquí). */
+  async changePassword(userId: number, password: string): Promise<void> {
+    const { error } = await this.supabase.client.functions.invoke('cambiar-clave-usuario', { body: { userId, password } });
+    if (error) {
+      const response = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+      const detail = await response?.json?.().catch(() => null);
+      throw new Error(detail?.error || 'No se pudo cambiar la clave. Verifica que la función cambiar-clave-usuario esté desplegada.');
+    }
   }
 
   async updateUser(id: number, form: UserFormModel, lastUpdate: string): Promise<UserRecord> {
@@ -104,27 +118,6 @@ export class UsersService {
     };
   }
 
-  private async createAuthUser(form: UserFormModel): Promise<string> {
-    const { data, error } = await this.registrationClient.auth.signUp({
-      email: form.email.trim(),
-      password: form.password,
-      options: {
-        emailRedirectTo: this.confirmationRedirectUrl(),
-        data: {
-          nombre_usuario: form.username.trim(),
-          empresa_id: form.companyId,
-          rol: form.role
-        }
-      }
-    });
-
-    if (error || !data.user) {
-      throw error ?? new Error('No se pudo crear la cuenta de acceso.');
-    }
-
-    return data.user.id;
-  }
-
   private toProfileRow(form: UserFormModel, lastUpdate: string): Omit<UserRow, 'codusuario' | 'auth_usuario_id'> {
     const firstName = form.firstName.trim();
     const lastName = form.lastName.trim();
@@ -146,9 +139,5 @@ export class UsersService {
 
   private buildAvatar(firstName: string, lastName: string): string {
     return `${firstName[0] ?? ''}${lastName[0] ?? ''}`.toUpperCase();
-  }
-
-  private confirmationRedirectUrl(): string {
-    return document.baseURI;
   }
 }

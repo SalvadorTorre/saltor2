@@ -2,278 +2,165 @@
 
 <app-login-page *ngIf="!isCheckingSession && !activeUser" (loggedIn)="onLoggedIn($event)"></app-login-page>
 
-<div *ngIf="!isCheckingSession && activeUser" class="dashboard-shell">
-  <header class="topbar">
-    <div class="topbar__system-brand">
-      <strong>{{ companyName }}</strong>
-    </div>
+<div
+  *ngIf="!isCheckingSession && activeUser"
+  class="shell"
+  [class.shell--with-sidebar]="hasSidebar"
+  [class.shell--sidebar-open]="isSidebarOpen">
+  <header class="appbar">
+    <button
+      class="appbar__menu-toggle"
+      type="button"
+      (click)="toggleSidebar()"
+      [attr.aria-expanded]="isSidebarOpen"
+      aria-controls="app-sidebar"
+      aria-label="Abrir menú">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" /></svg>
+    </button>
 
-    <nav class="topbar__navigation" aria-label="Menu de modulos">
-      <button class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === 'dashboard'" (click)="selectTopSection('dashboard')">
-        <span class="topbar__nav-icon">⌂</span> Inicio
-      </button>
-      <button class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === 'maintenance'" (click)="selectTopSection('maintenance')">
-        <span class="topbar__nav-icon">⚙</span> Mantenimiento
-      </button>
-      <button class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === 'settings'" (click)="selectTopSection('settings')">
-        <span class="topbar__nav-icon">☷</span> Configuracion
-      </button>
-      <button *ngFor="let item of modules" class="topbar__navigation-button" type="button" [class.topbar__navigation-button--active]="activeTopSection === item.key" (click)="selectTopModule(item)">
-        <span class="topbar__nav-icon"><ng-container [ngTemplateOutlet]="moduleIcon" [ngTemplateOutletContext]="{ icon: item.icon }"></ng-container></span>{{ item.label }}
+    <a class="appbar__brand" routerLink="/inicio" [title]="companyName">
+      <img [src]="companyLogo || 'assets/logosaltor.jpg'" [class.appbar__brand-logo--company]="companyLogo" alt="">
+      <span>{{ companyName }}</span>
+    </a>
+
+    <nav class="appbar__nav" aria-label="Módulos">
+      <button
+        *ngFor="let section of visibleSections"
+        class="appbar__nav-item"
+        type="button"
+        [class.appbar__nav-item--active]="activeTopSection === section.key"
+        [attr.aria-current]="activeTopSection === section.key ? 'page' : null"
+        [title]="section.label"
+        (click)="selectSection(section)">
+        <ng-container [ngTemplateOutlet]="icon" [ngTemplateOutletContext]="{ name: section.icon }"></ng-container>
+        <span class="appbar__nav-label">{{ section.label }}</span>
       </button>
     </nav>
 
-    <div class="topbar__meta">
-      <div class="topbar__user">
-        <div class="topbar__avatar">{{ userInitials }}</div>
-        <div><strong>{{ userName }}</strong><p>{{ userEmail }}</p></div>
-      </div>
-      <div class="topbar__date">{{ todayLabel }}</div>
-      <div class="topbar__logout-menu" (click)="$event.stopPropagation()">
-        <button class="topbar__logout" type="button" (click)="toggleLogoutMenu($event)" [attr.aria-expanded]="isLogoutMenuOpen" aria-haspopup="menu">Salir <span aria-hidden="true">▾</span></button>
-        <div *ngIf="isLogoutMenuOpen" class="topbar__logout-dropdown" role="menu">
-          <div class="topbar__logout-dropdown-title">Sesion actual</div>
-          <button type="button" role="menuitem" (click)="logout()">Cerrar sesion</button>
+    <button class="appbar__price" type="button" (click)="openPriceLookup()" title="Consulta de precio (F2)" aria-label="Consulta de precio">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6 12.4 2.6A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7c0 .6.2 1.1.6 1.4l9 9a2 2 0 0 0 2.8 0l7-7a2 2 0 0 0 0-2.8M6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8" /></svg>
+      <span>Precio</span>
+    </button>
+
+    <div class="appbar__user" (click)="$event.stopPropagation()">
+      <button
+        class="appbar__user-button"
+        type="button"
+        (click)="toggleUserMenu($event)"
+        [attr.aria-expanded]="isUserMenuOpen"
+        aria-haspopup="menu">
+        <span class="appbar__avatar" aria-hidden="true">{{ userInitials }}</span>
+        <span class="appbar__user-name">{{ userName }}</span>
+        <svg class="appbar__caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5z" /></svg>
+      </button>
+
+      <div *ngIf="isUserMenuOpen" class="user-menu" role="menu">
+        <div class="user-menu__header">
+          <span class="appbar__avatar appbar__avatar--large" aria-hidden="true">{{ userInitials }}</span>
+          <div>
+            <strong>{{ userName }}</strong>
+            <span>{{ userEmail }}</span>
+          </div>
         </div>
+        <dl class="user-menu__details">
+          <div><dt>Rol</dt><dd>{{ activeUser.role }}</dd></div>
+          <div><dt>Sucursal</dt><dd>{{ activeUser.branch || '—' }}</dd></div>
+          <div><dt>Hoy</dt><dd class="user-menu__date">{{ todayLabel }}</dd></div>
+        </dl>
+        <button class="user-menu__logout" type="button" role="menuitem" (click)="logout()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 17v-3h7v-4h-7V7l-5 5zm6 4V3H10v2h8v14h-8v2z" /></svg>
+          Cerrar sesión
+        </button>
       </div>
     </div>
   </header>
 
-  <aside class="sidebar" aria-label="Menu principal">
-    <nav class="sidebar-nav">
-      <section class="menu-group">
-        <div *ngIf="activeTopSection === 'maintenance'" class="submenu-card">
-          <div class="submenu-card__header">
-            <span class="sidebar-submenu-title">Mantenimiento</span>
-          </div>
+  <div class="shell__backdrop" (click)="isSidebarOpen = false" aria-hidden="true"></div>
 
-          <div class="submenu-card__body">
-            <button
-              *ngFor="let item of maintenanceLinks"
-              class="submenu-item"
-              type="button"
-              [class.submenu-item--active]="activeMaintenanceLabel === item.label && (activeView === 'clients' || activeView === 'suppliers')"
-              (click)="selectMaintenanceItem(item)">
-              <span class="submenu-item__icon">
-                <ng-container [ngSwitch]="item.icon">
-                  <svg *ngSwitchCase="'box'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 2 4 6v12l8 4 8-4V6zm0 2.2 5.7 2.85L12 9.9 6.3 7.05zM6 8.7l5 2.5v8.2l-5-2.5zm7 10.7v-8.2l5-2.5v8.2z" />
-                  </svg>
-                  <svg *ngSwitchCase="'users'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M16 11a4 4 0 1 0-3.999-4A4 4 0 0 0 16 11M8 10a3 3 0 1 0-3-3 3 3 0 0 0 3 3m8 3c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4m-8 1c-2.33 0-7 1.17-7 3.5V19h5v-2c0-.76.29-1.46.77-2.08A11.2 11.2 0 0 1 8 14" />
-                  </svg>
-                  <svg *ngSwitchCase="'truck'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M3 5h11v8h2.3l2.7 2.7V18h1a2 2 0 1 1-4 0H8a2 2 0 1 1-4 0H3zm13 2v4h3.2L17.5 7z" />
-                  </svg>
-                </ng-container>
-              </span>
-              <span>{{ item.label }}</span>
-            </button>
-
-            <div class="inventory-submenu">
-              <button class="submenu-item inventory-submenu__trigger" type="button" (click)="toggleSection('inventory')">
-                <span class="submenu-item__icon">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 2 4 6v12l8 4 8-4V6zm0 2.2 5.7 2.85L12 9.9 6.3 7.05zM6 8.7l5 2.5v8.2l-5-2.5zm7 10.7v-8.2l5-2.5v8.2z" />
-                  </svg>
-                </span>
-                <span>Inventario</span>
-                <span class="inventory-submenu__arrow" [class.inventory-submenu__arrow--expanded]="expandedSections['inventory']">v</span>
-              </button>
-              <div *ngIf="expandedSections['inventory']" class="inventory-submenu__body">
-                <button class="submenu-item" type="button" [class.submenu-item--active]="activeMaintenanceLabel === 'Productos' && activeView === 'products'" (click)="selectInventoryItem('Productos')">
-                  <span class="submenu-item__icon">-</span><span>Productos</span>
-                </button>
-                <button class="submenu-item" type="button" [class.submenu-item--active]="activeMaintenanceLabel === 'Entrada de producto' && activeView === 'product_entries'" (click)="selectInventoryItem('Entrada de producto')">
-                  <span class="submenu-item__icon">-</span><span>Entrada de producto</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div *ngIf="activeTopSection === 'settings'" class="submenu-card">
-          <div class="submenu-card__header">
-            <span class="sidebar-submenu-title">Configuracion</span>
-          </div>
-
-          <div class="submenu-card__body">
-            <button
-              *ngFor="let item of settingsLinks"
-              class="submenu-item"
-              type="button"
-              [class.submenu-item--active]="isSettingsActive(item.label)"
-              (click)="selectSettingsItem(item)">
-              <span class="submenu-item__icon">
-                <ng-container [ngSwitch]="item.icon">
-                  <svg *ngSwitchCase="'building'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 21h16V7l-5-4-5 4-6-2zm4-9h2v2H8zm0 4h2v2H8zm4-4h2v2h-2zm0 4h2v2h-2zm4-4h2v6h-2z" />
-                  </svg>
-                  <svg *ngSwitchCase="'users'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M16 11a4 4 0 1 0-3.999-4A4 4 0 0 0 16 11M8 10a3 3 0 1 0-3-3 3 3 0 0 0 3 3m8 3c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4m-8 1c-2.33 0-7 1.17-7 3.5V19h5v-2c0-.76.29-1.46.77-2.08A11.2 11.2 0 0 1 8 14" />
-                  </svg>
-                  <svg *ngSwitchCase="'receipt'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M18 2H6v20l3-2 3 2 3-2 3 2zm-3 12H9v-2h6zm0-4H9V8h6z" />
-                  </svg>
-                  <svg *ngSwitchCase="'tag'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M21.41 11.58 12.42 2.59A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 .59 1.41l8.99 8.99a2 2 0 0 0 2.83 0l7-7a2 2 0 0 0 0-2.82M6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8" />
-                  </svg>
-                  <svg *ngSwitchCase="'id'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m-9 9H5v-1h6zm-2-3a2 2 0 1 1 2-2 2 2 0 0 1-2 2m10 3h-6v-1h6zm0-3h-6V8h6z" />
-                  </svg>
-                  <svg *ngSwitchCase="'sliders'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M10 6H3V4h7zm11 0h-9V4h9zM8 13H3v-2h5zm13 0h-11v-2h11zM14 20H3v-2h11zm7 0h-5v-2h5z" />
-                  </svg>
-                </ng-container>
-              </span>
-              <span>{{ item.label }}</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section *ngIf="activeTopModule as item" class="menu-group menu-group--modules">
-          <div class="submenu-card">
-            <div class="submenu-card__header">
-              <div class="sidebar-submenu-title">
-                <span class="menu-item__icon">
-                  <ng-container [ngTemplateOutlet]="moduleIcon" [ngTemplateOutletContext]="{ icon: item.icon }"></ng-container>
-                </span>
-                <span>{{ item.label }}</span>
-              </div>
-            </div>
-
-            <div class="submenu-card__body">
-              <button
-                *ngFor="let child of item.children"
-                class="submenu-item"
-                type="button"
-                [class.submenu-item--active]="activeModuleLabel === item.label && activeModuleChild === child"
-                (click)="selectModuleChild(item, child)">
-                <span class="submenu-item__icon">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M9 17.2 4.8 13l1.4-1.4L9 14.4l8.8-8.8L19.2 7z" />
-                  </svg>
-                </span>
-                <span>{{ child }}</span>
-              </button>
-            </div>
-          </div>
-      </section>
+  <aside id="app-sidebar" class="sidebar" aria-label="Menú de la sección">
+    <!-- En pantallas pequeñas el panel también lleva los módulos de la barra superior. -->
+    <nav class="sidebar__sections" aria-label="Módulos">
+      <button
+        *ngFor="let section of visibleSections"
+        class="sidebar__link"
+        type="button"
+        [class.sidebar__link--active]="activeTopSection === section.key"
+        (click)="selectSection(section)">
+        <ng-container [ngTemplateOutlet]="icon" [ngTemplateOutletContext]="{ name: section.icon }"></ng-container>
+        <span>{{ section.label }}</span>
+      </button>
     </nav>
 
-    <div class="sidebar__system-brand">
-      <img src="assets/logosaltor.jpg" alt="Logo de SaltorSystem">
+    <nav *ngIf="activeSection?.groups as groups" class="sidebar__menu" [attr.aria-label]="activeSection?.label">
+      <p class="sidebar__title">
+        <ng-container [ngTemplateOutlet]="icon" [ngTemplateOutletContext]="{ name: activeSection?.icon }"></ng-container>
+        {{ activeSection?.label }}
+      </p>
+      <ng-container *ngFor="let group of groups">
+      <div *ngIf="visibleLinks(group.links).length" class="sidebar__group">
+        <p *ngIf="group.title" class="sidebar__group-title" [style.--group-color]="group.color || null">
+          <span class="sidebar__group-icon" aria-hidden="true">
+            <ng-container [ngTemplateOutlet]="icon" [ngTemplateOutletContext]="{ name: group.icon || 'folder' }"></ng-container>
+          </span>
+          <span>{{ group.title }}</span>
+        </p>
+        <a
+          *ngFor="let link of visibleLinks(group.links)"
+          class="sidebar__link"
+          [routerLink]="link.path"
+          routerLinkActive="sidebar__link--active"
+          ariaCurrentWhenActive="page">
+          {{ link.label }}
+        </a>
+      </div>
+      </ng-container>
+    </nav>
+
+    <div class="sidebar__footer">
+      <img src="assets/logosaltor.jpg" alt="">
       <div><strong>SaltorSystem</strong><span>Panel administrativo</span></div>
     </div>
-
   </aside>
 
-  <main class="workspace-area" aria-label="Vista previa">
-    <ng-container *ngIf="activeView === 'dashboard'">
-      <app-dashboard-page></app-dashboard-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'invoice_new'">
-      <app-invoice-new-page></app-invoice-new-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'suppliers'">
-      <app-suppliers-page></app-suppliers-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'clients'">
-      <app-clients-page></app-clients-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'products'">
-      <app-products-page></app-products-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'product_entries'">
-      <app-product-entries-page></app-product-entries-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'rnc'">
-      <app-rnc-page></app-rnc-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'ncf'">
-      <app-ncf-page></app-ncf-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'ncf_type'">
-      <app-ncf-type-page></app-ncf-type-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'users'">
-      <app-users-page></app-users-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'company'">
-      <app-company-page></app-company-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'settings_other'">
-      <app-settings-other-page></app-settings-other-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'invoice_history'">
-      <app-invoice-history-page></app-invoice-history-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'invoice_consultation'">
-      <app-invoice-consultation-page></app-invoice-consultation-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'quotation'">
-      <app-quotation-page (convertToInvoice)="openInvoiceFromQuotation()"></app-quotation-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'cash_opening'">
-      <app-cash-opening-page></app-cash-opening-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'cash_closing'">
-      <app-cash-closing-page></app-cash-closing-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'cash_movements'">
-      <app-cash-movements-page></app-cash-movements-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'accounting'">
-      <app-accounting-page [section]="activeModuleChild"></app-accounting-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'report'">
-      <app-report-page></app-report-page>
-    </ng-container>
-
-    <ng-container *ngIf="activeView === 'report_invoices'">
-      <app-report-page mode="invoices"></app-report-page>
-    </ng-container>
+  <main class="workspace-area" aria-label="Contenido">
+    <div *ngIf="subscriptionNotice && !isNoticeDismissed" class="subscription-notice" [ngClass]="'subscription-notice--' + noticeLevel" role="status">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2zm12-3h-2v-2h2zm0-4h-2v-4h2z" /></svg>
+      <span>{{ subscriptionNotice.mensaje }}</span>
+      <button type="button" (click)="isNoticeDismissed = true" aria-label="Ocultar aviso">×</button>
+    </div>
+    <div *ngFor="let n of platformNotices" class="subscription-notice" [ngClass]="'subscription-notice--' + noticeClass(n)" role="status">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h3l5 4V6L6 10zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4M14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6" /></svg>
+      <span>{{ n.titulo }}<small *ngIf="n.mensaje" class="subscription-notice__detail">{{ n.mensaje }}</small></span>
+      <button type="button" (click)="hideNotice(n)" aria-label="Ocultar aviso">×</button>
+    </div>
+    <router-outlet></router-outlet>
   </main>
+
+  <app-price-lookup [open]="isPriceLookupOpen" [showCost]="isAdmin" (closed)="isPriceLookupOpen = false"></app-price-lookup>
 </div>
 
-<ng-template #moduleIcon let-icon="icon">
-  <ng-container [ngSwitch]="icon">
-    <svg *ngSwitchCase="'file-text'" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 2h9l5 5v15H6zm8 1.5V8h4.5zM9 12h6v-2H9zm0 4h6v-2H9z" />
-    </svg>
-    <svg *ngSwitchCase="'clipboard'" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 2h6l1 2h3v18H5V4h3zm0 6v2h6V8zm0 4v2h6v-2zm0 4v2h4v-2z" />
-    </svg>
-    <svg *ngSwitchCase="'wallet'" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20 7H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2M6 5h12V3H6a2 2 0 0 0-2 2v1.5A3.96 3.96 0 0 1 6 6m12 7a1.5 1.5 0 1 1-1.5 1.5A1.5 1.5 0 0 1 18 12" />
-    </svg>
-    <svg *ngSwitchCase="'calculator'" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m2 3v3h6V5zm0 6v2h2v-2zm4 0v2h2v-2zm-4 4v2h2v-2zm4 0v2h2v-2z" />
-    </svg>
-    <svg *ngSwitchCase="'chart'" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 9h3v10H5zm5-4h3v14h-3zm5 7h3v7h-3zM4 21h16v1H4z" />
-    </svg>
-  </ng-container>
+<ng-template #icon let-name="name">
+  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" [ngSwitch]="name">
+    <path *ngSwitchCase="'home'" d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z" />
+    <path *ngSwitchCase="'wrench'" d="M22.7 19 13.6 9.9c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4" />
+    <path *ngSwitchCase="'settings'" d="M19.4 13c0-.3.1-.7.1-1s0-.7-.1-1l2.1-1.6c.2-.2.2-.4.1-.6l-2-3.5c-.1-.2-.4-.3-.6-.2l-2.5 1c-.5-.4-1.1-.7-1.7-1l-.4-2.6c0-.2-.2-.4-.5-.4h-4c-.2 0-.4.2-.5.4l-.4 2.6c-.6.3-1.2.6-1.7 1l-2.5-1c-.2-.1-.5 0-.6.2l-2 3.5c-.1.2-.1.5.1.6L4.6 11c0 .3-.1.7-.1 1s0 .7.1 1l-2.1 1.6c-.2.2-.2.4-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.2.4.5.4h4c.2 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5c.1-.2.1-.5-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7" />
+    <path *ngSwitchCase="'file-text'" d="M6 2h9l5 5v15H6zm8 1.5V8h4.5zM9 12h6v-2H9zm0 4h6v-2H9z" />
+    <path *ngSwitchCase="'clipboard'" d="M9 2h6l1 2h3v18H5V4h3zm0 6v2h6V8zm0 4v2h6v-2zm0 4v2h4v-2z" />
+    <path *ngSwitchCase="'wallet'" d="M20 7H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2M6 5h12V3H6a2 2 0 0 0-2 2v1.5A3.96 3.96 0 0 1 6 6m12 7a1.5 1.5 0 1 1-1.5 1.5A1.5 1.5 0 0 1 18 12" />
+    <path *ngSwitchCase="'calculator'" d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m2 3v3h6V5zm0 6v2h2v-2zm4 0v2h2v-2zm-4 4v2h2v-2zm4 0v2h2v-2z" />
+    <path *ngSwitchCase="'chart'" d="M5 9h3v10H5zm5-4h3v14h-3zm5 7h3v7h-3zM4 21h16v1H4z" />
+    <path *ngSwitchCase="'users'" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3m-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3m0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13m8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5" />
+    <path *ngSwitchCase="'box'" d="M12 2 3 6.5v11L12 22l9-4.5v-11zm0 2.2 6.4 3.2L12 10.6 5.6 7.4zM5 9.1l6 3v7.6l-6-3zm8 10.6v-7.6l6-3v7.6z" />
+    <path *ngSwitchCase="'shield'" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5zm-1.2 14.2L7 12.4l1.4-1.4 2.4 2.4 4.8-4.8L17 10z" />
+    <path *ngSwitchCase="'receipt'" d="M5 2v20l2.3-1.5L9.7 22l2.3-1.5 2.3 1.5 2.4-1.5L19 22V2l-2.3 1.5L14.3 2 12 3.5 9.7 2 7.3 3.5zm3 5h8v2H8zm0 4h8v2H8zm0 4h5v2H8z" />
+    <path *ngSwitchCase="'sliders'" d="M3 17v2h6v-2zm0-12v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z" />
+    <path *ngSwitchCase="'cash'" d="M2 6h20v12H2zm2 2v8h16V8zm8 1.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5M5 9h2v2H5zm12 4h2v2h-2z" />
+    <path *ngSwitchCase="'landmark'" d="M12 2 2 7v2h20V7zM4 11v7h3v-7zm6.5 0v7h3v-7zm6.5 0v7h3v-7zM2 20v2h20v-2z" />
+    <path *ngSwitchCase="'briefcase'" d="M10 3h4a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4V5a2 2 0 0 1 2-2m0 4h4V5h-4zm-6 6v6h16v-6h-6v2h-4v-2z" />
+    <path *ngSwitchCase="'trending'" d="m16 6 2.3 2.3-4.9 4.9-4-4L2 16.6 3.4 18l6-6 4 4 6.3-6.3L22 12V6z" />
+    <path *ngSwitchCase="'globe'" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m6.9 6h-2.9a15.7 15.7 0 0 0-1.4-3.6A8 8 0 0 1 18.9 8M12 4a14 14 0 0 1 1.9 4h-3.8A14 14 0 0 1 12 4M4.3 14a8.2 8.2 0 0 1 0-4h3.4a16.5 16.5 0 0 0 0 4zm.8 2h3a15.7 15.7 0 0 0 1.3 3.6A8 8 0 0 1 5.1 16M8 8H5.1a8 8 0 0 1 4.3-3.6A15.7 15.7 0 0 0 8 8m4 12a14 14 0 0 1-1.9-4h3.8A14 14 0 0 1 12 20m2.3-6H9.7a14.7 14.7 0 0 1 0-4h4.6a14.7 14.7 0 0 1 0 4m.3 5.6a15.7 15.7 0 0 0 1.4-3.6h2.9a8 8 0 0 1-4.3 3.6m1.7-5.6a16.5 16.5 0 0 0 0-4h3.4a8.2 8.2 0 0 1 0 4z" />
+    <path *ngSwitchCase="'building'" d="M4 2h12v6h4v14H4zm2 2v16h4v-3h2v3h6V10h-4V4zm2 2h2v2H8zm4 0h2v2h-2zm-4 4h2v2H8zm4 0h2v2h-2zm-4 4h2v2H8zm4 0h2v2h-2zm4-2h2v2h-2zm0 4h2v2h-2z" />
+    <path *ngSwitchCase="'support'" d="M12 2a9 9 0 0 0-9 9v6a3 3 0 0 0 3 3h2v-7H5v-2a7 7 0 0 1 14 0v2h-3v7h3v1h-6v2h6a2 2 0 0 0 2-2V11a9 9 0 0 0-9-9" />
+    <path *ngSwitchCase="'folder'" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z" />
+  </svg>
 </ng-template>
-
-<router-outlet></router-outlet>

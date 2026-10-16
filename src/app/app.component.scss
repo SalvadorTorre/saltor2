@@ -1,53 +1,17 @@
+// Marco de la aplicación: barra superior, menú lateral y área de trabajo.
+// Todo el estilo del marco vive aquí; las páginas solo estilan su contenido.
+
 :host {
+  --appbar-height: 56px;
+  --sidebar-width: 272px;
+  --shell-navy: #0f2344;
+  --shell-navy-dark: #0a1833;
+  --shell-accent: #60a5fa;
+  --shell-text: rgba(226, 232, 240, 0.86);
+  --shell-muted: #94a3b8;
+
   display: block;
   min-height: 100vh;
-}
-
-.dashboard-shell {
-  grid-template-columns: 330px minmax(0, 1fr);
-  grid-template-rows: 54px minmax(0, 1fr);
-}
-
-.topbar {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  min-height: 54px;
-  gap: 12px;
-  padding: 5px 16px;
-}
-
-.topbar__system-brand {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 9px;
-  color: #fff;
-}
-
-.topbar__system-brand img {
-  width: 38px;
-  height: 38px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-
-.topbar__system-brand strong {
-  font-size: 16px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.sidebar {
-  grid-column: 1;
-  grid-row: 2;
-  height: calc(100vh - 54px);
-  min-height: calc(100vh - 54px);
-  top: 54px;
-}
-
-.workspace-area {
-  grid-column: 2;
-  grid-row: 2;
 }
 
 .session-loading {
@@ -60,215 +24,635 @@
   min-height: 100vh;
 }
 
-.topbar__logout {
-  background: #edf3ff;
-  border: 1px solid #cbdafd;
-  border-radius: 7px;
-  color: #1749aa;
+.nav-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+// ---------------------------------------------------------------------------
+// Estructura
+// ---------------------------------------------------------------------------
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--appbar-height) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.shell--with-sidebar {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.workspace-area {
+  display: flex;
+  flex-direction: column;
+  grid-column: -2 / -1;
+  grid-row: 2;
+  min-width: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Barra superior
+// ---------------------------------------------------------------------------
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  height: var(--appbar-height);
+  padding: 0 16px;
+  background: linear-gradient(180deg, #16325f 0%, var(--shell-navy) 100%);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.18);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+  color: #fff;
+}
+
+.appbar__menu-toggle {
+  display: none;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+
+  svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.appbar__brand {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 10px;
+  min-width: 0;
+  max-width: 240px;
+  color: #fff;
+  text-decoration: none;
+
+  img {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    object-fit: cover;
+  }
+
+  span {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    color: #fff;
+  }
+}
+
+.appbar__nav {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.appbar__nav-item {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 7px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-accent);
+    outline-offset: 1px;
+  }
 }
 
-.topbar__logout-menu {
+.appbar__nav-item--active {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 -2px 0 var(--shell-accent);
+  color: #fff;
+}
+
+.appbar__user {
   position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
-.topbar__logout-dropdown {
+.appbar__user-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 6px 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.appbar__avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.appbar__avatar--large {
+  width: 42px;
+  height: 42px;
+  font-size: 15px;
+}
+
+.appbar__user-name {
+  max-width: 160px;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appbar__caret {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  opacity: 0.8;
+}
+
+.user-menu {
   position: absolute;
-  z-index: 30;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 185px;
+  z-index: 110;
+  width: 290px;
   padding: 8px;
   border: 1px solid #d6e1f3;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.2);
+  color: #0f172a;
 }
 
-.topbar__logout-dropdown-title {
-  padding: 7px 9px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+.user-menu__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+
+  div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  strong {
+    font-size: 14px;
+  }
+
+  span {
+    overflow: hidden;
+    color: #64748b;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
-.topbar__logout-dropdown button {
+.user-menu__details {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 8px;
+  border-bottom: 1px solid #e2e8f0;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  dt {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+  }
+}
+
+.user-menu__date {
+  text-transform: capitalize;
+}
+
+.user-menu__logout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  padding: 10px 11px;
+  margin-top: 6px;
+  padding: 9px 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   color: #b42318;
   cursor: pointer;
   font: inherit;
   font-size: 14px;
-  font-weight: 800;
-  text-align: left;
-}
-
-.topbar__logout-dropdown button:hover {
-  background: #fff1f2;
-}
-
-.topbar__navigation {
-  display: flex;
-  align-items: center;
-  flex: 1 1 auto;
-  gap: 6px;
-  min-width: 0;
-  overflow-x: auto;
-  padding: 2px 4px;
-  background: transparent !important;
-}
-
-.topbar__navigation-button {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 7px;
-  padding: 8px 11px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent !important;
-  box-shadow: none;
-  color: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.topbar__navigation-button:hover,
-.topbar__navigation-button--active {
-  background: transparent !important;
-  color: #ff6b6b;
-}
-
-.topbar__navigation-button--active {
-  border-color: rgba(255, 255, 255, 0.82);
-}
-
-.topbar__nav-icon {
-  display: grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  color: currentColor;
-  font-size: 18px;
-  line-height: 1;
-}
-
-.topbar__nav-icon svg {
-  width: 17px;
-  height: 17px;
-  fill: currentColor;
-}
-
-.sidebar__system-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: auto 14px 14px;
-  padding: 11px 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
-  color: #94a3b8;
-}
-
-.sidebar__company-brand {
-  display: grid;
-  gap: 5px;
-  margin: 2px 8px 24px;
-  padding: 8px 6px 18px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-}
-
-.sidebar__company-brand span {
-  color: #94a3b8;
-  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
+  text-align: left;
 
-.sidebar__company-brand strong {
-  color: #f8fafc;
-  font-size: 21px;
-  font-weight: 800;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
+  svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
 
-.sidebar__system-brand img {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.sidebar__system-brand div {
-  display: grid;
-  gap: 2px;
-}
-
-.sidebar__system-brand strong {
-  color: #dbeafe;
-  font-size: 13px;
-  line-height: 1.1;
-}
-
-.sidebar__system-brand span,
-.sidebar-submenu-title {
-  font-size: 12px;
-}
-
-.sidebar-submenu-title {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 13px 14px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #1e4f9e, #2d6dcc);
-  color: #fff;
-  font-size: 1.42rem !important;
-  font-weight: 800;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
-}
-
-@media (max-width: 900px) {
-  .topbar__navigation {
-    width: 100%;
+  &:hover {
+    background: #fff1f2;
   }
 }
 
-.inventory-submenu {
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
-  margin-top: 4px;
-  padding-top: 4px;
+// ---------------------------------------------------------------------------
+// Menú lateral
+// ---------------------------------------------------------------------------
+
+.sidebar {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  grid-column: 1;
+  grid-row: 2;
+  position: sticky;
+  top: var(--appbar-height);
+  height: calc(100vh - var(--appbar-height));
+  padding: 16px 12px 12px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--shell-navy) 0%, var(--shell-navy-dark) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--shell-text);
 }
 
-.inventory-submenu__trigger {
-  justify-content: flex-start;
+.shell--with-sidebar .sidebar {
+  display: flex;
 }
 
-.inventory-submenu__arrow {
-  font-size: 11px;
-  margin-left: auto;
-  transition: transform .18s ease;
+// Solo en pantallas pequeñas (los módulos ya están en la barra superior).
+.sidebar__sections {
+  display: none;
 }
 
-.inventory-submenu__arrow--expanded {
-  transform: rotate(180deg);
+.sidebar__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 4px 10px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+
+  .nav-icon {
+    color: var(--shell-accent);
+  }
 }
 
-.inventory-submenu__body {
-  border-left: 1px solid rgba(148, 163, 184, 0.25);
+.sidebar__group {
   display: grid;
-  gap: 3px;
-  margin: 2px 0 3px 27px;
-  padding-left: 8px;
+  gap: 2px;
+  padding-top: 6px;
 }
+
+.sidebar__group-title {
+  --group-color: var(--shell-accent);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 6px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--group-color);
+  border-radius: 10px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--group-color) 22%, transparent), rgba(255, 255, 255, 0.02));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.sidebar__title + .sidebar__group .sidebar__group-title {
+  margin-top: 4px;
+}
+
+.sidebar__group-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--group-color);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--group-color) 45%, transparent);
+
+  .nav-icon {
+    width: 17px;
+    height: 17px;
+    color: #fff;
+    fill: #fff;
+  }
+}
+
+.sidebar__link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--shell-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(148, 163, 184, 0.12);
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-accent);
+    outline-offset: -2px;
+  }
+}
+
+.sidebar__link--active {
+  background: rgba(59, 130, 246, 0.22);
+  color: #fff;
+  font-weight: 600;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--shell-accent);
+  }
+}
+
+.sidebar__footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding: 12px 8px 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  color: var(--shell-muted);
+
+  img {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    object-fit: cover;
+  }
+
+  div {
+    display: grid;
+    gap: 1px;
+  }
+
+  strong {
+    color: #dbeafe;
+    font-size: 14px;
+    line-height: 1.1;
+  }
+
+  span {
+    font-size: 12px;
+  }
+}
+
+.shell__backdrop {
+  display: none;
+}
+
+// ---------------------------------------------------------------------------
+// Tamaños de pantalla
+// ---------------------------------------------------------------------------
+
+// Pantallas medianas: el nombre del usuario pasa al menú del avatar.
+@media (max-width: 1600px) {
+  .appbar__user-name {
+    display: none;
+  }
+}
+
+// Laptops pequeñas: solo íconos en la barra (el nombre sale al pasar el ratón).
+@media (max-width: 1180px) {
+  .appbar__nav-label {
+    display: none;
+  }
+
+  .appbar__nav-item {
+    padding: 0 11px;
+  }
+}
+
+// Tabletas y teléfonos: los módulos pasan a un panel lateral deslizable.
+@media (max-width: 900px) {
+  .appbar {
+    gap: 10px;
+    padding: 0 10px;
+  }
+
+  .appbar__menu-toggle {
+    display: grid;
+  }
+
+  .appbar__brand {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .appbar__nav {
+    display: none;
+  }
+
+  .shell,
+  .shell--with-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-area {
+    grid-column: 1;
+  }
+
+  .sidebar,
+  .shell--with-sidebar .sidebar {
+    position: fixed;
+    top: var(--appbar-height);
+    bottom: 0;
+    left: 0;
+    z-index: 95;
+    display: flex;
+    width: min(300px, 86vw);
+    height: auto;
+    box-shadow: 12px 0 32px rgba(15, 23, 42, 0.3);
+    transform: translateX(-105%);
+    // visibility evita que el panel cerrado reciba el foco del teclado.
+    transition: transform 0.22s ease, visibility 0.22s;
+    visibility: hidden;
+  }
+
+  .shell--sidebar-open .sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  .sidebar__sections {
+    display: grid;
+    gap: 2px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  }
+
+  .shell--sidebar-open .shell__backdrop {
+    position: fixed;
+    inset: var(--appbar-height) 0 0;
+    z-index: 90;
+    display: block;
+    background: rgba(15, 23, 42, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .shell--with-sidebar .sidebar {
+    transition: none;
+  }
+}
+
+/* Consulta rápida de precio (F2) */
+.appbar__price {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 36px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: 700 14px Arial, sans-serif;
+  cursor: pointer;
+}
+.appbar__price:hover { background: rgba(255, 255, 255, 0.18); }
+.appbar__price svg { width: 18px; height: 18px; fill: currentColor; }
+.appbar__price + .appbar__user { margin-left: 8px; }
+@media (max-width: 640px) {
+  .appbar__price { width: 36px; padding: 0; justify-content: center; }
+  .appbar__price span { display: none; }
+}
+
+/* Logo propio de la empresa en la barra superior */
+.appbar__brand img.appbar__brand-logo--company {
+  width: auto;
+  max-width: 72px;
+  height: 34px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+}
+
+/* Aviso de suscripción de la empresa: solo informa, nunca bloquea. */
+.subscription-notice { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 18px; font: 700 15px Arial, sans-serif; border-bottom: 1px solid; }
+.subscription-notice svg { flex: 0 0 auto; width: 20px; height: 20px; fill: currentColor; }
+.subscription-notice span { flex: 1 1 auto; }
+.subscription-notice button { border: 0; background: none; color: inherit; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.subscription-notice--info { color: #5b21b6; background: #f3edff; border-color: #ddd0fb; }
+.subscription-notice--warn { color: #92400e; background: #fff7e6; border-color: #fde3b0; }
+.subscription-notice--danger { color: #9f1239; background: #ffeef1; border-color: #fbc7d0; }
+.subscription-notice__detail { display: block; margin-top: 2px; font-weight: 400; font-size: 14px; }

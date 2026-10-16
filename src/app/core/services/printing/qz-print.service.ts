@@ -24,6 +24,11 @@ export class QzPrintService {
     }
   }
 
+  /** Intenta conectar con QZ Tray en este equipo e indica si está funcionando. */
+  checkConnection(): Promise<boolean> {
+    return this.connectIfAvailable();
+  }
+
   private async connectIfAvailable(): Promise<boolean> {
     if (this.isActive()) return true;
     if (this.connecting) return this.connecting;

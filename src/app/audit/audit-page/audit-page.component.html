@@ -1,0 +1,43 @@
+<section class="au">
+  <header class="au__header">
+    <p class="au__eyebrow">{{ platform ? 'Plataforma' : 'Configuración' }}</p>
+    <h2>{{ platform ? 'Bitácora de la plataforma' : 'Bitácora de auditoría' }}</h2>
+    <span>{{ platform ? 'Cambios en empresas, usuarios, suscripciones, planes y pagos de todas las empresas.' : 'Quién creó, editó, anuló o eliminó cada registro y cuándo, con el valor anterior y el nuevo.' }}</span>
+  </header>
+
+  <section class="au__filters">
+    <label>Desde<input type="date" [(ngModel)]="from"></label>
+    <label>Hasta<input type="date" [(ngModel)]="to"></label>
+    <label>Módulo<select [(ngModel)]="table"><option value="">Todos</option><option *ngFor="let t of tables" [value]="t.value">{{ t.label }}</option></select></label>
+    <label *ngIf="platform">Empresa<select [(ngModel)]="companyFilter"><option [ngValue]="null">Todas</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select></label>
+    <label>Acción<select [(ngModel)]="action"><option value="">Todas</option><option *ngFor="let a of actions" [value]="a">{{ a }}</option></select></label>
+    <button type="button" class="au__btn" (click)="load()" [disabled]="isLoading">{{ isLoading ? 'Consultando…' : 'Consultar' }}</button>
+    <label class="au__text">Buscar<input type="search" [(ngModel)]="text" placeholder="Usuario, producto, factura, valor…"></label>
+    <button type="button" class="au__btn au__btn--ghost" (click)="exportCsv()" [disabled]="!filtered.length">Exportar Excel (CSV)</button>
+  </section>
+
+  <p class="au__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="au__list">
+    <p class="au__count">{{ filtered.length }} registro(s){{ entries.length >= 500 ? ' · se muestran los 500 más recientes; acota las fechas' : '' }}</p>
+    <article *ngFor="let e of filtered" class="au__item" [class.is-open]="expanded.has(e.id)">
+      <button type="button" class="au__row" (click)="toggle(e.id)" [attr.aria-expanded]="expanded.has(e.id)">
+        <span class="au__when">{{ e.fecha | date:'dd/MM/yyyy' }}<small>{{ e.fecha | date:'h:mm a' }}</small></span>
+        <span class="au__action" [ngClass]="actionClass(e.accion)">{{ e.accion }}</span>
+        <span class="au__what"><b>{{ tableLabel(e.tabla) }}</b><ng-container *ngIf="platform && e.empresa_id"> · {{ companyName(e.empresa_id) }}</ng-container> · {{ e.resumen || ('#' + e.registro_id) }}<small *ngIf="summary(e)">{{ summary(e) }}</small></span>
+        <span class="au__who">{{ e.usuario_nombre || '—' }}</span>
+        <span class="au__chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="au__detail" *ngIf="expanded.has(e.id)">
+        <table *ngIf="changeList(e).length; else noChanges">
+          <thead><tr><th>Campo</th><th>{{ e.accion === 'Eliminar' ? 'Valor' : 'Antes' }}</th><th *ngIf="e.accion !== 'Eliminar' && e.accion !== 'Crear'">Después</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let c of changeList(e)"><td>{{ c.field }}</td><td class="au__before">{{ c.before }}</td><td *ngIf="e.accion !== 'Eliminar' && e.accion !== 'Crear'" class="au__after">{{ c.after }}</td></tr>
+          </tbody>
+        </table>
+        <ng-template #noChanges><p class="au__muted">Registro creado.</p></ng-template>
+      </div>
+    </article>
+    <p class="au__empty" *ngIf="!isLoading && !filtered.length && !errorMessage">No hay movimientos en la bitácora para estos filtros.</p>
+  </section>
+</section>

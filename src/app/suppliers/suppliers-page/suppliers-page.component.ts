@@ -1,24 +1,19 @@
 import { Component, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupplierRecord, SupplierFormModel, NavigationItem } from '../../app.models';
+import { SupplierRecord, SupplierFormModel } from '../../app.models';
 import { AppDataService } from '../../app-data.service';
 import { SuppliersService } from '../../core/services/suppliers/suppliers.service';
+import { MaintenanceTabsComponent } from '../../shared/maintenance-tabs.component';
 
 @Component({
   selector: 'app-suppliers-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MaintenanceTabsComponent],
   templateUrl: './suppliers-page.component.html',
   styleUrls: ['./suppliers-page.component.scss']
 })
 export class SuppliersPageComponent implements OnInit {
-  readonly maintenanceLinks: NavigationItem[] = [
-    { label: 'Productos', icon: 'box' },
-    { label: 'Clientes', icon: 'users' },
-    { label: 'Suplidores', icon: 'truck' }
-  ];
-  activeMaintenanceLabel = 'Suplidores';
 
   supplierEditorMode: 'create' | 'edit' = 'create';
   supplierMessage = 'Gestiona suplidores, contactos, balances y condiciones de compra desde una sola pantalla.';
@@ -82,10 +77,6 @@ export class SuppliersPageComponent implements OnInit {
 
   get importerSuppliersCount(): number {
     return this.suppliers.filter((supplier) => supplier.category === 'Importador').length;
-  }
-
-  selectMaintenanceItem(item: NavigationItem): void {
-    this.activeMaintenanceLabel = item.label;
   }
 
   selectSupplier(supplier: SupplierRecord): void {

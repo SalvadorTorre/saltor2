@@ -30,308 +30,20 @@ body {
   box-sizing: border-box;
 }
 
-.dashboard-shell {
-  display: grid;
-  grid-template-columns: 370px 1fr;
-  min-height: 100vh;
-}
+/* Pantalla elegida en Configuracion > Otros. Chrome y Edge aplican zoom al layout completo.
+   Solo en pantallas de escritorio: en teléfonos y tabletas el zoom haría todo más pequeño. */
+@media (min-width: 1024px) {
+  html[data-display-profile='1366x768'] {
+    zoom: 0.82;
+  }
 
-/* Pantalla elegida en Configuracion > Otros. Chrome y Edge aplican zoom al layout completo. */
-html[data-display-profile='1366x768'] {
-  zoom: 0.82;
-}
+  html[data-display-profile='1440x900'] {
+    zoom: 0.92;
+  }
 
-html[data-display-profile='1440x900'] {
-  zoom: 0.92;
-}
-
-html[data-display-profile='1920x1080'] {
-  zoom: 1;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  min-height: 100vh;
-  overflow: hidden;
-  padding: 24px 22px 20px;
-  position: sticky;
-  top: 0;
-  color: #eff6ff;
-  background:
-    linear-gradient(180deg, rgba(31, 81, 255, 0.22) 0%, rgba(31, 81, 255, 0) 20%),
-    linear-gradient(180deg, #0e2248 0%, #0a1833 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 14px 24px;
-}
-
-.brand__logo {
-  flex-shrink: 0;
-  width: 50px;
-  height: 50px;
-  border-radius: 14px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.brand__logo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.brand h1 {
-  margin: 0;
-  font-size: 2.1rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-
-.brand p {
-  margin: 4px 0 0;
-  color: rgba(219, 234, 254, 0.72);
-  font-size: 1.3rem;
-}
-
-.sidebar-nav {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 24px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.sidebar-nav::-webkit-scrollbar {
-  width: 8px;
-}
-
-.sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
-  border-radius: 999px;
-}
-
-.menu-group {
-  display: grid;
-  gap: 8px;
-}
-
-.menu-group__title {
-  margin: 0;
-  padding: 0 12px;
-  color: rgba(191, 219, 254, 0.72);
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.menu-item,
-.submenu-item {
-  width: 100%;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 72px;
-  padding: 11px 14px;
-  border-radius: 16px;
-  background: transparent;
-}
-
-.menu-item:hover,
-.submenu-item:hover {
-  background: rgba(148, 163, 184, 0.12);
-}
-
-.menu-item--active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.34), rgba(96, 165, 250, 0.12));
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.2);
-}
-
-.menu-item--compact {
-  min-height: 50px;
-  padding: 0;
-}
-
-.menu-item__icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: rgba(191, 219, 254, 0.12);
-  color: #bfdbfe;
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
-.menu-item__icon svg,
-.submenu-item__icon svg {
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-}
-
-.menu-item__label {
-  flex: 1;
-  text-align: left;
-  font-size: 1.52rem;
-  font-weight: 600;
-}
-
-.menu-item__arrow,
-.submenu-card__arrow {
-  color: rgba(219, 234, 254, 0.64);
-  font-size: 1.52rem;
-}
-
-.submenu-card__arrow--expanded {
-  transform: rotate(180deg);
-}
-
-.submenu-card {
-  margin-top: 4px;
-  padding: 10px 12px 12px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
-}
-
-.submenu-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.submenu-card__body {
-  display: grid;
-  gap: 6px;
-  padding: 4px 8px 6px 22px;
-}
-
-.submenu-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 61px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: transparent;
-  color: rgba(219, 234, 254, 0.88);
-  font-size: 1.38rem;
-  font-weight: 500;
-  text-align: left;
-}
-
-.submenu-item--active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(96, 165, 250, 0.1));
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.18);
-}
-
-.submenu-item__icon {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  font-size: 1.32rem;
-  color: #93c5fd;
-}
-
-.workspace-area {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 78px;
-  padding: 18px 28px;
-  border-bottom: 1px solid rgba(96, 165, 250, 0.18);
-  background:
-    linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(15, 23, 42, 0.12)),
-    linear-gradient(180deg, #16325f 0%, #0f2344 100%);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.topbar__brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.topbar__company {
-  color: #eff6ff;
-  font-size: 1.02rem;
-  font-weight: 700;
-}
-
-.topbar__meta {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-left: auto;
-}
-
-.topbar__user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.topbar__avatar {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.topbar__user strong {
-  display: block;
-  font-size: 0.95rem;
-  color: #eff6ff;
-}
-
-.topbar__user p {
-  margin: 4px 0 0;
-  color: rgba(219, 234, 254, 0.74);
-  font-size: 0.84rem;
-}
-
-.topbar__date {
-  padding-left: 18px;
-  border-left: 1px solid rgba(191, 219, 254, 0.2);
-  color: #dbeafe;
-  font-size: 0.9rem;
-  font-weight: 500;
-  text-transform: capitalize;
+  html[data-display-profile='1920x1080'] {
+    zoom: 1;
+  }
 }
 
 .dashboard-content {
@@ -1313,7 +1025,12 @@ html[data-display-profile='1920x1080'] {
   font-size: 0.82rem;
   padding: 8px 12px;
   cursor: pointer;
+  text-decoration: none;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+a.maintenance-tab:hover {
+  color: #0f172a;
 }
 
 .maintenance-tab:hover {
@@ -1322,7 +1039,8 @@ html[data-display-profile='1920x1080'] {
   box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
 }
 
-.maintenance-tab--active {
+.maintenance-tab--active,
+a.maintenance-tab--active:hover {
   border-color: rgba(37, 99, 235, 0.42);
   background: rgba(37, 99, 235, 0.1);
   color: #1d4ed8;
@@ -3694,34 +3412,6 @@ html[data-display-profile='1920x1080'] {
 }
 
 @media (max-width: 900px) {
-  .dashboard-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    height: auto;
-    min-height: auto;
-    overflow: visible;
-    position: static;
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .topbar__meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-    margin-left: 0;
-  }
-
-  .topbar__date {
-    padding-left: 0;
-    border-left: 0;
-  }
-
   .dashboard-content {
     padding: 20px;
   }
@@ -3914,6 +3604,217 @@ html[data-display-profile='1920x1080'] {
   background-color: #0c3d67;
   border-color: #0c3d67;
 }
+// ---------------------------------------------------------------------------
+// Adaptación a tabletas y teléfonos
+// Complementa los bloques @media anteriores; va al final para tener prioridad.
+// ---------------------------------------------------------------------------
+
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
+// Tabletas y laptops pequeñas
+@media (max-width: 1100px) {
+  // La tabla de e-NCF ya fija un ancho mínimo a este tamaño: su panel debe
+  // desplazarse en horizontal en lugar de desbordar la página.
+  .ncf-table-panel {
+    overflow-x: auto;
+  }
+}
+
+// Tabletas en vertical y teléfonos
+@media (max-width: 900px) {
+  .dashboard-content,
+  .company-content,
+  .standalone-module-content,
+  .product-content,
+  .client-content,
+  .supplier-content {
+    padding: 18px 14px 28px;
+  }
+
+  // Columnas que pueden encogerse: con 1fr crecían hasta el ancho del gráfico
+  // de ventas y desbordaban la pantalla del inicio.
+  .dashboard-grid,
+  .sales-layout,
+  .categories-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sales-chart,
+  .sales-chart svg {
+    max-width: 100%;
+  }
+
+  // Nueva factura: los datos del cliente y del comprobante se apilan.
+  .invoice-customer-grid,
+  .invoice-customer-detail-grid,
+  .invoice-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  // Ver factura
+  .invoice-view-modal {
+    padding: 12px 8px;
+  }
+
+  .invoice-view-modal__panel {
+    padding: 16px;
+  }
+
+  .invoice-view-modal__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invoice-view-modal__customer {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-view-modal__table {
+    overflow-x: auto;
+  }
+
+  .invoice-view-modal__row {
+    min-width: 560px;
+  }
+
+  // Tarjetas de indicadores en dos columnas (en una sola ocupan demasiado alto).
+  .ncf-stats-grid,
+  .product-kpi-grid,
+  .client-kpi-grid,
+  .supplier-kpi-grid,
+  .company-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  // e-NCF
+  .ecf-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .ecf-sequence-modal {
+    padding: 12px 8px;
+  }
+
+  // Diálogos de confirmación
+  .invoice-clear-confirmation__dialog,
+  .dgii-process-dialog__panel {
+    width: 100%;
+  }
+
+  // Ventanas de edición (clientes, suplidores, productos): ocupan la pantalla
+  // y se desplazan por dentro.
+  .supplier-editor-modal__panel,
+  .client-editor-modal__panel,
+  .product-editor-modal__panel {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  // Barras de acciones: los botones bajan de línea en vez de salirse.
+  .company-header__actions,
+  .company-form__actions,
+  .company-detail-card__actions {
+    flex-wrap: wrap;
+  }
+
+  // Los botones de encabezado van en fila (antes se apilaban, uno por línea).
+  .company-header__actions {
+    flex-direction: row;
+    width: 100%;
+  }
+
+  .company-header__actions > * {
+    flex: 1 1 auto;
+  }
+
+  .maintenance-tabs {
+    overflow-x: auto;
+  }
+
+  .product-suggestions,
+  .product-replacement-results {
+    width: min(680px, calc(100vw - 28px));
+  }
+
+  // iOS amplía la página al enfocar campos con letra menor de 16px.
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+// Detalle de productos de la factura en teléfonos.  Los campos tienen columna
+// fija (1 a 5), por eso pasar la rejilla a 2 columnas los montaba uno sobre otro.
+@media (max-width: 720px) {
+  .line-editor-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .line-editor-field--code { grid-column: 1; grid-row: 1; }
+  .line-editor-field--product { grid-column: 2 / -1; grid-row: 1; }
+  .line-editor-field--quantity { grid-column: 1; grid-row: 2; }
+  .line-editor-field--price { grid-column: 2; grid-row: 2; }
+  .line-editor-field--total { grid-column: 3; grid-row: 2; }
+
+  // La tabla de líneas conserva sus 6 columnas y se desliza en horizontal.
+  .invoice-lines__row {
+    grid-template-columns: var(--invoice-detail-columns);
+    grid-auto-flow: row;
+    min-width: 560px;
+  }
+}
+
+// Teléfonos
+@media (max-width: 600px) {
+  .dashboard-content,
+  .company-content,
+  .standalone-module-content,
+  .product-content,
+  .client-content,
+  .supplier-content {
+    padding: 14px 10px 24px;
+  }
+
+  .invoice-view-modal__summary {
+    grid-template-columns: 1fr;
+  }
+
+  // Botones principales a todo el ancho para tocarlos con facilidad.
+  .company-header__actions > *,
+  .company-form__actions > * {
+    flex: 1 1 auto;
+  }
+
+  .dashboard-header h2 {
+    font-size: 1.35rem;
+  }
+}
+
+.product-stock-hint {
+  display: block;
+  margin-top: 4px;
+  color: #6b819d;
+  font-size: 12px;
+}
+
 @import './app/cash/opening-page/cash-opening-page.component.scss';
 @import './app/cash/movements-page/cash-movements-page.component.scss';
 
+
+/* Tema oscuro (Configuración → Otros → Tema visual). Invierte la interfaz completa y
+   devuelve a su color real las imágenes (logos, fotos de productos). */
+html[data-theme='dark'] {
+  filter: invert(0.9) hue-rotate(180deg);
+  background: #fff;
+}
+html[data-theme='dark'] img,
+html[data-theme='dark'] video,
+html[data-theme='dark'] picture,
+html[data-theme='dark'] .no-invert {
+  filter: invert(1) hue-rotate(180deg);
+}

@@ -1,11 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import Swal from 'sweetalert2';
 import { AppDataService } from '../../app-data.service';
-import { DigitalCertificateMetadata, DigitalCertificatesService } from '../../core/services/digital-certificates/digital-certificates.service';
-import { EcfConfigService, EcfConfiguration } from '../../core/services/ecf/ecf-config.service';
 import { CompanyPrintSettingsService, PrintPaper } from '../../core/services/printing/company-print-settings.service';
+import { BillingMode, CompanyBillingModeService } from '../../core/services/printing/company-billing-mode.service';
 import { DisplayPreferencesService, DisplayProfile } from '../../core/services/display-preferences/display-preferences.service';
+import { QzPrintService } from '../../core/services/printing/qz-print.service';
+
+type QzOs = 'windows' | 'mac' | 'linux';
+
+interface QzInstaller {
+  os: QzOs;
+  label: string;
+  detail: string;
+  fileName: string;
+  sizeMb: number;
+}
+
+/** Versión de QZ Tray que corresponde a la librería qz-tray del sistema. */
+const QZ_TRAY_VERSION = '2.3.0';
+const QZ_TRAY_RELEASE_URL = `https://github.com/qzind/tray/releases/download/v${QZ_TRAY_VERSION}/`;
 
 export interface OtherPreferences {
   primaryColor: string;
@@ -30,6 +45,7 @@ export interface OtherPreferences {
   defaultNcfType: string;
   defaultPaymentMethod: string;
   printPaper: PrintPaper;
+  billingMode: BillingMode;
   displayProfile: DisplayProfile;
 }
 
@@ -40,17 +56,8 @@ export interface OtherPreferences {
   templateUrl: './other-page.component.html',
   styleUrls: ['./other-page.component.scss']
 })
-export class SettingsOtherPageComponent implements OnInit {
-  activeView = 'settings_other';
+export class SettingsOtherPageComponent implements OnInit, OnDestroy {
   otherMessage = 'Personaliza colores, moneda, formato fecha, tema y preferencias generales del sistema.';
-  certificateMessage = 'Carga el certificado de firma digital para consultar su titular y vigencia.';
-  certificatePassword = '';
-  selectedCertificateFile: File | null = null;
-  certificateMetadata: DigitalCertificateMetadata | null = null;
-  isLoadingCertificate = false;
-  isUploadingCertificate = false;
-  ecfConfiguration: EcfConfiguration = { ambiente: 'TEST', url_base: 'https://ecf-propio.tail2c2b0a.ts.net/ecf', tipo_ingreso: '01', persistir_certificado: true };
-  ecfMessage = '';
 
   readonly currencyOptions = [
     { code: 'DOP', name: 'Peso Dominicano (RD$)', symbol: 'RD$' },
@@ -92,6 +99,17 @@ export class SettingsOtherPageComponent implements OnInit {
     { value: '1920x1080', label: '1920 x 1080', description: 'Aprovecha pantallas Full HD.' }
   ];
 
+  readonly qzVersion = QZ_TRAY_VERSION;
+  readonly qzInstallers: QzInstaller[] = [
+    { os: 'windows', label: 'Windows', detail: '64 bits (Intel / AMD)', fileName: `qz-tray-${QZ_TRAY_VERSION}-x86_64.exe`, sizeMb: 134 },
+    { os: 'windows', label: 'Windows', detail: 'ARM64', fileName: `qz-tray-${QZ_TRAY_VERSION}-arm64.exe`, sizeMb: 131 },
+    { os: 'mac', label: 'macOS', detail: 'Apple Silicon (M1/M2/M3)', fileName: `qz-tray-${QZ_TRAY_VERSION}-arm64.pkg`, sizeMb: 133 },
+    { os: 'mac', label: 'macOS', detail: 'Intel', fileName: `qz-tray-${QZ_TRAY_VERSION}-x86_64.pkg`, sizeMb: 137 },
+    { os: 'linux', label: 'Linux', detail: '64 bits (Intel / AMD)', fileName: `qz-tray-${QZ_TRAY_VERSION}-x86_64.run`, sizeMb: 151 }
+  ];
+  readonly detectedOs: QzOs | null = this.detectOs();
+  qzStatus: 'checking' | 'active' | 'inactive' = 'checking';
+
   preferences: OtherPreferences = {
     primaryColor: '#2563eb',
     secondaryColor: '#64748b',
@@ -115,6 +133,7 @@ export class SettingsOtherPageComponent implements OnInit {
     defaultNcfType: '02 - Consumo',
     defaultPaymentMethod: 'Contado',
     printPaper: 'carta',
+    billingMode: 'Directo',
     displayProfile: 'auto'
   };
 
@@ -124,94 +143,57 @@ export class SettingsOtherPageComponent implements OnInit {
   readonly moduleTitle = 'Otros';
   readonly moduleDescription = 'Modulo independiente para parametros generales y opciones adicionales del sistema.';
   readonly modulePill = 'Modulo Otros';
-  readonly maintenanceLinks = [
-    { label: 'Productos', icon: 'box' },
-    { label: 'Clientes', icon: 'users' },
-    { label: 'Suplidores', icon: 'truck' }
-  ];
 
   constructor(
     public data: AppDataService,
-    private readonly digitalCertificatesService: DigitalCertificatesService,
-    private readonly ecfConfigService: EcfConfigService,
     private readonly companyPrintSettings: CompanyPrintSettingsService,
-    private readonly displayPreferences: DisplayPreferencesService
+    private readonly billingModeService: CompanyBillingModeService,
+    private readonly displayPreferences: DisplayPreferencesService,
+    private readonly qzPrint: QzPrintService
   ) {}
 
   ngOnInit(): void {
-    void this.loadCertificate();
-    void this.loadEcfConfiguration();
     void this.loadPrintPaper();
+    void this.checkQzTray();
     this.preferences.displayProfile = this.displayPreferences.getProfile();
+    this.preferences.theme = this.displayPreferences.getTheme();
     this.originalPreferences = { ...this.preferences };
-  }
-
-  get certificateIsExpired(): boolean {
-    return !!this.certificateMetadata && new Date(this.certificateMetadata.validUntil) < new Date();
   }
 
   get displayProfileDescription(): string {
     return this.displayProfileOptions.find((profile) => profile.value === this.preferences.displayProfile)?.description ?? '';
   }
 
-  onCertificateFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.selectedCertificateFile = input.files?.[0] ?? null;
-    this.certificateMessage = this.selectedCertificateFile
-      ? `Archivo seleccionado: ${this.selectedCertificateFile.name}`
-      : 'Selecciona un certificado .p12 o .pfx.';
-  }
-
-  async uploadCertificate(): Promise<void> {
-    if (!this.selectedCertificateFile) {
-      this.certificateMessage = 'Selecciona el archivo del certificado antes de cargarlo.';
-      return;
-    }
-
-    this.isUploadingCertificate = true;
-    try {
-      this.certificateMetadata = await this.digitalCertificatesService.uploadCertificate(
-        this.selectedCertificateFile,
-        this.certificatePassword
-      );
-      this.certificatePassword = '';
-      this.selectedCertificateFile = null;
-      this.certificateMessage = 'Certificado validado. Su clave quedó guardada de forma protegida para los envíos e-CF.';
-    } catch (error) {
-      this.certificateMessage = error instanceof Error ? error.message : 'No se pudo cargar el certificado.';
-    } finally {
-      this.isUploadingCertificate = false;
-    }
-  }
-
-  async saveEcfConfiguration(): Promise<void> {
-    try { await this.ecfConfigService.save(this.ecfConfiguration); this.ecfMessage = 'Configuración e-CF guardada correctamente.'; }
-    catch { this.ecfMessage = 'No se pudo guardar la configuración e-CF.'; }
-  }
-
-  formatCertificateDate(value: string): string {
-    return new Intl.DateTimeFormat('es-DO', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'America/Santo_Domingo'
-    }).format(new Date(value));
-  }
-
   async saveOtherSettings(): Promise<void> {
-    try {
-      await this.companyPrintSettings.savePaper(this.preferences.printPaper);
-      this.displayPreferences.save(this.preferences.displayProfile);
-    } catch (error) {
-      this.otherMessage = error instanceof Error ? error.message : 'No se pudo guardar el tipo de papel de la empresa.';
+    // Preferencias de este equipo: siempre se guardan.
+    this.displayPreferences.save(this.preferences.displayProfile);
+    this.displayPreferences.saveTheme(this.preferences.theme);
+
+    // Datos de la empresa: solo si cambiaron (y solo un administrador puede).
+    const problems: string[] = [];
+    if (this.preferences.printPaper !== this.originalPreferences.printPaper) {
+      try { await this.companyPrintSettings.savePaper(this.preferences.printPaper); }
+      catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el tipo de papel.'); this.preferences.printPaper = this.originalPreferences.printPaper; }
+    }
+    if (this.preferences.billingMode !== this.originalPreferences.billingMode) {
+      try { await this.billingModeService.saveMode(this.preferences.billingMode); }
+      catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el modo de facturación.'); this.preferences.billingMode = this.originalPreferences.billingMode; }
+    }
+
+    this.originalPreferences = { ...this.preferences };
+    if (problems.length) {
+      this.otherMessage = problems.join(' ');
+      await Swal.fire({ icon: 'warning', title: 'Se guardó solo una parte', text: `El tema y la pantalla se guardaron. ${problems.join(' ')}` });
       return;
     }
-    this.originalPreferences = { ...this.preferences };
-    this.otherMessage = `Preferencias y tipo de papel guardados correctamente el ${this.formatTimestamp()}.`;
+    this.otherMessage = `Preferencias guardadas correctamente el ${this.formatTimestamp()}.`;
+    void Swal.fire({ icon: 'success', title: 'Cambios guardados', text: this.preferences.billingMode === 'Caja' ? 'Recarga la página (F5) para ver Caja → Cobro de facturas.' : '', timer: 2200, showConfirmButton: false });
   }
 
   resetOtherSettings(): void {
     this.preferences = { ...this.originalPreferences };
     this.displayPreferences.apply(this.preferences.displayProfile);
+    this.displayPreferences.applyTheme(this.preferences.theme);
     this.otherMessage = 'Preferencias restauradas a los ultimos valores guardados.';
   }
 
@@ -239,10 +221,22 @@ export class SettingsOtherPageComponent implements OnInit {
       defaultNcfType: '02 - Consumo',
       defaultPaymentMethod: 'Contado',
       printPaper: 'carta',
+      billingMode: this.preferences.billingMode,
       displayProfile: 'auto'
     };
     this.displayPreferences.apply(this.preferences.displayProfile);
+    this.displayPreferences.applyTheme(this.preferences.theme);
     this.otherMessage = 'Preferencias restauradas a valores por defecto. Recuerda guardar los cambios.';
+  }
+
+  /** Si sale sin guardar, vuelve el tema guardado. */
+  ngOnDestroy(): void {
+    this.displayPreferences.applyTheme(this.displayPreferences.getTheme());
+  }
+
+  /** Muestra el tema al elegirlo; se conserva al guardar. */
+  previewTheme(): void {
+    this.displayPreferences.applyTheme(this.preferences.theme);
   }
 
   previewDisplayProfile(): void {
@@ -256,6 +250,29 @@ export class SettingsOtherPageComponent implements OnInit {
     }
   }
 
+  qzDownloadUrl(installer: QzInstaller): string {
+    return QZ_TRAY_RELEASE_URL + installer.fileName;
+  }
+
+  /** El primer instalador del sistema operativo de este equipo es el recomendado. */
+  isRecommendedQz(installer: QzInstaller): boolean {
+    return installer === this.qzInstallers.find((item) => item.os === this.detectedOs);
+  }
+
+  async checkQzTray(): Promise<void> {
+    this.qzStatus = 'checking';
+    this.qzStatus = (await this.qzPrint.checkConnection()) ? 'active' : 'inactive';
+  }
+
+  private detectOs(): QzOs | null {
+    if (typeof navigator === 'undefined') return null;
+    const platform = `${(navigator as any).userAgentData?.platform ?? ''} ${navigator.platform ?? ''} ${navigator.userAgent}`.toLowerCase();
+    if (platform.includes('win')) return 'windows';
+    if (platform.includes('mac')) return 'mac';
+    if (platform.includes('linux') && !platform.includes('android')) return 'linux';
+    return null;
+  }
+
   private formatTimestamp(): string {
     return new Intl.DateTimeFormat('es-DO', {
       dateStyle: 'short',
@@ -264,28 +281,10 @@ export class SettingsOtherPageComponent implements OnInit {
     }).format(new Date());
   }
 
-  private async loadCertificate(): Promise<void> {
-    this.isLoadingCertificate = true;
-    try {
-      this.certificateMetadata = await this.digitalCertificatesService.getCertificate();
-      if (this.certificateMetadata) {
-        this.certificateMessage = 'Certificado de firma digital cargado.';
-      }
-    } catch {
-      this.certificateMessage = 'No se pudo consultar el certificado de firma digital.';
-    } finally {
-      this.isLoadingCertificate = false;
-    }
-  }
-
-  private async loadEcfConfiguration(): Promise<void> {
-    try { const value = await this.ecfConfigService.get(); if (value) this.ecfConfiguration = value; }
-    catch { this.ecfMessage = 'No se pudo consultar la configuración e-CF.'; }
-  }
-
   private async loadPrintPaper(): Promise<void> {
     try {
       this.preferences.printPaper = await this.companyPrintSettings.getPaper();
+      this.preferences.billingMode = await this.billingModeService.getMode();
       this.originalPreferences = { ...this.preferences };
     } catch {
       this.otherMessage = 'No se pudo cargar el tipo de papel de la empresa.';

@@ -1,0 +1,46 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Planes</h2>
+      <span>Precio mensual en RD$ y límites de referencia. Los límites solo generan aviso en el panel; no bloquean.</span>
+    </div>
+  </header>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <form class="pf-form pf-form--pay" (ngSubmit)="save()">
+    <label>Nombre<input name="nombre" type="text" [(ngModel)]="form.nombre" required></label>
+    <label>Precio mensual (RD$)<input name="precio" type="number" min="0" step="0.01" [(ngModel)]="form.precio_mensual"></label>
+    <label>Orden<input name="orden" type="number" min="0" [(ngModel)]="form.orden"></label>
+    <label>Máx. usuarios<input name="mu" type="number" min="1" [(ngModel)]="form.max_usuarios" placeholder="Sin límite"></label>
+    <label>Máx. sucursales<input name="ms" type="number" min="1" [(ngModel)]="form.max_sucursales" placeholder="Sin límite"></label>
+    <label style="display:flex; align-items:center; gap:8px; align-self:end; height:40px"><input name="activo" type="checkbox" [(ngModel)]="form.activo"> Activo</label>
+    <label class="pf-form__wide">Descripción<input name="desc" type="text" [(ngModel)]="form.descripcion"></label>
+    <div class="pf-form__wide pf-form__actions">
+      <small>{{ form.id ? 'Editando ' + form.nombre + '. Cambiar el precio aquí no cambia el precio de las empresas que ya tienen el plan.' : 'Nuevo plan' }}</small>
+      <span style="display:flex; gap:8px">
+        <button type="button" class="pf__btn pf__btn--ghost" *ngIf="form.id" (click)="reset()">Cancelar</button>
+        <button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : (form.id ? 'Guardar cambios' : 'Agregar plan') }}</button>
+      </span>
+    </div>
+  </form>
+
+  <section class="pf__table-wrap">
+    <table class="pf__table" style="min-width:640px">
+      <thead><tr><th>#</th><th>Plan</th><th class="num">Precio mensual</th><th class="num">Usuarios</th><th class="num">Sucursales</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let p of plans" [class.is-void]="!p.activo">
+          <td>{{ p.orden }}</td>
+          <td><b>{{ p.nombre }}</b><small>{{ p.descripcion }}</small></td>
+          <td class="num">{{ p.precio_mensual | number:'1.2-2' }}</td>
+          <td class="num">{{ p.max_usuarios ?? '∞' }}</td>
+          <td class="num">{{ p.max_sucursales ?? '∞' }}</td>
+          <td>{{ p.activo ? 'Activo' : 'Inactivo' }}</td>
+          <td class="pf__row-actions"><button type="button" (click)="edit(p)">Editar</button><button type="button" class="is-danger" (click)="remove(p)">Eliminar</button></td>
+        </tr>
+        <tr *ngIf="!plans.length && !isLoading"><td colspan="7" class="pf__empty">No hay planes.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</section>

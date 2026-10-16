@@ -1,0 +1,54 @@
+<div class="pl" *ngIf="open" (click)="close()">
+  <section class="pl__panel" role="dialog" aria-modal="true" aria-label="Consulta de precio" (click)="$event.stopPropagation()">
+    <header class="pl__head">
+      <h3>Consulta de precio <small>F2</small></h3>
+      <button type="button" class="pl__x" (click)="close()" aria-label="Cerrar">×</button>
+    </header>
+
+    <div class="pl__search">
+      <input #searchInput type="search" [(ngModel)]="term" (ngModelChange)="onTermChange()" (keydown)="onKeydown($event)"
+             placeholder="Escanea o escribe el código o la descripción" autocomplete="off" aria-label="Buscar producto">
+      <span *ngIf="isSearching" class="pl__spin">Buscando…</span>
+    </div>
+    <p class="pl__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+    <ng-container *ngIf="selected as p; else list">
+      <article class="pl__card">
+        <div class="pl__title"><b>{{ p.code }}</b><span>{{ p.description }}</span></div>
+        <p class="pl__price">{{ money(p.salePrice) }}</p>
+        <small class="pl__tax">{{ p.exemptItbis ? 'Exento de ITBIS' : 'ITBIS incluido' }} · por {{ p.unit || 'unidad' }}</small>
+
+        <dl class="pl__facts">
+          <div *ngIf="p.wholesaleEnabled && p.wholesalePrice > 0"><dt>Precio por mayor</dt><dd>{{ money(p.wholesalePrice) }} <small>desde {{ p.minimumWholesaleQuantity | number:'1.0-2' }} und.</small></dd></div>
+          <div *ngIf="p.minimumPrice > 0"><dt>Precio mínimo</dt><dd>{{ money(p.minimumPrice) }}</dd></div>
+          <div *ngIf="showCost"><dt>Costo</dt><dd>{{ money(p.cost) }}</dd></div>
+          <div>
+            <dt>Existencia{{ replacement ? ' (de ' + replacement.code + ')' : '' }}</dt>
+            <dd [class.pl__neg]="stockForSale <= 0">{{ stockForSale | number:'1.0-2' }}</dd>
+          </div>
+          <div *ngIf="p.location"><dt>Ubicación</dt><dd>{{ p.location }}</dd></div>
+          <div *ngIf="p.brand"><dt>Marca</dt><dd>{{ p.brand }}</dd></div>
+          <div *ngIf="p.status !== 'Activo'"><dt>Estado</dt><dd class="pl__neg">{{ p.status }}</dd></div>
+        </dl>
+        <p class="pl__note" *ngIf="p.replacementEnabled && p.replacementCode">Al venderlo se rebaja el inventario de {{ p.replacementCode }}{{ replacement ? ' · ' + replacement.description : '' }}.</p>
+      </article>
+      <div class="pl__actions">
+        <button type="button" *ngIf="results.length > 1" (click)="selected = null">← Ver resultados ({{ results.length }})</button>
+        <button type="button" class="pl__primary" (click)="newSearch()">Nueva consulta</button>
+      </div>
+    </ng-container>
+
+    <ng-template #list>
+      <ul class="pl__list" *ngIf="results.length">
+        <li *ngFor="let p of results; let i = index">
+          <button type="button" [class.is-active]="i === activeIndex" (click)="pick(p)" (mouseenter)="activeIndex = i">
+            <span><b>{{ p.code }}</b> · {{ p.description }}</span>
+            <span class="pl__right"><b>{{ money(p.salePrice) }}</b><small [class.pl__neg]="p.stock <= 0">Exist. {{ p.stock | number:'1.0-2' }}</small></span>
+          </button>
+        </li>
+      </ul>
+      <p class="pl__hint" *ngIf="term && !isSearching && !results.length && !errorMessage">No se encontró ningún producto.</p>
+      <p class="pl__hint" *ngIf="!term">Usa ↑ ↓ y Enter para elegir. Esc para cerrar.</p>
+    </ng-template>
+  </section>
+</div>

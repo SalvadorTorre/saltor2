@@ -16,6 +16,7 @@ interface CompanyRow {
   estado: 'Activa' | 'Inactiva';
   cantidad_sucursales: number | string | null;
   ultima_actualizacion: string | null;
+  logo?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -91,11 +92,33 @@ export class CompaniesService {
       category: row.categoria,
       status: row.estado,
       branchCount: Number(row.cantidad_sucursales ?? 0),
-      lastUpdate: row.ultima_actualizacion ?? ''
+      lastUpdate: row.ultima_actualizacion ?? '',
+      logoUrl: row.logo ?? null
     };
   }
 
-  private toInsertRow(form: CompanyFormModel, lastUpdate: string): Omit<CompanyRow, 'id'> {
+  /** ¿El usuario actual es dueño del sistema (puede crear empresas)? */
+  async isPlatformOwner(): Promise<boolean> {
+    const { data, error } = await this.supabase.client.rpc('soy_dueno_sistema');
+    if (error) return false;
+    return data === true;
+  }
+
+  /** Logo de una empresa (solo esa columna, para no traer todo). */
+  async getLogo(companyId: number): Promise<string | null> {
+    const { data, error } = await this.supabase.client.from(this.table).select('logo').eq('id', companyId).maybeSingle();
+    if (error) throw error;
+    return (data as { logo?: string | null } | null)?.logo ?? null;
+  }
+
+  /** Guarda o quita (null) el logo de la empresa. Solo administradores (RLS). */
+  async updateLogo(companyId: number, logo: string | null): Promise<void> {
+    const { data, error } = await this.supabase.client.from(this.table).update({ logo }).eq('id', companyId).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('No tienes permiso para cambiar el logo de esta empresa.');
+  }
+
+  private toInsertRow(form: CompanyFormModel, lastUpdate: string): Omit<CompanyRow, 'id' | 'logo'> {
     return {
       nombre_comercial: form.tradeName.trim(),
       razon_social: form.legalName.trim(),

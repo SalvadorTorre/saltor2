@@ -16,3 +16,30 @@ h1, h2, p { margin: 0; }h1 { font-size: 23px; line-height: 1.2; letter-spacing: 
 .quote-product-editor .quote-product-field { position: relative; }.product-suggestions { background: #fff; border: 1px solid #cbd8e8; border-radius: 10px; box-shadow: 0 12px 24px rgba(15, 42, 78, .18); left: 0; max-height: 310px; overflow-y: auto; position: absolute; right: 0; top: calc(100% + 5px); z-index: 20; }.product-suggestion { align-items: center; background: #fff; border: 0; border-bottom: 1px solid #e4ebf3; cursor: pointer; display: flex; gap: 10px; justify-content: space-between; padding: 10px 12px; text-align: left; width: 100%; }.product-suggestion:last-child { border-bottom: 0; }.product-suggestion:hover, .product-suggestion--active { background: #eaf3ff; }.product-suggestion__main, .product-suggestion__amount { display: grid; gap: 3px; }.product-suggestion__main { min-width: 0; }.product-suggestion__main strong { color: #142b4c; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.product-suggestion small { color: #64748b; font-size: 13px; font-weight: 600; }.product-suggestion__amount { flex: 0 0 auto; text-align: right; }.product-suggestion__amount strong { color: #1357c5; font-size: 15px; }
 @media (max-width: 900px) { .quotation-page { padding: 22px 18px 36px; }.page-header { margin: -22px -18px 28px; padding: 18px; }.list-toolbar { align-items: stretch; flex-direction: column; }.search-field { flex-basis: 38px; max-width: none; }.table-shell { overflow-x: auto; }table { min-width: 730px; }.quote-line, .line-header { min-width: 700px; }.concepts-section { overflow-x: auto; }.quote-product-editor { min-width: 920px; } }
 @media (max-width: 560px) { .quotation-page { padding-left: 18px; padding-right: 18px; }.page-header { align-items: flex-start; gap: 16px; flex-direction: column; }.page-actions { width: 100%; }.page-actions .button { flex: 1; }.quotation-tabs { overflow-x: auto; }.quotation-tabs__button { font-size: 14px; white-space: nowrap; }.general-row, .general-row--identity, .general-row--address, .general-row--details { grid-template-columns: 1fr; }.field-wide { grid-column: auto; }.totals { width: 100%; }.status-filters { gap: 5px; }.status-filters button { padding: 6px 10px; } }
+
+/* Tabletas y teléfonos */
+@media (max-width: 900px) {
+  .page-header { position: static; }
+  .quotation-products-layout { grid-template-columns: 1fr; }
+  .concepts-section { overflow-x: visible; }
+  .quote-product-editor { min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .quote-product-editor > :nth-child(1) { grid-column: span 1; }
+  .quote-product-editor > :nth-child(2) { grid-column: span 2; }
+  .quotation-lines-table { overflow-x: auto; }
+  .quotation-lines-table .line-header, .quotation-lines-table .quote-line { min-width: 680px; }
+  .form-section { padding: 20px 16px; }
+  .form-section h2 { font-size: 21px; }
+}
+
+@media (max-width: 560px) {
+  .quotation-page { padding: 16px 10px 32px; }
+  .page-header { margin: -16px -10px 20px; padding: 14px 10px; }
+  .quote-product-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quote-product-editor > :nth-child(1), .quote-product-editor > :nth-child(2) { grid-column: 1 / -1; }
+  label, .quote-product-editor label { font-size: 16px; }
+  input, select, textarea { min-height: 46px; font-size: 16px; }
+  .quotation-form .button { font-size: 16px; }
+  .quotation-form .totals { width: 100%; }
+  h1 { font-size: 20px; }
+  .page-title p { font-size: 14px; }
+}

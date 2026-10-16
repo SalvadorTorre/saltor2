@@ -1,0 +1,147 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Instalaciones locales</h2>
+      <span>Equipos instalados en cada empresa y sucursal, y el historial de visitas y servicios.</span>
+    </div>
+    <div class="pf__header-actions">
+      <button type="button" class="pf__btn pf__btn--ghost" (click)="newVisit()">+ Registrar visita</button>
+      <button type="button" class="pf__btn" (click)="newEquipment()">+ Nuevo equipo</button>
+    </div>
+  </header>
+
+  <nav class="pf-drawer__tabs">
+    <button type="button" [class.is-active]="view === 'equipos'" (click)="view = 'equipos'">Equipos ({{ visibleEquipment.length }})</button>
+    <button type="button" [class.is-active]="view === 'visitas'" (click)="view = 'visitas'">Visitas y servicios ({{ visibleVisits.length }})</button>
+  </nav>
+
+  <section class="pf__filters">
+    <div class="pf__chips" style="align-items:flex-end; gap:10px">
+      <label>Empresa<select [(ngModel)]="companyId"><option [ngValue]="null">Todas</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select></label>
+      <ng-container *ngIf="view === 'visitas'">
+        <label>Desde<input type="date" [(ngModel)]="from"></label>
+        <label>Hasta<input type="date" [(ngModel)]="to"></label>
+        <button type="button" class="pf__btn" (click)="load()" [disabled]="isLoading">Consultar</button>
+      </ng-container>
+      <label *ngIf="view === 'equipos'" style="display:flex; align-items:center; gap:6px; height:40px"><input type="checkbox" [(ngModel)]="showRetired" style="min-width:0; height:auto"> Mostrar retirados</label>
+    </div>
+    <input type="search" [(ngModel)]="text" placeholder="Buscar equipo, serie, IP, responsable…" aria-label="Buscar">
+  </section>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="pf__table-wrap" *ngIf="view === 'equipos'">
+    <table class="pf__table">
+      <thead><tr><th>Equipo</th><th>Empresa</th><th>Tipo</th><th>Sistema / versión</th><th>IP / acceso remoto</th><th>Responsable</th><th>Instalado</th><th>Garantía</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let i of visibleEquipment" tabindex="0" (click)="editEquipment(i)" (keydown.enter)="editEquipment(i)" [class.is-void]="i.estado === 'Retirada'">
+          <td><b>{{ i.nombre_equipo }}</b><small>{{ i.marca_modelo }}{{ i.serie ? ' · S/N ' + i.serie : '' }}</small></td>
+          <td>{{ companyName(i.empresa_id) }}<small>{{ i.ubicacion }}</small></td>
+          <td>{{ i.tipo }}</td>
+          <td>{{ i.sistema_operativo || '—' }}<small *ngIf="i.version_app">App {{ i.version_app }}</small></td>
+          <td>{{ i.ip_local || '—' }}<small *ngIf="i.acceso_remoto">{{ i.acceso_remoto }}</small></td>
+          <td>{{ i.responsable || '—' }}<small *ngIf="i.telefono">{{ i.telefono }}</small></td>
+          <td>{{ date(i.fecha_instalacion) }}</td>
+          <td><span *ngIf="i.garantia_hasta" class="pf__state" [ngClass]="warrantyClass(i)">{{ date(i.garantia_hasta) }}</span><span *ngIf="!i.garantia_hasta">—</span></td>
+          <td>{{ i.estado }}</td>
+          <td class="pf__row-actions" (click)="$event.stopPropagation()"><button type="button" (click)="newVisit(i)">Visita</button></td>
+        </tr>
+        <tr *ngIf="!visibleEquipment.length && !isLoading"><td colspan="10" class="pf__empty">No hay equipos registrados.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <ng-container *ngIf="view === 'visitas'">
+    <section class="pf__kpis">
+      <article class="is-blue"><span>Visitas en el período</span><b>{{ visibleVisits.length }}</b><small>{{ visitsHours | number:'1.0-2' }} hora(s)</small></article>
+      <article class="is-ok"><span>Servicios cobrables</span><b>{{ visitsTotal | currency:'RD$ ':'symbol':'1.2-2' }}</b><small>Monto registrado en las visitas</small></article>
+    </section>
+    <section class="pf__table-wrap">
+      <table class="pf__table">
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Tipo</th><th>Trabajo realizado</th><th>Equipo</th><th>Técnico</th><th class="num">Horas</th><th class="num">Monto</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let v of visibleVisits" tabindex="0" (click)="editVisit(v)" (keydown.enter)="editVisit(v)">
+            <td>{{ date(v.fecha) }}</td>
+            <td>{{ companyName(v.empresa_id) }}</td>
+            <td>{{ v.tipo }}<small>{{ v.modalidad }}</small></td>
+            <td style="max-width:320px">{{ v.descripcion }}</td>
+            <td>{{ equipmentName(v.instalacion_id) || '—' }}</td>
+            <td>{{ v.tecnico || '—' }}</td>
+            <td class="num">{{ v.horas ?? '—' }}</td>
+            <td class="num">{{ v.monto | number:'1.2-2' }}</td>
+          </tr>
+          <tr *ngIf="!visibleVisits.length && !isLoading"><td colspan="8" class="pf__empty">No hay visitas en este período.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </ng-container>
+</section>
+
+<div class="pf-drawer" *ngIf="equipment || visit" role="dialog" aria-modal="true" [attr.aria-label]="equipment ? 'Equipo' : 'Visita'">
+  <div class="pf-drawer__backdrop" (click)="closeForms()"></div>
+  <aside class="pf-drawer__panel">
+    <header class="pf-drawer__head">
+      <div><h3>{{ equipment ? (equipment.id ? equipment.nombre_equipo : 'Nuevo equipo') : (visit?.id ? 'Visita' : 'Registrar visita') }}</h3>
+        <p>{{ (equipment?.empresa_id || visit?.empresa_id) ? companyName((equipment?.empresa_id || visit?.empresa_id) ?? null) : '' }}</p></div>
+      <button type="button" class="pf-drawer__close" (click)="closeForms()" aria-label="Cerrar">×</button>
+    </header>
+
+    <p class="pf__error" *ngIf="formError">{{ formError }}</p>
+
+    <form *ngIf="equipment as e" class="pf-form" (ngSubmit)="saveEquipment()">
+      <label>Empresa
+        <select name="emp" [(ngModel)]="e.empresa_id" (ngModelChange)="loadBranches()" required>
+          <option [ngValue]="null" disabled>Elige…</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option>
+        </select>
+      </label>
+      <label>Sucursal<select name="suc" [(ngModel)]="e.sucursal_id"><option [ngValue]="null">—</option><option *ngFor="let b of branches" [ngValue]="b.idsucursal">{{ b.nombresucursal }}</option></select></label>
+      <label>Nombre del equipo<input name="nom" type="text" [(ngModel)]="e.nombre_equipo" placeholder="CAJA 1, SERVIDOR…" required></label>
+      <label>Tipo<select name="tipo" [(ngModel)]="e.tipo"><option *ngFor="let t of types">{{ t }}</option></select></label>
+      <label>Marca / modelo<input name="mm" type="text" [(ngModel)]="e.marca_modelo"></label>
+      <label>Número de serie<input name="serie" type="text" [(ngModel)]="e.serie"></label>
+      <label>Sistema operativo<input name="so" type="text" [(ngModel)]="e.sistema_operativo"></label>
+      <label>Versión de SaltorSystem<input name="ver" type="text" [(ngModel)]="e.version_app"></label>
+      <label>IP local<input name="ip" type="text" [(ngModel)]="e.ip_local" placeholder="192.168.1.10"></label>
+      <label>ID de acceso remoto<input name="rem" type="text" [(ngModel)]="e.acceso_remoto" placeholder="AnyDesk / TeamViewer (sin clave)"></label>
+      <label>Ubicación<input name="ubi" type="text" [(ngModel)]="e.ubicacion" placeholder="Mostrador, oficina…"></label>
+      <label>Estado<select name="est" [(ngModel)]="e.estado"><option>Activa</option><option>En mantenimiento</option><option>Retirada</option></select></label>
+      <label>Responsable<input name="resp" type="text" [(ngModel)]="e.responsable"></label>
+      <label>Teléfono<input name="tel" type="tel" [(ngModel)]="e.telefono"></label>
+      <label>Fecha de instalación<input name="fi" type="date" [(ngModel)]="e.fecha_instalacion"></label>
+      <label>Garantía hasta<input name="gar" type="date" [(ngModel)]="e.garantia_hasta"></label>
+      <label class="pf-form__wide">Notas<textarea name="notas" rows="3" [(ngModel)]="e.notas"></textarea></label>
+      <div class="pf-form__wide pf-form__actions">
+        <small>No guardes claves aquí: solo el ID del acceso remoto.</small>
+        <span style="display:flex; gap:8px; flex-wrap:wrap">
+          <button type="button" class="pf__btn pf__btn--ghost" *ngIf="e.id" (click)="newVisit(e)">Registrar visita</button>
+          <button type="button" class="pf__btn pf__btn--ghost pf__btn--danger" *ngIf="e.id" (click)="deleteEquipment()">Eliminar</button>
+          <button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : 'Guardar equipo' }}</button>
+        </span>
+      </div>
+    </form>
+
+    <form *ngIf="visit as v" class="pf-form" (ngSubmit)="saveVisit()">
+      <label>Empresa
+        <select name="vemp" [(ngModel)]="v.empresa_id" required>
+          <option [ngValue]="null" disabled>Elige…</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option>
+        </select>
+      </label>
+      <label>Equipo<select name="veq" [(ngModel)]="v.instalacion_id"><option [ngValue]="null">General / ninguno</option><option *ngFor="let i of equipmentFor(v.empresa_id)" [ngValue]="i.id">{{ i.nombre_equipo }}</option></select></label>
+      <label>Fecha<input name="vf" type="date" [(ngModel)]="v.fecha" required></label>
+      <label>Tipo<select name="vt" [(ngModel)]="v.tipo"><option *ngFor="let t of visitTypes">{{ t }}</option></select></label>
+      <label>Modalidad<select name="vm" [(ngModel)]="v.modalidad"><option>Remota</option><option>Presencial</option></select></label>
+      <label>Técnico<input name="vtec" type="text" [(ngModel)]="v.tecnico"></label>
+      <label>Horas<input name="vh" type="number" min="0" step="0.25" [(ngModel)]="v.horas"></label>
+      <label>Monto a cobrar (RD$)<input name="vmonto" type="number" min="0" step="0.01" [(ngModel)]="v.monto"></label>
+      <label class="pf-form__wide">Trabajo realizado<textarea name="vd" rows="4" [(ngModel)]="v.descripcion" required></textarea></label>
+      <div class="pf-form__wide pf-form__actions">
+        <small>Deja el monto en 0 si el servicio entra en la suscripción.</small>
+        <span style="display:flex; gap:8px">
+          <button type="button" class="pf__btn pf__btn--ghost pf__btn--danger" *ngIf="v.id" (click)="deleteVisit()">Eliminar</button>
+          <button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : 'Guardar visita' }}</button>
+        </span>
+      </div>
+    </form>
+  </aside>
+</div>

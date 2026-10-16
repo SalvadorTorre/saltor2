@@ -1,0 +1,76 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Caja</p>
+      <h2>Cobro de facturas</h2>
+      <span>Facturas que guardaron los vendedores. Elige una, cobra e imprime.</span>
+    </div>
+    <div class="pf__header-actions">
+      <button type="button" class="pf__btn pf__btn--ghost" (click)="load()" [disabled]="isLoading">{{ isLoading ? 'Actualizando…' : 'Actualizar' }}</button>
+    </div>
+  </header>
+
+  <p class="pf__error" *ngIf="!isCashierMode">Esta empresa factura en modo <b>Directo</b> (se cobra al facturar). Para usar el cobro en caja, cámbialo en Configuración → Otros → Modo de facturación.</p>
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="pf__kpis">
+    <article class="is-ok"><span>Pendientes de cobro</span><b>{{ invoices.length }}</b><small>Se actualiza sola cada 20 s{{ lastRefresh ? ' · ' + (lastRefresh | date:'h:mm:ss a') : '' }}</small></article>
+    <article class="is-blue"><span>Monto pendiente</span><b>{{ pendingTotal | currency:'RD$ ':'symbol':'1.2-2' }}</b><small>en esta sucursal</small></article>
+  </section>
+
+  <div class="cc">
+    <div>
+      <input type="search" [(ngModel)]="text" placeholder="Buscar factura, cliente, vendedor…" aria-label="Buscar factura" style="width:100%; height:42px; margin-bottom:8px; padding:0 12px; border:1px solid #cedded; border-radius:8px; font:15px Arial, sans-serif">
+      <div class="cc__list">
+        <button type="button" *ngFor="let i of visible" class="cc__item" [class.is-active]="selected?.id === i.id" (click)="select(i)">
+          <span><b>{{ i.number }}</b> · {{ i.customerName || 'Consumidor final' }}</span>
+          <span class="cc__amount">{{ i.total | number:'1.2-2' }}</span>
+          <small>{{ i.seller || '—' }} · {{ waitLabel(i) }}{{ i.condition === 'Credito' ? ' · CRÉDITO' : '' }}</small>
+        </button>
+        <p class="pf__empty" *ngIf="!visible.length && !isLoading">No hay facturas pendientes de cobro.</p>
+      </div>
+    </div>
+
+    <div class="cc__detail">
+      <ng-container *ngIf="selected as s; else nothing">
+        <div class="cc__head">
+          <div>
+            <h3>Factura {{ s.number }}</h3>
+            <p>{{ s.customerName || 'Consumidor final' }}{{ s.rnc ? ' · RNC/Céd. ' + s.rnc : '' }} · {{ s.ncfType || 'Sin tipo' }} · Vendedor: {{ s.seller || '—' }}</p>
+          </div>
+          <dl class="cc__totals">
+            <div><dt>Subtotal</dt><dd>{{ s.subtotal | number:'1.2-2' }}</dd></div>
+            <div><dt>ITBIS</dt><dd>{{ s.tax | number:'1.2-2' }}</dd></div>
+            <div class="cc__grand"><dt>Total&nbsp;</dt><dd>RD$ {{ s.total | number:'1.2-2' }}</dd></div>
+          </dl>
+        </div>
+
+        <table class="cc__lines" *ngIf="detail; else loadingLines">
+          <thead><tr><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Total</th></tr></thead>
+          <tbody><tr *ngFor="let l of detail.lines"><td>{{ l.description }}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unitPrice | number:'1.2-2' }}</td><td class="num">{{ l.lineTotal | number:'1.2-2' }}</td></tr></tbody>
+        </table>
+        <ng-template #loadingLines><p class="pf__empty">Cargando productos…</p></ng-template>
+
+        <form class="cc__pay" (ngSubmit)="collect()">
+          <label>Forma de pago
+            <select name="method" [(ngModel)]="paymentCode" (ngModelChange)="onMethodChange()">
+              <option *ngFor="let m of paymentMethods" [ngValue]="m.code">{{ m.description }}</option>
+            </select>
+          </label>
+          <label>{{ isCredit ? 'Venta a crédito' : 'Recibido (RD$)' }}
+            <input id="ccReceived" name="received" type="number" min="0" step="0.01" [(ngModel)]="received" [disabled]="paymentCode !== 1">
+          </label>
+          <label>{{ shortfall > 0 && paymentCode === 1 ? 'Falta' : 'Devuelta' }}
+            <span class="cc__change" [class.cc__short]="shortfall > 0 && paymentCode === 1">RD$ {{ (shortfall > 0 && paymentCode === 1 ? shortfall : change) | number:'1.2-2' }}</span>
+          </label>
+          <p *ngIf="isCredit && !s.customerId" class="pf__error" style="grid-column:1/-1; margin:0">Para vender a crédito la factura debe tener un cliente registrado.</p>
+          <div class="cc__actions" style="grid-column:1/-1">
+            <button type="button" class="pf__btn pf__btn--ghost pf__btn--danger" (click)="cancel()" [disabled]="isWorking">Anular (no pagó)</button>
+            <button type="submit" class="pf__btn cc__collect" [disabled]="!canCollect">{{ isWorking ? 'Procesando…' : (isCredit ? 'Confirmar crédito e imprimir' : 'Cobrar e imprimir') }}</button>
+          </div>
+        </form>
+      </ng-container>
+      <ng-template #nothing><div class="cc__empty"><p>Elige una factura de la lista para cobrarla.</p></div></ng-template>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,184 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Empresas y suscripciones</h2>
+      <span>Estado de cada empresa cliente, su plan, vencimiento, cobros y uso del sistema.</span>
+    </div>
+    <div class="pf__header-actions">
+      <a class="pf__btn pf__btn--ghost" routerLink="/configuracion/empresa">+ Nueva empresa</a>
+      <button type="button" class="pf__btn" (click)="load()" [disabled]="isLoading">{{ isLoading ? 'Actualizando…' : 'Actualizar' }}</button>
+    </div>
+  </header>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <ng-container *ngIf="summary as s">
+    <section class="pf__kpis">
+      <article><span>Empresas</span><b>{{ s.totales.empresas }}</b><small>{{ s.totales.activas }} activas · {{ s.totales.prueba }} en prueba</small></article>
+      <article class="is-warn"><span>Requieren atención</span><b>{{ s.totales.por_vencer + s.totales.en_gracia + s.totales.vencidas }}</b>
+        <small>{{ s.totales.por_vencer }} por vencer · {{ s.totales.en_gracia }} en gracia · {{ s.totales.vencidas }} vencidas</small></article>
+      <article class="is-ok"><span>Ingreso mensual (activas)</span><b>{{ s.totales.ingreso_mensual | currency:'RD$ ':'symbol':'1.2-2' }}</b><small>{{ s.totales.suspendidas }} suspendida(s) o cancelada(s)</small></article>
+      <article class="is-warn" *ngIf="(s.totales.contratos_por_vencer ?? 0) + (s.totales.contratos_vencidos ?? 0) > 0 || (s.totales.contratos_vigentes ?? 0) > 0">
+        <span>Contratos vigentes</span><b>{{ s.totales.contratos_vigentes ?? 0 }}</b>
+        <small><a routerLink="/plataforma/contratos">{{ s.totales.contratos_por_vencer ?? 0 }} vencen en 30 días · {{ s.totales.contratos_vencidos ?? 0 }} vencidos</a></small></article>
+      <article><span>Equipos instalados</span><b>{{ s.totales.equipos ?? 0 }}</b>
+        <small><a routerLink="/plataforma/instalaciones">{{ s.totales.visitas_mes ?? 0 }} visita(s) este mes · {{ (s.totales.servicios_mes ?? 0) | currency:'RD$ ':'symbol':'1.0-0' }}</a>{{ s.totales.garantias_por_vencer ? ' · ' + s.totales.garantias_por_vencer + ' garantía(s) por vencer' : '' }}</small></article>
+      <article class="is-blue"><span>Cobrado este mes</span><b>{{ s.totales.cobrado_mes | currency:'RD$ ':'symbol':'1.2-2' }}</b><small>Año: {{ s.totales.cobrado_anio | currency:'RD$ ':'symbol':'1.2-2' }}</small></article>
+    </section>
+
+    <section class="pf__alerts" *ngIf="alerts.length">
+      <h3>Para cobrar o dar seguimiento</h3>
+      <button type="button" *ngFor="let c of alerts" class="pf__alert" (click)="open(c, 'pagos')">
+        <span class="pf__state" [ngClass]="stateClass(c.estado_calculado)">{{ c.estado_calculado }}</span>
+        <b>{{ c.nombre_comercial }}</b>
+        <span>{{ daysLabel(c) }} · vence {{ date(c.vence) }}</span>
+        <span *ngIf="c.contacto_telefono">☎ {{ c.contacto_telefono }}</span>
+      </button>
+    </section>
+
+    <section class="pf__filters">
+      <div class="pf__chips" role="group" aria-label="Filtrar por estado">
+        <button type="button" *ngFor="let st of states" [class.is-active]="stateFilter === st.value" (click)="stateFilter = st.value">{{ st.label }}</button>
+      </div>
+      <input type="search" [(ngModel)]="text" placeholder="Buscar empresa, RNC, contacto, plan…" aria-label="Buscar empresa">
+    </section>
+
+    <section class="pf__table-wrap">
+      <table class="pf__table">
+        <thead>
+          <tr><th>Empresa</th><th>Plan</th><th>Estado</th><th>Vence</th><th class="num">Mensual</th><th class="num">Usuarios</th><th class="num">Suc.</th><th>Último acceso</th><th class="num">Fact. mes</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let c of companies" (click)="open(c)" [class.is-selected]="selected?.id === c.id" tabindex="0" (keydown.enter)="open(c)">
+            <td><b>{{ c.nombre_comercial }}</b><small>{{ c.rnc ? 'RNC ' + c.rnc : 'Sin RNC' }}<ng-container *ngIf="overLimit(c) as o"> · <em class="pf__over">{{ o }}</em></ng-container></small></td>
+            <td>{{ c.plan || '—' }}</td>
+            <td><span class="pf__state" [ngClass]="stateClass(c.estado_calculado)">{{ c.estado_calculado }}</span></td>
+            <td>{{ date(c.vence) }}<small>{{ daysLabel(c) }}</small></td>
+            <td class="num">{{ (c.precio_mensual ?? 0) | number:'1.2-2' }}</td>
+            <td class="num">{{ c.usuarios_activos }}<small *ngIf="c.max_usuarios">de {{ c.max_usuarios }}</small></td>
+            <td class="num">{{ c.sucursales }}</td>
+            <td>{{ c.ultimo_acceso ? (c.ultimo_acceso | date:'dd/MM/yyyy h:mm a') : 'Nunca' }}</td>
+            <td class="num">{{ c.facturas_mes }}<small>{{ c.ventas_mes | number:'1.0-0' }}</small></td>
+          </tr>
+          <tr *ngIf="!companies.length"><td colspan="9" class="pf__empty">No hay empresas para este filtro.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </ng-container>
+</section>
+
+<div class="pf-drawer" *ngIf="selected as c" role="dialog" aria-modal="true" [attr.aria-label]="c.nombre_comercial">
+  <div class="pf-drawer__backdrop" (click)="close()"></div>
+  <aside class="pf-drawer__panel">
+    <header class="pf-drawer__head">
+      <div>
+        <h3>{{ c.nombre_comercial }}</h3>
+        <p>{{ c.razon_social }}{{ c.rnc ? ' · RNC ' + c.rnc : '' }}</p>
+        <p><span class="pf__state" [ngClass]="stateClass(c.estado_calculado)">{{ c.estado_calculado }}</span> {{ daysLabel(c) }} · vence {{ date(c.vence) }}</p>
+      </div>
+      <button type="button" class="pf-drawer__close" (click)="close()" aria-label="Cerrar">×</button>
+    </header>
+
+    <div class="pf-drawer__quick">
+      <button type="button" class="pf__btn" (click)="tab = 'pagos'">Registrar pago</button>
+      <button type="button" class="pf__btn pf__btn--ghost" (click)="extendTrial()">Dar días de prueba</button>
+      <button type="button" class="pf__btn pf__btn--ghost" [class.pf__btn--danger]="c.estado !== 'Suspendida'" (click)="toggleSuspend()">{{ c.estado === 'Suspendida' ? 'Reactivar' : 'Suspender' }}</button>
+    </div>
+
+    <nav class="pf-drawer__tabs">
+      <button type="button" [class.is-active]="tab === 'suscripcion'" (click)="tab = 'suscripcion'">Suscripción</button>
+      <button type="button" [class.is-active]="tab === 'pagos'" (click)="tab = 'pagos'">Pagos ({{ payments.length }})</button>
+      <button type="button" [class.is-active]="tab === 'usuarios'" (click)="tab = 'usuarios'">Usuarios ({{ users.length }})</button>
+      <button type="button" [class.is-active]="tab === 'sucursales'" (click)="tab = 'sucursales'">Sucursales ({{ branches.length }})</button>
+    </nav>
+
+    <p class="pf__error" *ngIf="drawerError">{{ drawerError }}</p>
+
+    <form *ngIf="tab === 'suscripcion' && form" class="pf-form" (ngSubmit)="saveSubscription()">
+      <label>Plan
+        <select name="plan" [(ngModel)]="form.plan_id" (ngModelChange)="onPlanChange()">
+          <option [ngValue]="null">Sin plan</option>
+          <option *ngFor="let p of plans" [ngValue]="p.id">{{ p.nombre }} · RD$ {{ p.precio_mensual | number:'1.2-2' }}{{ p.activo ? '' : ' (inactivo)' }}</option>
+        </select>
+      </label>
+      <label>Estado
+        <select name="estado" [(ngModel)]="form.estado">
+          <option>Prueba</option><option>Activa</option><option>Suspendida</option><option>Cancelada</option>
+        </select>
+      </label>
+      <label class="pf-form__wide">Modo de facturación de la empresa (se guarda al elegirlo)
+        <select name="modo" [ngModel]="billingMode" (ngModelChange)="changeBillingMode($event)">
+          <option value="Directo">Directo: quien factura cobra e imprime</option>
+          <option value="Caja">Cobro en caja: el vendedor guarda y la cajera cobra e imprime</option>
+        </select>
+      </label>
+      <label>Precio mensual (RD$)<input name="precio" type="number" min="0" step="0.01" [(ngModel)]="form.precio_mensual"></label>
+      <label>Días de gracia<input name="gracia" type="number" min="0" max="60" [(ngModel)]="form.dias_gracia"></label>
+      <label>Prueba hasta<input name="prueba" type="date" [(ngModel)]="form.prueba_hasta"></label>
+      <label>Pagado hasta<input name="pagado" type="date" [(ngModel)]="form.pagado_hasta"></label>
+      <label>Contacto<input name="contacto" type="text" [(ngModel)]="form.contacto_nombre"></label>
+      <label>Teléfono de contacto<input name="contactoTel" type="tel" [(ngModel)]="form.contacto_telefono"></label>
+      <label class="pf-form__wide">Notas<textarea name="notas" rows="3" [(ngModel)]="form.notas"></textarea></label>
+      <dl class="pf-form__wide pf-facts">
+        <div><dt>Cliente desde</dt><dd>{{ date(c.fecha_inicio) }}</dd></div>
+        <div><dt>Último pago</dt><dd>{{ date(c.ultimo_pago) }}</dd></div>
+        <div><dt>Productos</dt><dd>{{ c.productos | number }}</dd></div>
+        <div><dt>Ventas del mes</dt><dd>RD$ {{ c.ventas_mes | number:'1.2-2' }}</dd></div>
+        <div><dt>Contratos vigentes</dt><dd><a routerLink="/plataforma/contratos" [queryParams]="{ empresa: c.id }">{{ c.contratos_vigentes ?? 0 }}{{ c.contrato_vence ? ' · vence ' + date(c.contrato_vence) : '' }}</a></dd></div>
+        <div><dt>Equipos</dt><dd><a routerLink="/plataforma/instalaciones" [queryParams]="{ empresa: c.id }">{{ c.equipos ?? 0 }}</a></dd></div>
+        <div><dt>Última visita</dt><dd><a routerLink="/plataforma/instalaciones" [queryParams]="{ empresa: c.id, vista: 'visitas' }">{{ date(c.ultima_visita) }}</a></dd></div>
+      </dl>
+      <div class="pf-form__wide pf-form__actions"><button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : 'Guardar suscripción' }}</button></div>
+    </form>
+
+    <ng-container *ngIf="tab === 'pagos'">
+      <form class="pf-form pf-form--pay" (ngSubmit)="registerPayment()">
+        <label>Fecha<input name="pfecha" type="date" [(ngModel)]="payment.fecha" required></label>
+        <label>Meses<input name="pmeses" type="number" min="1" max="36" [(ngModel)]="payment.meses" (ngModelChange)="onMonthsChange()" required></label>
+        <label>Monto (RD$)<input name="pmonto" type="number" min="0.01" step="0.01" [(ngModel)]="payment.monto" required></label>
+        <label>Forma de pago<select name="pforma" [(ngModel)]="payment.forma_pago"><option *ngFor="let m of paymentMethods">{{ m }}</option></select></label>
+        <label>Referencia<input name="pref" type="text" [(ngModel)]="payment.referencia" placeholder="No. transferencia, cheque…"></label>
+        <label>Notas<input name="pnotas" type="text" [(ngModel)]="payment.notas"></label>
+        <div class="pf-form__wide pf-form__actions">
+          <small>El pago extiende la suscripción {{ payment.meses }} mes(es) desde el vencimiento actual (o desde hoy si venció hace más de {{ c.dias_gracia ?? 5 }} días).</small>
+          <button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Registrando…' : 'Registrar pago' }}</button>
+        </div>
+      </form>
+      <table class="pf__table pf__table--compact">
+        <thead><tr><th>Recibo</th><th>Fecha</th><th>Período</th><th class="num">Monto</th><th>Forma</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let p of payments" [class.is-void]="p.estado === 'Anulado'">
+            <td><b>{{ p.numero }}</b><small *ngIf="p.estado === 'Anulado'">Anulado: {{ p.motivo_anulacion }}</small></td>
+            <td>{{ date(p.fecha) }}</td>
+            <td>{{ date(p.periodo_desde) }} – {{ date(p.periodo_hasta) }}</td>
+            <td class="num">{{ p.monto | number:'1.2-2' }}</td>
+            <td>{{ p.forma_pago }}<small *ngIf="p.referencia">{{ p.referencia }}</small></td>
+            <td class="pf__row-actions">
+              <button type="button" (click)="print(p)">Imprimir</button>
+              <button type="button" *ngIf="p.estado === 'Activo'" class="is-danger" (click)="voidPayment(p)">Anular</button>
+            </td>
+          </tr>
+          <tr *ngIf="!payments.length"><td colspan="6" class="pf__empty">Sin pagos registrados.</td></tr>
+        </tbody>
+      </table>
+    </ng-container>
+
+    <table *ngIf="tab === 'usuarios'" class="pf__table pf__table--compact">
+      <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let u of users"><td><b>{{ u.idusuario }}</b><small>{{ u.nombre_completo }}</small></td><td>{{ u.rol }}</td><td>{{ u.estado }}</td>
+          <td>{{ u.ultimo_acceso_en ? (u.ultimo_acceso_en | date:'dd/MM/yyyy h:mm a') : 'Nunca' }}</td></tr>
+        <tr *ngIf="!users.length"><td colspan="4" class="pf__empty">Esta empresa no tiene usuarios. Créalos en Configuración → Usuarios.</td></tr>
+      </tbody>
+    </table>
+
+    <table *ngIf="tab === 'sucursales'" class="pf__table pf__table--compact">
+      <thead><tr><th>#</th><th>Sucursal</th><th>Ciudad</th><th>Teléfono</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let b of branches"><td>{{ b.idsucursal }}</td><td><b>{{ b.nombresucursal }}</b></td><td>{{ b.ciudad || '—' }}</td><td>{{ b.telefono || '—' }}</td><td>{{ b.estado }}</td></tr>
+        <tr *ngIf="!branches.length"><td colspan="5" class="pf__empty">Sin sucursales.</td></tr>
+      </tbody>
+    </table>
+  </aside>
+</div>

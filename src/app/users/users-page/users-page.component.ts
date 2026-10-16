@@ -6,6 +6,7 @@ import { UserRecord, UserFormModel, Company } from '../../app.models';
 import { CompaniesService } from '../../core/services/companies/companies.service';
 import { UsersService } from '../../core/services/users/users.service';
 import { BranchesService } from '../../core/services/branches/branches.service';
+import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-users-page',
@@ -44,6 +45,35 @@ export class UsersPageComponent implements OnInit {
 
   ngOnInit(): void {
     void this.loadInitialData();
+  }
+
+  async changeUserPassword(user: UserRecord | null): Promise<void> {
+    if (!user) return;
+    const { value } = await Swal.fire({
+      title: 'Cambiar clave',
+      html: `<p style="margin:0 0 10px">Nueva clave para <b>${(user.fullName || user.username || '').replace(/[<>&"]/g, '')}</b></p>
+        <input id="newPass1" type="password" class="swal2-input" placeholder="Nueva clave (mínimo 6)" autocomplete="new-password">
+        <input id="newPass2" type="password" class="swal2-input" placeholder="Repite la clave" autocomplete="new-password">`,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Guardar clave',
+      cancelButtonText: 'Cancelar',
+      didOpen: () => (document.getElementById('newPass1') as HTMLInputElement | null)?.focus(),
+      preConfirm: () => {
+        const a = (document.getElementById('newPass1') as HTMLInputElement).value;
+        const b = (document.getElementById('newPass2') as HTMLInputElement).value;
+        if (a.length < 6) { Swal.showValidationMessage('La clave debe tener al menos 6 caracteres.'); return false; }
+        if (a !== b) { Swal.showValidationMessage('Las dos claves no coinciden.'); return false; }
+        return a;
+      }
+    });
+    if (!value) return;
+    try {
+      await this.usersService.changePassword(user.id, value as string);
+      await Swal.fire({ icon: 'success', title: 'Clave cambiada', text: `${user.fullName || user.username} ya puede entrar con la clave nueva.`, timer: 2500, showConfirmButton: false });
+    } catch (error) {
+      await Swal.fire({ icon: 'error', title: 'No se pudo cambiar la clave', text: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   get selectedUser(): UserRecord | null {

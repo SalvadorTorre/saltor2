@@ -33,12 +33,14 @@ export class CompanyPrintSettingsService {
     if (!companyId) throw new Error('No se identificó la empresa activa.');
 
     const value = this.normalize(paper);
-    const { error } = await this.supabase.client
+    const { data, error } = await this.supabase.client
       .from('empresas')
       .update({ tipo_papel_impresion: value })
-      .eq('id', companyId);
+      .eq('id', companyId)
+      .select('id');
 
     if (error) throw error;
+    if (!data?.length) throw new Error('No se guardó el tipo de papel: solo un administrador de la empresa puede cambiarlo.');
     this.cachedPaper = value;
   }
 

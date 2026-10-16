@@ -14,14 +14,14 @@ interface ProductRow {
   tipo: string | null;
   tamano: string | null;
   existencia: number | string | null;
-  existencia_minima: number | string | null;
+  existenciamin: number | string | null;
   costo: number | string | null;
   precio_venta: number | string | null;
   precio_minimo: number | string | null;
   ventaxmayor: 'S' | 'N' | null;
   precio_mayor: number | string | null;
-  cantidad_minima_venta: number | string | null;
-  cantidad_minima_mayor: number | string | null;
+  cantidadminventa: number | string | null;
+  cantidadxmayor: number | string | null;
   reemplazo: 'S' | 'N' | null;
   codigo_reemplazo: string | null;
   exento_itbis: boolean | null;
@@ -116,7 +116,7 @@ export class ProductsService {
   async updateProduct(id: number, form: ProductFormModel): Promise<ProductRecord> {
     const { data, error } = await this.supabase.client
       .from(this.table)
-      .update(this.toRow(form))
+      .update(this.toUpdateRow(form))
       .eq('id', id)
       .select('*')
       .single();
@@ -233,21 +233,31 @@ export class ProductsService {
       type: row.tipo ?? '',
       size: row.tamano ?? '',
       stock: Number(row.existencia ?? 0),
-      minimumStock: Number(row.existencia_minima ?? 0),
+      minimumStock: Number(row.existenciamin ?? 0),
       cost: Number(row.costo ?? 0),
       salePrice: Number(row.precio_venta ?? 0),
       minimumPrice: Number(row.precio_minimo ?? 0),
       wholesaleEnabled: row.ventaxmayor === 'S',
       wholesalePrice: Number(row.precio_mayor ?? 0),
-      minimumSaleQuantity: Number(row.cantidad_minima_venta ?? 1),
-      minimumWholesaleQuantity: Number(row.cantidad_minima_mayor ?? 0),
-      replacementEnabled: row.reemplazo === 'S' || Boolean(row.codigo_reemplazo),
+      minimumSaleQuantity: Number(row.cantidadminventa ?? 1),
+      minimumWholesaleQuantity: Number(row.cantidadxmayor ?? 0),
+      replacementEnabled: row.reemplazo === 'S',
       replacementCode: row.codigo_reemplazo ?? '',
       exemptItbis: Boolean(row.exento_itbis),
       taxValue: Number(row.valor_impuesto ?? 0),
       status: row.estado,
       imageUrl: row.url_imagen ?? undefined
     };
+  }
+
+  /**
+   * Al editar no se envía la existencia: solo cambia por ventas, entradas o
+   * ajustes (queda en el kardex).  Enviarla pisaba las ventas hechas mientras
+   * el formulario estaba abierto.
+   */
+  private toUpdateRow(form: ProductFormModel): Omit<ProductRow, 'id' | 'existencia'> {
+    const { existencia: _stock, ...row } = this.toRow(form);
+    return row;
   }
 
   private toRow(form: ProductFormModel): Omit<ProductRow, 'id'> {
@@ -261,14 +271,14 @@ export class ProductsService {
       tipo: form.type.trim() || null,
       tamano: form.size.trim() || null,
       existencia: Number(form.stock || 0),
-      existencia_minima: Number(form.minimumStock || 0),
+      existenciamin: Number(form.minimumStock || 0),
       costo: Number(form.cost || 0),
       precio_venta: Number(form.salePrice || 0),
       precio_minimo: Number(form.minimumPrice || 0),
       ventaxmayor: form.wholesaleEnabled ? 'S' : 'N',
       precio_mayor: form.wholesaleEnabled ? Number(form.wholesalePrice || 0) : 0,
-      cantidad_minima_venta: Math.max(1, Number(form.minimumSaleQuantity || 1)),
-      cantidad_minima_mayor: form.wholesaleEnabled ? Number(form.minimumWholesaleQuantity || 0) : 0,
+      cantidadminventa: Math.max(1, Number(form.minimumSaleQuantity || 1)),
+      cantidadxmayor: form.wholesaleEnabled ? Number(form.minimumWholesaleQuantity || 0) : 0,
       reemplazo: form.replacementEnabled ? 'S' : 'N',
       codigo_reemplazo: form.replacementEnabled ? form.replacementCode.trim() || null : null,
       exento_itbis: Boolean(form.exemptItbis),

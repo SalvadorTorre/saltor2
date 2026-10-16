@@ -1,4 +1,4 @@
-<section class="dashboard-content product-content" *ngIf="activeView === 'products'">
+<section class="dashboard-content product-content">
   <div class="dashboard-header company-header">
     <div>
       <h2>Inventario</h2>
@@ -142,7 +142,7 @@
             <label class="field product-field--brand"><span>Marca</span><input type="text" name="productBrand" [(ngModel)]="productForm.brand" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field product-field--type"><span>Tipo</span><input type="text" name="productType" [(ngModel)]="productForm.type" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field product-field--size"><span>Tamano</span><input type="text" name="productSize" [(ngModel)]="productForm.size" (keydown.enter)="focusNextProductField($event)" /></label>
-            <label class="field product-field--stock"><span>Existencia</span><input type="number" name="productStock" [(ngModel)]="productForm.stock" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field product-field--stock"><span>Existencia</span><input type="number" name="productStock" [(ngModel)]="productForm.stock" [readonly]="productEditorMode !== 'create'" [title]="productEditorMode !== 'create' ? 'La existencia se cambia con un ajuste en Kardex' : ''" (keydown.enter)="focusNextProductField($event)" /><small *ngIf="productEditorMode !== 'create'" class="product-stock-hint">Para cambiarla usa un ajuste en Kardex.</small></label>
             <label class="field product-field--minimum-stock"><span>Existencia minima</span><input type="number" name="productMinimumStock" [(ngModel)]="productForm.minimumStock" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field product-field--cost"><span>Costo</span><input type="number" name="productCost" [(ngModel)]="productForm.cost" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field product-field--sale-price"><span>Precio ventas</span><input type="number" name="productSalePrice" [(ngModel)]="productForm.salePrice" (keydown.enter)="focusNextProductField($event)" /></label>

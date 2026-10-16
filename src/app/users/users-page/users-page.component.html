@@ -65,6 +65,7 @@
               </button>
               <div class="company-options__menu" *ngIf="openUserOptionsId === user.id">
                 <button class="company-options__item" type="button" (click)="selectUser(user)">Editar</button>
+                <button class="company-options__item" type="button" (click)="changeUserPassword(user)">Cambiar clave</button>
                 <button class="company-options__item company-options__item--danger" type="button" (click)="deleteUser(user)">Eliminar</button>
               </div>
             </div>
@@ -77,7 +78,7 @@
       <div class="panel__header company-panel-header">
         <div>
           <h3>{{ userEditorMode === 'create' ? 'Agregar usuario' : 'Editar usuario' }}</h3>
-          <p>{{ userMessage }}</p>
+          <p>Datos personales, acceso, empresa y permisos.</p>
         </div>
         <div class="company-form__chip">{{ userEditorMode === 'create' ? 'Nuevo registro' : 'Modo edicion' }}</div>
       </div>
@@ -91,7 +92,7 @@
           </div>
         </div>
 
-        <div class="user-step-card">
+        <div class="user-step-card user-step-card--personal">
           <div class="user-step-card__header">
             <div class="user-step-card__badge">1</div>
             <h3>Informacion Personal</h3>
@@ -142,7 +143,7 @@
           </div>
         </div>
 
-        <div class="user-step-card">
+        <div class="user-step-card user-step-card--access">
           <div class="user-step-card__header">
             <div class="user-step-card__badge">2</div>
             <h3>Clave de Acceso</h3>
@@ -155,7 +156,7 @@
                 <span class="input-shell__icon">*</span>
                 <input type="password" name="userPassword" [(ngModel)]="userForm.password" [disabled]="userEditorMode === 'edit'" [required]="userEditorMode === 'create'" [placeholder]="userEditorMode === 'create' ? 'Mínimo 6 caracteres' : 'La clave se conserva sin cambios'" />
               </div>
-              <small>{{ userEditorMode === 'create' ? 'La clave se guarda de forma protegida en Supabase Auth.' : 'Por seguridad, la clave no se muestra ni se modifica desde esta pantalla.' }}</small>
+              <small>{{ userEditorMode === 'create' ? 'La clave se guarda de forma protegida en Supabase Auth.' : 'Por seguridad, la clave no se muestra. Para poner una nueva usa el botón «Cambiar clave».' }}</small>
             </label>
 
             <label class="field field--icon" *ngIf="userEditorMode === 'create'">
@@ -169,7 +170,7 @@
           </div>
         </div>
 
-        <div class="user-step-card">
+        <div class="user-step-card user-step-card--company">
           <div class="user-step-card__header">
             <div class="user-step-card__badge">3</div>
             <h3>Asignacion de Empresa y Sucursal</h3>
@@ -200,7 +201,7 @@
           </div>
         </div>
 
-        <div class="user-step-card">
+        <div class="user-step-card user-step-card--role">
           <div class="user-step-card__header">
             <div class="user-step-card__badge">4</div>
             <h3>Tipo de Usuario</h3>
@@ -282,6 +283,7 @@
 
         <div class="company-detail-card__actions">
           <button class="secondary-action" type="button" (click)="selectUser(selected)">Modificar datos</button>
+          <button class="secondary-action" type="button" (click)="changeUserPassword(selected)">Cambiar clave</button>
           <button class="ghost-action" type="button" (click)="toggleSelectedUserStatus()">
             {{ selected.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario' }}
           </button>

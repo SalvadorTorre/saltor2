@@ -1,0 +1,162 @@
+<section class="fp">
+  <header class="fp__header">
+    <div>
+      <p class="fp__eyebrow">Contabilidad</p>
+      <h2>Panel fiscal</h2>
+      <span>Alertas de comprobantes y certificado, estado de los e-CF ante la DGII y resumen de ITBIS del mes.</span>
+    </div>
+    <div class="fp__month">
+      <button type="button" (click)="shiftMonth(-1)" aria-label="Mes anterior">‹</button>
+      <label><span>Período</span><input type="month" [(ngModel)]="month" (change)="load()"></label>
+      <button type="button" (click)="shiftMonth(1)" [disabled]="isCurrentMonth" aria-label="Mes siguiente">›</button>
+    </div>
+  </header>
+
+  <p class="fp__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p class="fp__loading" *ngIf="isLoading && !data">Cargando…</p>
+
+  <ng-container *ngIf="data as d">
+    <div [class.fp__dim]="isLoading">
+      <!-- Alertas -->
+      <section class="fp__card">
+        <div class="fp__card-head">
+          <h3>Alertas</h3>
+          <div class="fp__pills">
+            <span class="fp__pill fp__pill--danger" *ngIf="alertCounts.danger">{{ alertCounts.danger }} urgente(s)</span>
+            <span class="fp__pill fp__pill--warn" *ngIf="alertCounts.warn">{{ alertCounts.warn }} por atender</span>
+          </div>
+        </div>
+        <ul class="fp__alerts" *ngIf="alerts.length; else allGood">
+          <li *ngFor="let alert of alerts" [class]="'fp__alert fp__alert--' + alert.severity">
+            <i>{{ alert.severity === 'danger' ? '!' : alert.severity === 'warn' ? '▲' : 'i' }}</i>
+            <div><strong>{{ alert.title }}</strong><span>{{ alert.detail }}</span></div>
+            <a *ngIf="alert.link" [routerLink]="alert.link">Ir</a>
+          </li>
+        </ul>
+        <ng-template #allGood><p class="fp__ok">✓ Todo en orden: secuencias, certificado y envíos a la DGII sin pendientes.</p></ng-template>
+      </section>
+
+      <!-- Resumen ITBIS (IT-1) -->
+      <section class="fp__card">
+        <div class="fp__card-head"><h3>Resumen de ITBIS · {{ monthLabel }}</h3><small>Base para el formulario IT-1</small></div>
+        <div class="fp__it1">
+          <div class="fp__it1-col">
+            <h4>Ventas ({{ d.it1.facturas }} facturas)</h4>
+            <dl>
+              <div><dt>Ventas gravadas (sin ITBIS)</dt><dd>{{ money(d.it1.ventas_gravadas) }}</dd></div>
+              <div><dt>Ventas exentas</dt><dd>{{ money(d.it1.ventas_exentas) }}</dd></div>
+              <div><dt>ITBIS facturado 18%</dt><dd>{{ money(d.it1.itbis_18) }}</dd></div>
+              <div *ngIf="d.it1.itbis_16"><dt>ITBIS facturado 16%</dt><dd>{{ money(d.it1.itbis_16) }}</dd></div>
+              <div class="fp__sub"><dt>Notas de crédito ({{ d.it1.nc_cantidad }})</dt><dd>− {{ money(d.it1.itbis_nc) }}</dd></div>
+              <div class="fp__total"><dt>ITBIS de ventas neto</dt><dd>{{ money(d.it1.itbis_ventas - d.it1.itbis_nc) }}</dd></div>
+            </dl>
+          </div>
+          <div class="fp__it1-col">
+            <h4>Compras ({{ d.it1.compras_cantidad }} en el 606)</h4>
+            <dl>
+              <div><dt>Compras (sin ITBIS)</dt><dd>{{ money(d.it1.compras_neto) }}</dd></div>
+              <div><dt>ITBIS pagado en compras</dt><dd>{{ money(d.it1.itbis_compras) }}</dd></div>
+              <div class="fp__muted"><dt>Gastos menores (E43)</dt><dd>{{ money(d.it1.gastos_menores_total) }}</dd></div>
+              <div class="fp__muted"><dt>ITBIS en gastos menores</dt><dd>{{ money(d.it1.gastos_menores_itbis) }}</dd></div>
+            </dl>
+          </div>
+          <div class="fp__it1-result" [class.is-credit]="d.it1.itbis_neto < 0">
+            <span>{{ d.it1.itbis_neto >= 0 ? 'ITBIS estimado a pagar' : 'Saldo a favor estimado' }}</span>
+            <strong>{{ money(d.it1.itbis_neto < 0 ? -d.it1.itbis_neto : d.it1.itbis_neto) }}</strong>
+            <small>ITBIS ventas − notas de crédito − ITBIS compras (606)</small>
+          </div>
+        </div>
+        <div class="fp__table-wrap" *ngIf="d.it1.por_tipo.length">
+          <table class="fp__compact">
+            <thead><tr><th>Tipo de comprobante</th><th class="n">Cantidad</th><th class="n">Monto sin ITBIS</th><th class="n">ITBIS</th><th class="n">Total</th></tr></thead>
+            <tbody><tr *ngFor="let row of d.it1.por_tipo"><td>{{ row.tipo }}</td><td class="n">{{ row.cantidad }}</td><td class="n">{{ money(row.neto) }}</td><td class="n">{{ money(row.itbis) }}</td><td class="n">{{ money(row.total) }}</td></tr></tbody>
+          </table>
+        </div>
+        <p class="fp__note" *ngIf="d.it1.facturas_no_aceptadas">⚠ {{ d.it1.facturas_no_aceptadas }} factura(s) del mes no están aceptadas por la DGII; están incluidas en las ventas pero el 607 y la declaración deben cuadrar con lo aceptado.</p>
+        <p class="fp__hint">Cálculo orientativo: no incluye saldos a favor anteriores, retenciones de terceros, proporcionalidad ni otros ajustes del IT-1. Confírmalo con tu contador antes de declarar.</p>
+      </section>
+
+      <div class="fp__grid">
+        <!-- Estado e-CF -->
+        <section class="fp__card">
+          <div class="fp__card-head"><h3>e-CF de {{ monthLabel }}</h3></div>
+          <div class="fp__table-wrap">
+            <table class="fp__compact">
+              <thead><tr><th>Documento</th><th class="n">Total</th><th class="n">Aceptados</th><th class="n">Rechaz.</th><th class="n">En proceso</th><th class="n">Sin enviar</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let row of d.ecf_resumen">
+                  <td>{{ row.tipo_doc }}<div class="fp__meter"><span [style.width.%]="acceptedPct(row)"></span></div></td>
+                  <td class="n">{{ row.total }}</td>
+                  <td class="n fp__c-ok">{{ row.aceptados + row.condicionales }}</td>
+                  <td class="n" [class.fp__c-bad]="row.rechazados">{{ row.rechazados }}</td>
+                  <td class="n">{{ row.en_proceso }}</td>
+                  <td class="n" [class.fp__c-warn]="row.sin_enviar">{{ row.sin_enviar }}</td>
+                </tr>
+                <tr *ngIf="!d.ecf_resumen.length"><td colspan="6" class="fp__empty">Sin comprobantes en el mes.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Certificado y retenciones -->
+        <section class="fp__card">
+          <div class="fp__card-head"><h3>Certificado y retenciones</h3></div>
+          <dl class="fp__facts">
+            <div><dt>Ambiente DGII</dt><dd><span class="fp__state" [class.is-warn]="(d.ambiente || '').toUpperCase() !== 'PROD'" [class.is-ok]="(d.ambiente || '').toUpperCase() === 'PROD'">{{ d.ambiente || 'Sin configurar' }}</span></dd></div>
+            <div><dt>Certificado</dt><dd>{{ d.certificado?.titular || 'No cargado' }}</dd></div>
+            <div *ngIf="d.certificado?.valido_hasta"><dt>Vence</dt><dd [class.fp__c-bad]="(d.certificado?.dias_restantes ?? 0) <= 30">{{ formatDate(d.certificado?.valido_hasta) }} ({{ d.certificado?.dias_restantes }} días)</dd></div>
+            <div><dt>Compras informales E41</dt><dd>{{ d.retenciones.comprobantes }} · {{ money(d.retenciones.monto_compras) }}</dd></div>
+            <div><dt>ITBIS retenido (E41)</dt><dd>{{ money(d.retenciones.retencion_itbis) }}</dd></div>
+            <div><dt>ISR retenido (E41) · IR-17</dt><dd>{{ money(d.retenciones.retencion_isr) }}</dd></div>
+          </dl>
+        </section>
+      </div>
+
+      <!-- Secuencias -->
+      <section class="fp__card">
+        <div class="fp__card-head"><h3>Secuencias de comprobantes</h3><a routerLink="/contabilidad/e-ncf" class="fp__link">Administrar</a></div>
+        <div class="fp__seqs">
+          <article *ngFor="let s of d.secuencias" class="fp__seq"
+                   [class.is-bad]="s.restantes <= 0 || (s.dias_para_vencer !== null && s.dias_para_vencer <= 30)"
+                   [class.is-warn]="s.pct_usado >= s.porcentaje_alerta">
+            <header><b>{{ s.serie }}</b><span>{{ shortType(s.tipo_ncf) }}</span></header>
+            <div class="fp__meter fp__meter--big"><span [style.width.%]="s.pct_usado"></span></div>
+            <p><strong>{{ s.restantes }}</strong> disponibles de {{ s.total }} ({{ s.pct_usado }}% usado)</p>
+            <small>Vence {{ s.fecha_vencimiento || '—' }}<ng-container *ngIf="s.dias_para_vencer !== null"> · {{ s.dias_para_vencer }} días</ng-container></small>
+          </article>
+          <p class="fp__empty" *ngIf="!d.secuencias.length">No hay secuencias registradas.</p>
+        </div>
+      </section>
+
+      <!-- Pendientes -->
+      <section class="fp__card">
+        <div class="fp__card-head">
+          <h3>Comprobantes no aceptados <small>(todas las fechas)</small></h3>
+          <div class="fp__filters">
+            <select [(ngModel)]="pendingType"><option value="all">Todos los documentos</option><option *ngFor="let t of pendingTypes" [value]="t">{{ t }}</option></select>
+            <select [(ngModel)]="pendingState"><option value="all">Todos los estados</option><option value="Rechazado">Rechazado</option><option value="Sin enviar">Sin enviar</option><option value="En proceso">En proceso</option></select>
+            <button type="button" class="fp__btn" (click)="exportPending()" [disabled]="!pending.length">Exportar Excel (CSV)</button>
+          </div>
+        </div>
+        <div class="fp__table-wrap">
+          <table>
+            <thead><tr><th>Documento</th><th>Número / e-NCF</th><th>Fecha</th><th>Cliente / tercero</th><th class="n">Total</th><th>Estado</th><th>Mensaje DGII</th><th></th></tr></thead>
+            <tbody>
+              <tr *ngFor="let p of pending">
+                <td>{{ p.tipo_doc }}</td>
+                <td>{{ p.numero }}<small>{{ p.encf || 'sin e-NCF' }}</small></td>
+                <td>{{ formatDate(p.fecha) }}<small>hace {{ p.dias }} día(s)</small></td>
+                <td>{{ p.tercero || '—' }}</td>
+                <td class="n">{{ money(p.total) }}</td>
+                <td><span class="fp__state" [ngClass]="stateClass(p.estado)">{{ p.estado }}</span></td>
+                <td class="fp__msg" [title]="p.mensaje || ''">{{ p.mensaje || '—' }}</td>
+                <td><a *ngIf="docLinks[p.tipo_doc]" [routerLink]="docLinks[p.tipo_doc]" class="fp__link">Abrir</a></td>
+              </tr>
+              <tr *ngIf="!pending.length"><td colspan="8" class="fp__empty">No hay comprobantes pendientes. 🎉</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </ng-container>
+</section>

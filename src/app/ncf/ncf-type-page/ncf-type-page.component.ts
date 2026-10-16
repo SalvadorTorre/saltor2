@@ -13,7 +13,6 @@ import { NcfTypesService } from '../../core/services/ncf-types/ncf-types.service
   styleUrls: ['./ncf-type-page.component.scss']
 })
 export class NcfTypePageComponent implements OnInit {
-  activeView = 'ncf_type';
   searchTerm = '';
   message = 'Consulta, crea y edita los tipos de comprobantes fiscales (e-NCF) del sistema.';
   editorMode: 'create' | 'edit' = 'create';

@@ -1,0 +1,107 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Instalador local</h2>
+      <span>Genera el paquete para instalar SaltorSystem en el servidor de un cliente y usarlo en su red local, sin depender de internet.</span>
+    </div>
+  </header>
+
+  <div class="li">
+    <form class="li__form" (ngSubmit)="generate()" autocomplete="off">
+      <fieldset [disabled]="isBuilding">
+        <h3>Cliente</h3>
+        <div class="pf-form">
+          <label class="pf-form__wide">Nombre de la empresa *<input name="cliente" [(ngModel)]="form.cliente" placeholder="Ej. Farmacia Central SRL" required></label>
+          <label>RNC / cédula *<input name="rnc" [(ngModel)]="form.rnc" placeholder="101000000" required></label>
+          <label>Teléfono<input name="telefono" [(ngModel)]="form.telefono" placeholder="809-000-0000"></label>
+          <label class="pf-form__wide">Correo de la empresa<input name="correoEmpresa" type="email" [(ngModel)]="form.correoEmpresa" placeholder="Si lo dejas vacío se usa el del dueño"></label>
+        </div>
+
+        <h3>Usuario dueño del sistema (ROOT)</h3>
+        <div class="pf-form">
+          <label>Correo *<input name="rootCorreo" type="email" [(ngModel)]="form.rootCorreo" required></label>
+          <label>Usuario de acceso *<input name="rootUsuario" [(ngModel)]="form.rootUsuario" required></label>
+          <label>Nombre<input name="rootNombre" [(ngModel)]="form.rootNombre"></label>
+          <label>Contraseña *
+            <span class="li__secret">
+              <input name="rootPassword" [type]="showPasswords ? 'text' : 'password'" [(ngModel)]="form.rootPassword" required>
+              <button type="button" title="Generar otra" (click)="regenerate('rootPassword')">⟳</button>
+            </span>
+          </label>
+          <label class="pf-form__wide">Contraseña de Postgres *
+            <span class="li__secret">
+              <input name="postgresPassword" [type]="showPasswords ? 'text' : 'password'" [(ngModel)]="form.postgresPassword" required>
+              <button type="button" title="Generar otra" (click)="regenerate('postgresPassword')">⟳</button>
+            </span>
+          </label>
+          <label class="li__check pf-form__wide"><input type="checkbox" name="showPasswords" [(ngModel)]="showPasswords"> Mostrar contraseñas</label>
+        </div>
+
+        <h3>Licencia</h3>
+        <div class="pf-form">
+          <div class="pf__chips pf-form__wide">
+            <button type="button" [class.is-active]="form.licencia === 'Activa'" (click)="setLicense('Activa')">Activa</button>
+            <button type="button" [class.is-active]="form.licencia === 'Prueba'" (click)="setLicense('Prueba')">Prueba</button>
+          </div>
+          <label>{{ form.licencia === 'Activa' ? 'Pagada hasta' : 'Prueba hasta' }} *<input name="licenciaHasta" type="date" [(ngModel)]="form.licenciaHasta" required></label>
+          <label>Plan
+            <select name="plan" [(ngModel)]="form.plan">
+              <option value="">Primer plan activo</option>
+              <option *ngFor="let p of plans" [value]="p.nombre">{{ p.nombre }}</option>
+            </select>
+          </label>
+        </div>
+
+        <h3>Red</h3>
+        <div class="pf-form">
+          <label>Puerto web *<input name="puertoWeb" type="number" min="1" max="65535" [(ngModel)]="form.puertoWeb"></label>
+          <label>Puerto de Postgres<input name="puertoPostgres" type="number" min="1" max="65535" [(ngModel)]="form.puertoPostgres" [disabled]="!form.exponerPostgres"></label>
+          <label class="li__check pf-form__wide"><input type="checkbox" name="exponerPostgres" [(ngModel)]="form.exponerPostgres"> Permitir conexión directa a Postgres desde la red (solo para soporte)</label>
+        </div>
+
+        <button type="button" class="li__toggle" (click)="showAdvanced = !showAdvanced">{{ showAdvanced ? '▾' : '▸' }} Opciones avanzadas: firma de QZ Tray</button>
+        <div class="pf-form" *ngIf="showAdvanced">
+          <label class="pf-form__wide">Certificado QZ (digital-certificate.txt)<textarea name="qzCertificado" rows="4" [(ngModel)]="form.qzCertificado" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+          <label class="pf-form__wide">Llave privada QZ (private-key.pem)<textarea name="qzLlave" rows="4" [(ngModel)]="form.qzLlave" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></label>
+        </div>
+      </fieldset>
+
+      <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+      <div class="li__progress" *ngIf="isBuilding">
+        <div class="li__bar"><span [style.width.%]="progressPct"></span></div>
+        <small>{{ progress }}</small>
+      </div>
+
+      <div class="li__done" *ngIf="result">
+        <b>Paquete descargado: {{ result.nombre }}</b>
+        <small>{{ result.archivos }} archivos · {{ size(result.bytes) }}. Guárdalo en un lugar seguro: el archivo .env tiene las contraseñas de esta instalación.</small>
+      </div>
+
+      <button type="submit" class="pf__btn li__submit" [disabled]="isBuilding">{{ isBuilding ? 'Generando…' : '⬇ Generar paquete' }}</button>
+    </form>
+
+    <aside class="li__help">
+      <h3>Después de descargar</h3>
+      <ol>
+        <li>Copia el .zip a la PC servidor del cliente y descomprímelo (ej. <code>C:\SaltorSystem</code>).</li>
+        <li>Instala y abre <b>Docker Desktop</b>.</li>
+        <li>Ejecuta <code>instalar.bat</code> como administrador. La primera vez descarga ~1.5 GB, así que necesita internet.</li>
+        <li>Se abre <code>http://localhost:{{ form.puertoWeb }}</code>. Entra con el usuario <b>{{ form.rootUsuario || '…' }}</b> y la contraseña ROOT.</li>
+        <li>Las demás PCs entran por <code>http://IP-DEL-SERVIDOR:{{ form.puertoWeb }}</code>, sin instalar nada.</li>
+      </ol>
+
+      <h3>Qué incluye</h3>
+      <ul>
+        <li>La base de datos con el esquema actual de SaltorSystem (tablas, funciones, seguridad y catálogos), sin datos de otras empresas.</li>
+        <li>La empresa del cliente, con su sucursal PRINCIPAL y su licencia.</li>
+        <li>El sistema web en su versión actual y las funciones (inicio de sesión, usuarios, e-CF, RNC, QZ).</li>
+        <li>Los scripts <code>instalar</code>, <code>iniciar</code>, <code>detener</code> y <code>respaldo</code>.</li>
+      </ul>
+
+      <h3>Sin internet</h3>
+      <p>Facturar, cobrar, manejar caja, inventario y reportes funciona sin internet. El envío de e-CF a la DGII y la consulta de RNC sí lo necesitan.</p>
+    </aside>
+  </div>
+</section>

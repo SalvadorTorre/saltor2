@@ -25,3 +25,19 @@
 .sales-report__results { overflow: hidden; }.sales-report__results-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid #e5ebf3; }.sales-report__results h3 { color: #1d2c46; }.sales-report__results h3 span { color: #94a3b8; font-weight: 500; }.sales-report__export-actions { display: flex; flex-wrap: wrap; gap: 8px; }.sales-report__results-header button:disabled { cursor: not-allowed; opacity: .5; }.sales-report__table-wrap { overflow-x: auto; }.sales-report table { width: 100%; min-width: 900px; border-collapse: collapse; }.sales-report th { padding: 16px 24px; background: #f5f8fc; color: #53657e; font-size: 16px; font-weight: 750; letter-spacing: .02em; text-align: left; text-transform: uppercase; white-space: nowrap; }.sales-report td { padding: 18px 24px; border-top: 1px solid #e8eef5; color: #63728a; font-size: 18px; }.sales-report td.product { color: #202d45; font-weight: 700; }.sales-report .numeric { text-align: right; }.sales-report td.total { color: #07877d; font-weight: 750; }.sales-report .category { display: inline-block; padding: 6px 12px; border-radius: 99px; background: #e4faf6; color: #06867b; font-size: 16px; }.sales-report td.empty { padding: 38px; color: #8492a6; font-size: 18px; text-align: center; }
 @media (max-width: 1024px) { .sales-report__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .sales-report { padding: 0 14px 24px; }.sales-report__header { margin-bottom: 16px; }.sales-report__filters { padding: 18px; }.sales-report__fields, .sales-report__metrics { grid-template-columns: 1fr; }.sales-report__results-header { align-items: flex-start; flex-direction: column; }.sales-report__metrics { margin-top: 20px; }.sales-report__period-buttons button { padding: 9px 12px; } }
+
+/* Con el filtro de producto los campos pasan a 3 columnas (regla :has de
+   arriba, más específica); aquí se adaptan también a pantallas pequeñas. */
+@media (max-width: 1024px) {
+  .sales-report__fields:has(.sales-report__product-field) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .sales-report__fields:has(.sales-report__product-field) { grid-template-columns: 1fr; }
+  .sales-report__header h2 { font-size: 22px; }
+  .sales-report__header p, .sales-report__filter-heading p { font-size: 15px; }
+  .sales-report__actions { flex-wrap: wrap; }
+  .sales-report__actions button { flex: 1 1 auto; }
+  .sales-report__metrics strong { font-size: 24px; }
+  .sales-report th, .sales-report td { padding: 12px 14px; font-size: 15px; }
+}

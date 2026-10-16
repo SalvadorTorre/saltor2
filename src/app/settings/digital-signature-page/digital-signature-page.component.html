@@ -1,0 +1,68 @@
+<section class="dashboard-content standalone-module-content">
+  <div class="dashboard-header company-header">
+    <div>
+      <p class="dashboard-header__eyebrow">Configuración</p>
+      <h2>Firma Digital DGII</h2>
+      <p class="company-header__copy">Certificado de firma digital de la empresa y conexión del servicio de facturación electrónica (e-CF) con la DGII.</p>
+    </div>
+  </div>
+
+  <div class="settings-layout">
+    <section class="panel digital-certificate-panel">
+      <div class="panel__header company-panel-header">
+        <div>
+          <h3>Firma Digital</h3>
+          <p>Sube el certificado de firma digital de la empresa en formato P12 o PFX.</p>
+        </div>
+        <span class="certificate-status" [class.certificate-status--expired]="certificateIsExpired">
+          {{ certificateMetadata ? (certificateIsExpired ? 'Vencido' : 'Activo') : 'Sin certificado' }}
+        </span>
+      </div>
+
+      <div class="certificate-upload-grid">
+        <label class="field">
+          <span>{{ certificateMetadata ? 'Reemplazar certificado (solo si vas a cambiarlo)' : 'Archivo del certificado' }}</span>
+          <input type="file" accept=".p12,.pfx,application/x-pkcs12" (change)="onCertificateFileSelected($event)" />
+          <small class="certificate-current" *ngIf="certificateMetadata">Ya guardado: <b>{{ certificateMetadata.fileName }}</b></small>
+        </label>
+        <label class="field">
+          <span>Contraseña del certificado</span>
+          <input type="password" name="certificatePassword" [(ngModel)]="certificatePassword" autocomplete="new-password" />
+        </label>
+        <div class="certificate-upload-action">
+          <button class="primary-action" type="button" (click)="uploadCertificate()" [disabled]="isUploadingCertificate">
+            {{ isUploadingCertificate ? 'Validando...' : (certificateMetadata ? 'Reemplazar certificado' : 'Cargar certificado') }}
+          </button>
+        </div>
+      </div>
+      <p class="certificate-message">{{ certificateMessage }}</p>
+      <p class="certificate-security-note">La contraseña se usa solo para validar el archivo y no se guarda en el sistema.</p>
+
+      <div class="certificate-details" *ngIf="certificateMetadata; else noCertificate">
+        <div><span>Titular</span><strong>{{ certificateMetadata.holder }}</strong></div>
+        <div><span>Emisor</span><strong>{{ certificateMetadata.issuer }}</strong></div>
+        <div><span>Número de serie</span><strong>{{ certificateMetadata.serialNumber }}</strong></div>
+        <div><span>Válido desde</span><strong>{{ formatCertificateDate(certificateMetadata.validFrom) }}</strong></div>
+        <div><span>Vence el</span><strong>{{ formatCertificateDate(certificateMetadata.validUntil) }}</strong></div>
+        <div><span>Archivo</span><strong>{{ certificateMetadata.fileName }}</strong></div>
+      </div>
+      <ng-template #noCertificate>
+        <div class="certificate-empty" *ngIf="!isLoadingCertificate">Aún no hay un certificado de firma digital registrado para esta empresa.</div>
+      </ng-template>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header company-panel-header">
+        <div><h3>Facturación electrónica DGII</h3><p>Define si los envíos usan el servicio de prueba o producción.</p></div>
+        <span class="certificate-status">{{ ecfConfiguration.ambiente }}</span>
+      </div>
+      <div class="company-form__grid">
+        <label class="field"><span>Ambiente</span><select [(ngModel)]="ecfConfiguration.ambiente"><option value="TEST">TEST</option><option value="PROD">PROD</option></select></label>
+        <label class="field"><span>Tipo de ingreso</span><input type="text" maxlength="2" [(ngModel)]="ecfConfiguration.tipo_ingreso" /></label>
+        <label class="field field--full"><span>URL base del servicio</span><input type="text" [(ngModel)]="ecfConfiguration.url_base" /></label>
+        <label class="field field--full"><span><input type="checkbox" [(ngModel)]="ecfConfiguration.persistir_certificado" /> Permitir persistencia del certificado en el servicio</span></label>
+      </div>
+      <div class="settings-actions"><span>{{ ecfMessage }}</span><button class="primary-action" type="button" (click)="saveEcfConfiguration()">Guardar configuración e-CF</button></div>
+    </section>
+  </div>
+</section>

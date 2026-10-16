@@ -1,0 +1,172 @@
+<section class="cxc">
+  <header class="cxc__header">
+    <div>
+      <p class="cxc__eyebrow">Contabilidad</p>
+      <h2>Cuentas por cobrar</h2>
+      <span>Saldos de las ventas a crédito, cobros recibidos y antigüedad de la deuda.</span>
+    </div>
+    <div class="cxc__header-actions">
+      <button type="button" class="cxc__btn cxc__btn--ghost" [disabled]="isLoading" (click)="load()">{{ isLoading ? 'Actualizando…' : 'Actualizar' }}</button>
+      <button type="button" class="cxc__btn" (click)="openPayment()">Registrar cobro</button>
+    </div>
+  </header>
+
+  <p *ngIf="errorMessage" class="cxc__error">{{ errorMessage }}</p>
+
+  <section class="cxc__kpis" aria-label="Resumen">
+    <article><span>Total por cobrar</span><strong>{{ money(totalReceivable) }}</strong><small>{{ invoices.length }} factura{{ invoices.length === 1 ? '' : 's' }} con saldo</small></article>
+    <article class="cxc__kpi--danger"><span>Vencido</span><strong>{{ money(totalOverdue) }}</strong><small>{{ totalReceivable ? ((totalOverdue / totalReceivable) * 100 | number:'1.0-0') : 0 }}% del total</small></article>
+    <article><span>Clientes con saldo</span><strong>{{ clientsWithBalance }}</strong><small>Con facturas a crédito abiertas</small></article>
+    <article class="cxc__kpi--ok"><span>Cobrado este mes</span><strong>{{ money(collectedThisMonth) }}</strong><small>Recibos activos</small></article>
+  </section>
+
+  <section class="cxc__aging" aria-label="Antigüedad de saldos">
+    <div class="cxc__aging-head"><h3>Antigüedad de saldos</h3><small>Días desde el vencimiento</small></div>
+    <div class="cxc__aging-bar" *ngIf="totalReceivable > 0; else noDebt">
+      <span *ngFor="let b of aging" class="cxc__aging-seg cxc__aging-seg--{{ b.tone }}" [style.width.%]="agingShare(b)" [hidden]="!b.amount" [title]="b.label + ': ' + money(b.amount)"></span>
+    </div>
+    <ng-template #noDebt><p class="cxc__muted">No hay saldos pendientes.</p></ng-template>
+    <ul class="cxc__aging-legend">
+      <li *ngFor="let b of aging"><i class="cxc__dot cxc__dot--{{ b.tone }}"></i><span>{{ b.label }}</span><strong>{{ money(b.amount) }}</strong><small>{{ b.count }} fact.</small></li>
+    </ul>
+  </section>
+
+  <section class="cxc__workspace">
+    <nav class="cxc__tabs" aria-label="Vistas">
+      <button type="button" [class.is-active]="tab === 'clientes'" (click)="tab = 'clientes'">Por cliente</button>
+      <button type="button" [class.is-active]="tab === 'facturas'" (click)="tab = 'facturas'">Facturas pendientes</button>
+      <button type="button" [class.is-active]="tab === 'recibos'" (click)="tab = 'recibos'">Recibos</button>
+    </nav>
+
+    <div class="cxc__toolbar" *ngIf="tab !== 'recibos'">
+      <label class="cxc__search"><span aria-hidden="true">⌕</span><input type="search" [(ngModel)]="search" placeholder="Buscar cliente, documento o factura"></label>
+      <label class="cxc__check"><input type="checkbox" [(ngModel)]="onlyOverdue"> Solo vencidas</label>
+    </div>
+    <div class="cxc__toolbar" *ngIf="tab === 'recibos'">
+      <label class="cxc__search"><span aria-hidden="true">⌕</span><input type="search" [(ngModel)]="receiptSearch" placeholder="Buscar recibo, cliente, referencia o factura"></label>
+    </div>
+
+    <!-- Por cliente -->
+    <div class="cxc__table-wrap" *ngIf="tab === 'clientes'">
+      <table>
+        <thead><tr><th>Cliente</th><th class="n">Facturas</th><th class="n">Saldo</th><th class="n">Vencido</th><th>Mayor atraso</th><th class="n">Límite</th><th class="a">Acciones</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let c of clientSummaries">
+            <td><b>{{ c.name }}</b><small>{{ c.document }}</small></td>
+            <td class="n">{{ c.invoices }}</td>
+            <td class="n"><b>{{ money(c.balance) }}</b></td>
+            <td class="n" [class.cxc__red]="c.overdue > 0">{{ money(c.overdue) }}</td>
+            <td><span class="cxc__pill" [class.cxc__pill--late]="c.maxDaysOverdue > 0">{{ overdueLabel(c.maxDaysOverdue) }}</span></td>
+            <td class="n">{{ c.creditLimit ? money(c.creditLimit) : '—' }}<small *ngIf="c.overLimit" class="cxc__red">Excedido</small></td>
+            <td class="a">
+              <button type="button" class="cxc__link" (click)="printStatement(c.clientId, c.name)">Estado de cuenta</button>
+              <button type="button" class="cxc__link cxc__link--primary" [disabled]="c.clientId == null" (click)="openPayment(c.clientId)">Cobrar</button>
+            </td>
+          </tr>
+          <tr *ngIf="!isLoading && !clientSummaries.length"><td colspan="7" class="cxc__empty">{{ invoices.length ? 'Ningún cliente coincide con el filtro.' : 'No hay facturas a crédito pendientes.' }}</td></tr>
+          <tr *ngIf="isLoading"><td colspan="7" class="cxc__empty">Consultando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Facturas pendientes -->
+    <div class="cxc__table-wrap" *ngIf="tab === 'facturas'">
+      <table>
+        <thead><tr><th>Factura</th><th>Cliente</th><th>Fecha</th><th>Vence</th><th class="n">Total</th><th class="n">Abonado</th><th class="n">Saldo</th><th>Atraso</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let i of filteredInvoices">
+            <td><b>{{ i.invoiceNumber }}</b><small>{{ i.documentType === 'Saldo anterior' ? 'Saldo anterior' : i.ncf }}</small></td>
+            <td>{{ i.clientName }}</td>
+            <td>{{ date(i.date) }}</td>
+            <td>{{ date(i.dueDate) }}</td>
+            <td class="n">{{ money(i.total) }}</td>
+            <td class="n">{{ money(i.paid + i.creditNotes) }}</td>
+            <td class="n"><b>{{ money(i.balance) }}</b></td>
+            <td><span class="cxc__pill" [class.cxc__pill--late]="i.daysOverdue > 0">{{ overdueLabel(i.daysOverdue) }}</span></td>
+          </tr>
+          <tr *ngIf="!isLoading && !filteredInvoices.length"><td colspan="8" class="cxc__empty">No hay facturas pendientes con ese filtro.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Recibos -->
+    <div class="cxc__table-wrap" *ngIf="tab === 'recibos'">
+      <table>
+        <thead><tr><th>Recibo</th><th>Fecha</th><th>Cliente</th><th>Forma de pago</th><th>Facturas</th><th class="n">Monto</th><th>Estado</th><th class="a">Acciones</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let r of filteredReceipts" [class.cxc__voided]="r.status === 'Anulado'">
+            <td><b>{{ r.number }}</b><small>{{ r.userName }}</small></td>
+            <td>{{ date(r.date) }}</td>
+            <td>{{ r.clientName }}</td>
+            <td>{{ methodName(r.paymentCode) }}<small *ngIf="r.reference">{{ r.reference }}</small></td>
+            <td><small *ngFor="let a of r.applications">{{ a.invoiceNumber }} · {{ money(a.amount) }}</small></td>
+            <td class="n"><b>{{ money(r.total) }}</b></td>
+            <td><span class="cxc__pill" [class.cxc__pill--late]="r.status === 'Anulado'">{{ r.status }}</span></td>
+            <td class="a">
+              <button type="button" class="cxc__link" (click)="printReceipt(r)">Imprimir</button>
+              <button type="button" class="cxc__link cxc__link--danger" *ngIf="isAdmin && r.status === 'Activo'" (click)="voidReceipt(r)">Anular</button>
+            </td>
+          </tr>
+          <tr *ngIf="!isLoading && !filteredReceipts.length"><td colspan="8" class="cxc__empty">{{ receipts.length ? 'Ningún recibo coincide con la búsqueda.' : 'Aún no hay recibos de cobro.' }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Registrar cobro -->
+  <div class="cxc-modal" *ngIf="isPaymentOpen" (click)="closePayment()">
+    <form class="cxc-modal__panel" (click)="$event.stopPropagation()" (ngSubmit)="savePayment()" role="dialog" aria-labelledby="cxc-modal-title">
+      <header class="cxc-modal__head">
+        <h3 id="cxc-modal-title">Registrar cobro</h3>
+        <button type="button" class="cxc-modal__close" aria-label="Cerrar" (click)="closePayment()">×</button>
+      </header>
+
+      <div class="cxc-modal__grid">
+        <label class="cxc-modal__wide"><span>Cliente</span>
+          <select name="paymentClient" [(ngModel)]="paymentClientId" (ngModelChange)="onPaymentClientChange()">
+            <option [ngValue]="null">Seleccione un cliente…</option>
+            <option *ngFor="let c of payableClients" [ngValue]="c.id">{{ c.name }} — {{ money(c.balance) }}</option>
+          </select>
+        </label>
+        <label><span>Fecha</span><input type="date" name="paymentDate" [(ngModel)]="paymentDate"></label>
+        <label><span>Forma de pago</span>
+          <select name="paymentCode" [(ngModel)]="paymentCode"><option *ngFor="let m of collectionMethods" [ngValue]="m.code">{{ m.description }}</option></select>
+        </label>
+        <label><span>Monto recibido</span>
+          <span class="cxc-modal__amount"><input type="number" name="amountReceived" min="0" step="0.01" [(ngModel)]="amountReceived" placeholder="0.00"><button type="button" (click)="distribute()" [disabled]="!paymentRows.length">Distribuir</button></span>
+        </label>
+        <label><span>Referencia</span><input name="paymentReference" [(ngModel)]="paymentReference" placeholder="No. cheque, transferencia…"></label>
+      </div>
+
+      <div class="cxc-modal__lines" *ngIf="paymentClientId">
+        <table>
+          <thead><tr><th></th><th>Factura</th><th>Vence</th><th class="n">Saldo</th><th class="n">Aplicar</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let row of paymentRows; let idx = index">
+              <td><input type="checkbox" [name]="'sel' + idx" [(ngModel)]="row.selected" (ngModelChange)="toggleRow(row)" [attr.aria-label]="'Aplicar a ' + row.invoice.invoiceNumber"></td>
+              <td><b>{{ row.invoice.invoiceNumber }}</b><small *ngIf="row.invoice.daysOverdue > 0" class="cxc__red">{{ overdueLabel(row.invoice.daysOverdue) }} de atraso</small></td>
+              <td>{{ date(row.invoice.dueDate) }}</td>
+              <td class="n">{{ money(row.invoice.balance) }}</td>
+              <td class="n"><input type="number" [name]="'amt' + idx" min="0" step="0.01" [max]="row.invoice.balance" [(ngModel)]="row.amount" (change)="onRowAmountChange(row)"></td>
+            </tr>
+            <tr *ngIf="!paymentRows.length"><td colspan="5" class="cxc__empty">Este cliente no tiene facturas a crédito pendientes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <label class="cxc-modal__notes"><span>Notas</span><textarea name="paymentNotes" rows="2" [(ngModel)]="paymentNotes"></textarea></label>
+
+      <div class="cxc-modal__totals">
+        <span>Saldo del cliente <b>{{ money(paymentClientBalance) }}</b></span>
+        <span>Total aplicado <b>{{ money(paymentTotal) }}</b></span>
+        <span *ngIf="unappliedAmount > 0.009" class="cxc__red">Sin aplicar <b>{{ money(unappliedAmount) }}</b></span>
+      </div>
+      <p *ngIf="paymentError" class="cxc__error">{{ paymentError }}</p>
+
+      <footer class="cxc-modal__actions">
+        <button type="button" class="cxc__btn cxc__btn--ghost" (click)="closePayment()">Cancelar</button>
+        <button type="submit" class="cxc__btn" [disabled]="isSaving || !paymentTotal">{{ isSaving ? 'Guardando…' : 'Guardar cobro ' + money(paymentTotal) }}</button>
+      </footer>
+    </form>
+  </div>
+</section>

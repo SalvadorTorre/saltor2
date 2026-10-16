@@ -1,4 +1,5 @@
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Quotation, QuotationLine, QuotationsService } from '../../core/services/quotations/quotations.service';
@@ -13,7 +14,7 @@ import { AuthService } from '../../core/services/auth/auth.service';
 
 @Component({ selector: 'app-quotation-page', standalone: true, imports: [CommonModule, FormsModule], templateUrl: './quotation-page.component.html', styleUrls: ['./quotation-page.component.scss'] })
 export class QuotationPageComponent implements OnInit {
-  @Output() readonly convertToInvoice = new EventEmitter<void>();
+  private readonly router = inject(Router);
   tab: 'create' | 'consult' = 'create';
   editingId: number | null = null;
   isReadOnly = false;
@@ -244,7 +245,8 @@ export class QuotationPageComponent implements OnInit {
       await this.quotations.markAsInvoiced(detail.id);
       sessionStorage.setItem('saltor.quotationInvoiceDraft', JSON.stringify(detail));
       await this.load();
-      this.convertToInvoice.emit();
+      // La pantalla de facturación toma el borrador de sessionStorage al abrir.
+      await this.router.navigateByUrl('/facturacion');
     } catch (error) {
       this.message = error instanceof Error ? error.message : 'No se pudo convertir la cotización en factura.';
     }

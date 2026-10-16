@@ -3,10 +3,6 @@ export interface NavigationItem {
   icon: string;
 }
 
-export interface ModuleItem extends NavigationItem {
-  key?: string;
-  children?: string[];
-}
 
 export interface Company {
   id: number;
@@ -22,6 +18,8 @@ export interface Company {
   status: 'Activa' | 'Inactiva';
   branchCount: number;
   lastUpdate: string;
+  /** Logo propio de la empresa (data URL), si se cargó. */
+  logoUrl?: string | null;
 }
 
 export type CompanyFormModel = Omit<Company, 'id' | 'branchCount' | 'lastUpdate'>;
@@ -239,25 +237,3 @@ export interface NcfTypeFormModel {
   status: 'Activa' | 'Inactiva';
 }
 
-export type ViewMode =
-  | 'dashboard'
-  | 'company'
-  | 'users'
-  | 'ncf'
-  | 'ncf_type'
-  | 'rnc'
-  | 'settings_other'
-  | 'products'
-  | 'product_entries'
-  | 'clients'
-  | 'suppliers'
-  | 'invoice_new'
-  | 'invoice_history'
-  | 'invoice_consultation'
-  | 'quotation'
-  | 'cash_opening'
-  | 'cash_closing'
-  | 'cash_movements'
-  | 'accounting'
-  | 'report'
-  | 'report_invoices';

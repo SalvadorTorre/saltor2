@@ -1,4 +1,4 @@
-<section class="dashboard-content client-content" *ngIf="activeView === 'clients'">
+<section class="dashboard-content client-content">
   <div class="dashboard-header company-header">
     <div>
       <p class="dashboard-header__eyebrow">Mantenimiento</p>
@@ -11,15 +11,7 @@
     </div>
   </div>
 
-  <div class="maintenance-tabs" role="navigation" aria-label="Navegacion de mantenimiento">
-    <button
-      *ngFor="let item of maintenanceLinks"
-      class="maintenance-tab"
-      type="button"
-      [class.maintenance-tab--active]="activeMaintenanceLabel === item.label">
-      {{ item.label }}
-    </button>
-  </div>
+  <app-maintenance-tabs></app-maintenance-tabs>
 
   <div class="client-kpi-grid">
     <article class="client-kpi-card client-kpi-card--accent">

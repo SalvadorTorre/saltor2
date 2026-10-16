@@ -1,0 +1,56 @@
+<section class="anl">
+  <header class="anl__header">
+    <div>
+      <p class="anl__eyebrow">Contabilidad · Reportes fiscales</p>
+      <h2>Comprobantes anulados</h2>
+      <span>Facturas anuladas en el mes, con su tipo y motivo. Base del Formato 608.</span>
+    </div>
+    <label class="anl__period"><span>Período (mes de anulación)</span><input type="month" [(ngModel)]="period" (change)="load()"></label>
+  </header>
+
+  <p *ngIf="errorMessage" class="anl__error">{{ errorMessage }}</p>
+
+  <section class="anl__kpis">
+    <article><span>Anulados</span><strong>{{ rows.length }}</strong><small>{{ money(totalAmount) }}</small></article>
+    <article><span>NCF serie B</span><strong>{{ ncfRows.length }}</strong><small>Van en el 608</small></article>
+    <article><span>e-NCF</span><strong>{{ encfRows.length }}</strong><small>No van en el 608</small></article>
+  </section>
+
+  <aside class="anl__note">
+    <b>e-NCF:</b> los comprobantes electrónicos no se reportan en el 608. Si ya se enviaron a la DGII se anulan con nota de crédito;
+    si no se enviaron, con el formato ANECF. Aquí se listan igual para tu control.
+  </aside>
+
+  <section class="anl__workspace">
+    <div class="anl__toolbar">
+      <label class="anl__search"><span aria-hidden="true">⌕</span><input type="search" [(ngModel)]="search" placeholder="Buscar factura, NCF, cliente o motivo"></label>
+      <div class="anl__actions">
+        <button type="button" class="anl__btn anl__btn--ghost" [disabled]="!rows.length" (click)="downloadCsv()">Exportar Excel (CSV)</button>
+        <button type="button" class="anl__btn" [disabled]="!ncfRows.length || missingType.length || !companyRnc" (click)="download608()">Generar TXT 608</button>
+      </div>
+    </div>
+    <p class="anl__hint" *ngIf="!ncfRows.length && !isLoading">No hay NCF serie B anulados en este período: el 608 se presenta en cero desde la Oficina Virtual.</p>
+    <p class="anl__hint anl__hint--warn" *ngIf="missingType.length">{{ missingType.length }} NCF anulado(s) sin tipo de anulación (anulados antes de este cambio). Complete el tipo antes de generar el 608.</p>
+    <p class="anl__hint anl__hint--warn" *ngIf="ncfRows.length && !companyRnc">La empresa no tiene RNC registrado en Configuración → Empresa.</p>
+
+    <div class="anl__table-wrap">
+      <table>
+        <thead><tr><th>Factura</th><th>Comprobante</th><th>Fecha comp.</th><th>Anulada</th><th>Tipo de anulación</th><th>Motivo</th><th>Cliente</th><th class="n">Total</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let r of filteredRows">
+            <td><b>{{ r.invoiceNumber }}</b></td>
+            <td>{{ r.ncf || '—' }}<small class="anl__tag" [class.anl__tag--b]="r.kind === 'NCF'">{{ r.kind }}</small></td>
+            <td>{{ date(r.invoiceDate) }}</td>
+            <td>{{ date(r.cancelledAt) }}<small>{{ r.cancelledBy }}</small></td>
+            <td>{{ typeLabel(r) }}</td>
+            <td>{{ r.reason || '—' }}</td>
+            <td>{{ r.client }}</td>
+            <td class="n">{{ money(r.total) }}</td>
+          </tr>
+          <tr *ngIf="isLoading"><td colspan="8" class="anl__empty">Consultando…</td></tr>
+          <tr *ngIf="!isLoading && !filteredRows.length"><td colspan="8" class="anl__empty">No hay comprobantes anulados en este período.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>

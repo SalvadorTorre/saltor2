@@ -13,7 +13,6 @@ import { RncService } from '../../core/services/rnc/rnc.service';
   styleUrls: ['./rnc-page.component.scss']
 })
 export class RncPageComponent implements OnInit {
-  activeView = 'rnc';
   rncSearch = '';
   rncMessage = 'Consulta, registra y da seguimiento a RNC sincronizados con tu base local.';
   rncEditorMode: 'create' | 'edit' = 'create';

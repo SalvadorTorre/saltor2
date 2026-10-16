@@ -1,27 +1,34 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth/auth.service';
-import { SupabaseService } from '../../core/services/supabase/supabase.service';
+import { DashboardService, DashboardSummary } from '../../core/services/dashboard/dashboard.service';
 
-interface InvoiceRow { id: number; numero_factura: string; fecha_factura: string; cliente_nombre: string | null; total: number | string | null; estado: string | null; dgii_estado: string | null; }
-interface DetailRow { factura_id: number; descripcion: string; cantidad: number | string; total_linea: number | string; }
-interface ProductRow { descripcion: string; existencia: number | string | null; existencia_minima: number | string | null; }
+interface StatCard { label: string; value: string; hint: string; trend?: 'up' | 'down' | ''; tone: string; icon: string; link?: string; }
+interface AlertItem { text: string; detail?: string; link?: string; }
+interface AlertGroup { title: string; icon: 'alert' | 'box' | 'fiscal' | 'money'; tone: 'danger' | 'warning' | 'info'; items: AlertItem[]; more?: { text: string; link: string }; }
+interface ChartPoint { label: string; value: string; x: number; y: number; showLabel: boolean; highlight: boolean; }
 
-@Component({ selector: 'app-dashboard-page', standalone: true, imports: [CommonModule], templateUrl: './dashboard-page.component.html', styleUrls: ['./dashboard-page.component.scss'] })
+const CATEGORY_COLORS = ['#2563eb', '#14b8a6', '#f97316', '#ef4444', '#8b5cf6', '#94a3b8'];
+
+@Component({ selector: 'app-dashboard-page', standalone: true, imports: [CommonModule, RouterLink], templateUrl: './dashboard-page.component.html', styleUrls: ['./dashboard-page.component.scss'] })
 export class DashboardPageComponent implements OnInit {
   isLoading = true;
   errorMessage = '';
   companyName = '';
   updatedAt = '';
-  statCards: Array<{ label: string; value: string; hint: string; tone: string; icon: string }> = [];
-  salesSeries: Array<{ label: string; value: string; x: number; y: number }> = [];
+  chartDays: 7 | 30 = 7;
+  data: DashboardSummary | null = null;
+
+  statCards: StatCard[] = [];
   topProducts: Array<{ name: string; quantity: number; amount: string }> = [];
-  alertGroups: Array<{ title: string; icon: string; items: string[] }> = [];
-  categories: Array<{ label: string; percent: number; color: string }> = [];
+  alertGroups: AlertGroup[] = [];
+  categories: Array<{ label: string; percent: number; color: string; amount: string }> = [];
+  donutBackground = '';
   inventoryFlow: Array<{ label: string; value: number; width: number; tone: string }> = [];
   transactions: Array<{ date: string; invoice: string; client: string; total: string; status: string }> = [];
 
-  constructor(private readonly auth: AuthService, private readonly supabase: SupabaseService) {}
+  constructor(private readonly auth: AuthService, private readonly dashboard: DashboardService) {}
   ngOnInit(): void { void this.loadDashboard(); }
 
   async loadDashboard(): Promise<void> {
@@ -31,81 +38,129 @@ export class DashboardPageComponent implements OnInit {
       const session = await this.auth.restoreSession();
       if (!session) throw new Error('No se encontró una sesión activa.');
       this.companyName = session.companyName;
-      const { data, error } = await this.supabase.client.from('facturas')
-        .select('id, numero_factura, fecha_factura, cliente_nombre, total, estado, dgii_estado')
-        .eq('idempres', session.companyId).order('fecha_factura', { ascending: false }).order('id', { ascending: false });
-      if (error) throw error;
-      const invoices = (data ?? []) as InvoiceRow[];
-      const invoiceIds = invoices.map((invoice) => invoice.id);
-      const [details, products] = await Promise.all([this.loadDetails(invoiceIds), this.loadProducts()]);
-      this.applyData(invoices, details, products);
+      this.data = await this.dashboard.getSummary();
+      this.applyData(this.data);
       this.updatedAt = new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
     } catch (error) {
-      this.errorMessage = error instanceof Error ? error.message : 'No fue posible cargar el resumen de Inicio.';
+      const message = String((error as { message?: string })?.message ?? '');
+      this.errorMessage = /dashboard_inicio/.test(message) ? 'Falta aplicar la migración del resumen de Inicio en la base de datos.' : message || 'No fue posible cargar el resumen de Inicio.';
     } finally { this.isLoading = false; }
   }
 
-  private async loadDetails(invoiceIds: number[]): Promise<DetailRow[]> {
-    if (!invoiceIds.length) return [];
-    const { data, error } = await this.supabase.client.from('factura_detalles').select('factura_id, descripcion, cantidad, total_linea').in('factura_id', invoiceIds);
-    if (error) throw error;
-    return (data ?? []) as DetailRow[];
-  }
+  setChartDays(days: 7 | 30): void { this.chartDays = days; }
 
-  private async loadProducts(): Promise<ProductRow[]> {
-    const { data, error } = await this.supabase.client.from('products').select('descripcion, existencia, existencia_minima');
-    if (error) throw error;
-    return (data ?? []) as ProductRow[];
+  get salesSeries(): ChartPoint[] {
+    const rows = (this.data?.serie_30 ?? []).slice(-this.chartDays);
+    if (!rows.length) return [];
+    const max = Math.max(1, ...rows.map((row) => Number(row.total)));
+    const maxIndex = rows.findIndex((row) => Number(row.total) === max);
+    const step = rows.length > 1 ? 92 / (rows.length - 1) : 0;
+    return rows.map((row, index) => {
+      const date = new Date(`${row.fecha}T12:00:00`);
+      const label = this.chartDays === 7
+        ? date.toLocaleDateString('es-DO', { weekday: 'short' }).replace('.', '')
+        : `${row.fecha.slice(8, 10)}/${row.fecha.slice(5, 7)}`;
+      return {
+        label, value: this.money(Number(row.total)),
+        x: 4 + index * step, y: 6 + Math.round((Number(row.total) / max) * 84),
+        showLabel: this.chartDays === 7 || index % 5 === (rows.length - 1) % 5,
+        highlight: index === maxIndex || index === rows.length - 1
+      };
+    });
   }
+  get chartLine(): string { return this.salesSeries.map((p) => `${p.x},${100 - p.y}`).join(' '); }
+  get chartArea(): string {
+    const pts = this.salesSeries;
+    return pts.length ? `${pts[0].x},100 ${this.chartLine} ${pts[pts.length - 1].x},100` : '';
+  }
+  get chartTotal(): string { return this.money((this.data?.serie_30 ?? []).slice(-this.chartDays).reduce((s, r) => s + Number(r.total), 0)); }
 
-  private applyData(invoices: InvoiceRow[], details: DetailRow[], products: ProductRow[]): void {
-    const today = this.isoDate(new Date());
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const active = invoices.filter((invoice) => invoice.estado?.toLowerCase() !== 'anulada');
-    const todayInvoices = active.filter((invoice) => invoice.fecha_factura === today);
-    const monthInvoices = active.filter((invoice) => invoice.fecha_factura >= monthStart);
-    const activeIds = new Set(active.map((invoice) => invoice.id));
-    const activeDetails = details.filter((detail) => activeIds.has(detail.factura_id));
-    const todayIds = new Set(todayInvoices.map((invoice) => invoice.id));
-    const todayDetails = activeDetails.filter((detail) => todayIds.has(detail.factura_id));
-    const lowStock = products.filter((product) => Number(product.existencia ?? 0) <= Number(product.existencia_minima ?? 0));
-    const pending = invoices.filter((invoice) => !['Aceptado', 'Anulada'].includes(invoice.dgii_estado ?? invoice.estado ?? '')).length;
+  private applyData(d: DashboardSummary): void {
+    const v = d.ventas;
+    const dayTrend = this.trend(v.hoy, v.ayer);
+    const monthTrend = this.trend(v.mes, v.mes_anterior_corte);
+    const stockIssues = d.stock.negativos + d.stock.bajo_minimo;
+    const fiscalIssues = d.fiscal.rechazados + d.fiscal.sin_enviar;
     this.statCards = [
-      { label: 'Ventas del Día', value: this.money(this.sum(todayInvoices)), hint: `${todayInvoices.length} factura(s) hoy`, tone: 'success', icon: 'sale' },
-      { label: 'Ventas del Mes', value: this.money(this.sum(monthInvoices)), hint: `${monthInvoices.length} factura(s) este mes`, tone: 'primary', icon: 'wallet' },
-      { label: 'Productos Vendidos', value: this.quantity(activeDetails).toLocaleString('es-DO'), hint: `${this.quantity(todayDetails)} hoy`, tone: 'emerald', icon: 'bag' },
-      { label: 'Total Facturas', value: active.length.toLocaleString('es-DO'), hint: `${pending} pendiente(s)`, tone: 'sky', icon: 'file' },
-      { label: 'Stock Bajo', value: lowStock.length.toLocaleString('es-DO'), hint: lowStock.length ? 'Requiere revisión' : 'Inventario al día', tone: 'danger', icon: 'alert' }
+      { label: 'Ventas del Día', value: this.money(v.hoy), hint: `${v.hoy_facturas} fact. · ${dayTrend.text} vs ayer`, trend: dayTrend.dir, tone: 'success', icon: 'sale', link: '/reportes/analisis' },
+      { label: 'Ventas del Mes', value: this.money(v.mes), hint: `${v.mes_facturas} fact. · ${monthTrend.text} vs mes ant.`, trend: monthTrend.dir, tone: 'primary', icon: 'wallet', link: '/reportes/analisis' },
+      { label: 'Por Cobrar', value: this.money(d.cxc.saldo), hint: d.cxc.vencido ? `${this.money(d.cxc.vencido)} vencido` : `${d.cxc.clientes} cliente(s)`, tone: d.cxc.vencido ? 'danger' : 'emerald', icon: 'bag', link: '/contabilidad/cuentas-por-cobrar' },
+      { label: 'Pendientes DGII', value: fiscalIssues.toLocaleString('es-DO'), hint: d.fiscal.rechazados ? `${d.fiscal.rechazados} rechazado(s)` : (d.fiscal.sin_enviar ? 'Sin enviar' : 'Todo aceptado'), tone: fiscalIssues ? 'danger' : 'sky', icon: 'file', link: '/contabilidad/panel-fiscal' },
+      { label: 'Stock Bajo', value: stockIssues.toLocaleString('es-DO'), hint: d.stock.negativos ? `${d.stock.negativos} en negativo` : (stockIssues ? 'Requiere revisión' : 'Inventario al día'), tone: 'danger', icon: 'alert', link: '/mantenimiento/kardex' }
     ];
-    this.salesSeries = this.lastSevenDays(active);
-    this.topProducts = this.getTopProducts(activeDetails);
-    this.alertGroups = [
-      { title: 'Stock Bajo', icon: 'alert', items: lowStock.slice(0, 5).map((product) => product.descripcion) },
-      { title: 'Sin Movimiento', icon: 'box', items: [] }
-    ];
+
+    this.topProducts = d.top_productos.map((p) => ({ name: p.nombre, quantity: Number(p.cantidad), amount: this.money(Number(p.total)) }));
+
+    // Categorías: las 5 principales + "Otras".
+    const totalCat = d.categorias.reduce((s, c) => s + Number(c.total), 0);
+    const main = d.categorias.slice(0, 5);
+    const rest = d.categorias.slice(5).reduce((s, c) => s + Number(c.total), 0);
+    const cats = [...main.map((c) => ({ label: c.nombre, value: Number(c.total) })), ...(rest > 0 ? [{ label: 'Otras', value: rest }] : [])];
+    this.categories = cats.map((c, i) => ({ label: c.label, value: c.value, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], percent: totalCat ? Math.round(c.value / totalCat * 1000) / 10 : 0, amount: this.money(c.value) }));
+    let acc = 0;
+    const stops = this.categories.map((c) => { const from = acc; acc += totalCat ? (cats.find((x) => x.label === c.label)!.value / totalCat * 100) : 0; return `${c.color} ${from}% ${acc}%`; });
+    this.donutBackground = `radial-gradient(circle at center, #fff 0 34%, transparent 35%), ${stops.length ? `conic-gradient(${stops.join(', ')})` : 'conic-gradient(#e2e8f0 0 100%)'}`;
+
+    const inv = d.inventario_mes;
+    const maxInv = Math.max(1, inv.entradas, inv.salidas);
     this.inventoryFlow = [
-      { label: 'Entradas', value: 0, width: 0, tone: 'green' },
-      { label: 'Salidas', value: this.quantity(activeDetails), width: Math.min(100, this.quantity(activeDetails)), tone: 'orange' },
-      { label: 'Productos activos', value: products.length, width: Math.min(100, products.length), tone: 'blue' }
+      { label: 'Entradas del mes', value: Number(inv.entradas), width: Number(inv.entradas) / maxInv * 100, tone: 'green' },
+      { label: 'Salidas del mes', value: Number(inv.salidas), width: Number(inv.salidas) / maxInv * 100, tone: 'orange' },
+      { label: 'Ajustes del mes', value: Number(inv.ajustes), width: Math.min(100, Number(inv.ajustes) * 10), tone: 'blue' }
     ];
-    this.transactions = invoices.slice(0, 8).map((invoice) => ({ date: this.date(invoice.fecha_factura), invoice: invoice.numero_factura, client: invoice.cliente_nombre || 'CLIENTE CONTADO', total: this.money(Number(invoice.total ?? 0)), status: invoice.dgii_estado || invoice.estado || 'Borrador' }));
+
+    this.alertGroups = this.buildAlerts(d);
+    this.transactions = d.ultimas.map((t) => ({ date: this.date(t.fecha), invoice: t.numero, client: t.cliente, total: this.money(Number(t.total)), status: t.estado }));
   }
 
-  private lastSevenDays(invoices: InvoiceRow[]): Array<{ label: string; value: string; x: number; y: number }> {
-    const days = Array.from({ length: 7 }, (_, index) => { const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - (6 - index)); return { date, total: this.sum(invoices.filter((invoice) => invoice.fecha_factura === this.isoDate(date))) }; });
-    const max = Math.max(1, ...days.map((day) => day.total));
-    return days.map((day, index) => ({ label: day.date.toLocaleDateString('es-DO', { weekday: 'short' }).replace('.', ''), value: this.money(day.total), x: 8 + index * 14, y: 10 + Math.round((day.total / max) * 78) }));
+  private buildAlerts(d: DashboardSummary): AlertGroup[] {
+    const groups: AlertGroup[] = [];
+    const fiscal: AlertItem[] = [];
+    if ((d.fiscal.ambiente ?? '').toUpperCase() !== 'PROD') fiscal.push({ text: `Ambiente DGII en ${d.fiscal.ambiente || 'sin configurar'}`, detail: 'Los e-CF no tienen validez fiscal' });
+    if (d.fiscal.rechazados) fiscal.push({ text: `${d.fiscal.rechazados} comprobante(s) rechazado(s)` });
+    if (d.fiscal.sin_enviar) fiscal.push({ text: `${d.fiscal.sin_enviar} comprobante(s) sin enviar` });
+    if (d.fiscal.secuencias_alerta) fiscal.push({ text: `${d.fiscal.secuencias_alerta} secuencia(s) por agotarse o vencer` });
+    if (d.fiscal.certificado_dias === null) fiscal.push({ text: 'No hay certificado digital cargado' });
+    else if (d.fiscal.certificado_dias <= 60) fiscal.push({ text: d.fiscal.certificado_dias < 0 ? 'Certificado digital vencido' : `Certificado vence en ${d.fiscal.certificado_dias} días` });
+    if (fiscal.length) groups.push({ title: 'Fiscal / DGII', icon: 'fiscal', tone: 'danger', items: fiscal, more: { text: 'Abrir panel fiscal', link: '/contabilidad/panel-fiscal' } });
+
+    if (d.stock.lista.length) groups.push({
+      title: `Stock bajo (${d.stock.negativos + d.stock.bajo_minimo})`, icon: 'alert', tone: 'warning',
+      items: d.stock.lista.slice(0, 5).map((p) => ({ text: `${p.codigo} · ${p.descripcion}`, detail: Number(p.existencia) < 0 ? `Existencia negativa: ${p.existencia}` : `Quedan ${p.existencia} (mín. ${p.existenciamin})` })),
+      more: { text: 'Ver en Kardex', link: '/mantenimiento/kardex' }
+    });
+
+    if (d.cxc.facturas_vencidas) groups.push({
+      title: 'Cuentas por cobrar', icon: 'money', tone: 'danger',
+      items: [{ text: `${this.money(d.cxc.vencido)} vencido`, detail: `${d.cxc.facturas_vencidas} factura(s) vencida(s)` }],
+      more: { text: 'Ver cuentas por cobrar', link: '/contabilidad/cuentas-por-cobrar' }
+    });
+
+    if (d.cotizaciones.por_vencer) groups.push({
+      title: 'Cotizaciones', icon: 'box', tone: 'info',
+      items: [{ text: `${d.cotizaciones.por_vencer} cotización(es) vencen esta semana`, detail: `${d.cotizaciones.activas} activas por ${this.money(d.cotizaciones.monto_activas)}` }],
+      more: { text: 'Ver cotizaciones', link: '/cotizaciones' }
+    });
+
+    if (d.sin_movimiento.cantidad) groups.push({
+      title: `Sin ventas en 60 días (${d.sin_movimiento.cantidad})`, icon: 'box', tone: 'info',
+      items: d.sin_movimiento.lista.slice(0, 5).map((p) => ({ text: `${p.codigo} · ${p.descripcion}`, detail: `${p.existencia} en inventario · ${p.ultima_venta ? `última venta hace ${p.dias} días` : 'nunca vendido'}` })),
+      more: d.sin_movimiento.valor ? { text: `Inventario detenido: ${this.money(d.sin_movimiento.valor)} al costo`, link: '/mantenimiento/kardex' } : undefined
+    });
+    return groups;
   }
 
-  private getTopProducts(details: DetailRow[]): Array<{ name: string; quantity: number; amount: string }> {
-    const grouped = new Map<string, { quantity: number; amount: number }>();
-    details.forEach((detail) => { const item = grouped.get(detail.descripcion) ?? { quantity: 0, amount: 0 }; item.quantity += Number(detail.cantidad ?? 0); item.amount += Number(detail.total_linea ?? 0); grouped.set(detail.descripcion, item); });
-    return [...grouped.entries()].map(([name, item]) => ({ name, quantity: item.quantity, amount: this.money(item.amount) })).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+  statusClass(status: string): string {
+    if (status === 'Anulada' || status === 'Rechazado') return 'status-pill--cancelled';
+    if (status === 'Aceptado' || status === 'Aceptado condicional') return '';
+    return 'status-pill--pending';
   }
 
-  private sum(rows: InvoiceRow[]): number { return rows.reduce((total, row) => total + Number(row.total ?? 0), 0); }
-  private quantity(rows: DetailRow[]): number { return rows.reduce((total, row) => total + Number(row.cantidad ?? 0), 0); }
-  private money(value: number): string { return `RD$${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
-  private isoDate(value: Date): string { return value.toISOString().slice(0, 10); }
+  private trend(current: number, previous: number): { text: string; dir: 'up' | 'down' | '' } {
+    if (!previous) return { text: current ? 'nuevo' : '—', dir: current ? 'up' : '' };
+    const pct = (current - previous) / previous * 100;
+    return { text: `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toLocaleString('es-DO', { maximumFractionDigits: 0 })}%`, dir: pct >= 0 ? 'up' : 'down' };
+  }
+  money(value: number): string { return `RD$${Number(value ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
   private date(value: string): string { return value ? new Date(`${value}T12:00:00`).toLocaleDateString('es-DO') : 'N/D'; }
 }

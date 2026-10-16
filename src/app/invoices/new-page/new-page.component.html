@@ -159,14 +159,14 @@
               </label>
               <label class="field invoice-inline-field">
                 <span>Condicion</span>
-                <select name="invoicePayment" [(ngModel)]="invoiceForm.paymentMethod" (keydown.enter)="focusNextField($event)">
+                <select name="invoicePayment" [(ngModel)]="invoiceForm.paymentMethod" (ngModelChange)="onInvoiceConditionChange()" (keydown.enter)="focusNextField($event)">
                   <option value="Contado">Contado</option>
                   <option value="Credito">Credito</option>
                 </select>
               </label>
               <label class="field invoice-inline-field">
                 <span>Forma de pago</span>
-                <select name="invoicePaymentMethod" [(ngModel)]="paymentMethodCode" (keydown.enter)="focusNextField($event)">
+                <select name="invoicePaymentMethod" [(ngModel)]="paymentMethodCode" (ngModelChange)="onInvoicePaymentMethodChange()" (keydown.enter)="focusNextField($event)">
                   <option *ngFor="let method of paymentMethods" [ngValue]="method.code">{{ method.code }} - {{ method.description }}</option>
                 </select>
               </label>
@@ -221,6 +221,7 @@
                   </label>
                 </div>
                 <p class="line-editor-message" *ngIf="lineEditorMessage">{{ lineEditorMessage }}</p>
+                <p class="line-editor-notice" *ngIf="lineEditorInventoryNotice">{{ lineEditorInventoryNotice }}</p>
               </section>
               <div class="invoice-lines__table">
                 <div class="invoice-lines__row invoice-lines__row--head">

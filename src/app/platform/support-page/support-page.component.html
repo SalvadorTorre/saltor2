@@ -1,0 +1,97 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">{{ platform ? 'Plataforma' : 'Ayuda' }}</p>
+      <h2>{{ platform ? 'Soporte a clientes' : 'Soporte de SaltorSystem' }}</h2>
+      <span>{{ platform ? 'Tickets de todas las empresas. Los marcados en amarillo esperan tu respuesta.' : '¿Algo no funciona o tienes una duda? Abre un ticket y te respondemos por aquí.' }}</span>
+    </div>
+    <div class="pf__header-actions">
+      <button type="button" class="pf__btn pf__btn--ghost" (click)="load()" [disabled]="isLoading">Actualizar</button>
+      <button type="button" class="pf__btn" (click)="newTicket()">+ Nuevo ticket</button>
+    </div>
+  </header>
+
+  <section class="pf__filters">
+    <div class="pf__chips" role="group" aria-label="Filtrar tickets">
+      <button type="button" *ngIf="platform" [class.is-active]="view === 'responder'" (click)="view = 'responder'">Por responder ({{ pendingCount }})</button>
+      <button type="button" *ngIf="!platform" [class.is-active]="view === 'responder'" (click)="view = 'responder'">Con respuesta ({{ pendingCount }})</button>
+      <button type="button" [class.is-active]="view === 'abiertos'" (click)="view = 'abiertos'">Abiertos ({{ openCount }})</button>
+      <button type="button" [class.is-active]="view === 'todos'" (click)="view = 'todos'">Todos ({{ tickets.length }})</button>
+    </div>
+    <select *ngIf="platform" [(ngModel)]="companyId" aria-label="Empresa"><option [ngValue]="null">Todas las empresas</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select>
+  </section>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <div class="sp">
+    <div class="sp__list">
+      <button type="button" *ngFor="let t of visible" class="sp__item" [class.is-active]="selected?.id === t.id"
+        [class.is-pending]="needsAnswer(t) && t.estado !== 'Cerrado' && t.estado !== 'Resuelto'" (click)="open(t)">
+        <span class="sp__item-top"><span>{{ t.numero }}{{ platform ? ' · ' + companyName(t.empresa_id) : '' }}</span><span>{{ t.ultima_actividad | date:'dd/MM h:mm a' }}</span></span>
+        <b>{{ t.asunto }}</b>
+        <span><span class="pf__state" [ngClass]="stateClass(t.estado)">{{ t.estado }}</span>
+          <span class="pf__state" *ngIf="t.prioridad !== 'Normal'" [ngClass]="priorityClass(t.prioridad)">{{ t.prioridad }}</span>
+          <small style="color:#6b819d"> {{ t.categoria }}</small></span>
+      </button>
+      <p class="pf__empty" *ngIf="!visible.length && !isLoading">No hay tickets aquí.</p>
+    </div>
+
+    <div class="sp__detail">
+      <form *ngIf="draft as d" class="pf-form" (ngSubmit)="createTicket()">
+        <h3 class="pf-form__wide" style="margin:0">Nuevo ticket</h3>
+        <label *ngIf="platform" class="pf-form__wide">Empresa
+          <select name="emp" [(ngModel)]="d.empresa_id"><option [ngValue]="null" disabled>Elige…</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select>
+        </label>
+        <label class="pf-form__wide">Asunto<input name="asunto" type="text" [(ngModel)]="d.asunto" maxlength="150" placeholder="Ej.: No imprime la factura" required></label>
+        <label>Categoría<select name="cat" [(ngModel)]="d.categoria"><option *ngFor="let c of categories">{{ c }}</option></select></label>
+        <label>Prioridad<select name="pri" [(ngModel)]="d.prioridad"><option *ngFor="let p of priorities">{{ p }}</option></select></label>
+        <label class="pf-form__wide">Describe el caso<textarea name="msg" rows="6" [(ngModel)]="d.mensaje" data-enter="native" data-case="native" placeholder="Qué estabas haciendo, qué pasó y, si aparece, el mensaje de error." required></textarea></label>
+        <div class="pf-form__wide pf-form__actions">
+          <button type="button" class="pf__btn pf__btn--ghost" (click)="draft = null">Cancelar</button>
+          <button type="submit" class="pf__btn" [disabled]="isSending">{{ isSending ? 'Enviando…' : 'Enviar ticket' }}</button>
+        </div>
+      </form>
+
+      <ng-container *ngIf="!draft && selected as t">
+        <div class="sp__detail-head">
+          <div>
+            <h3>{{ t.asunto }}</h3>
+            <p>{{ t.numero }}{{ platform ? ' · ' + companyName(t.empresa_id) : '' }} · {{ t.categoria }} · abierto por {{ t.creado_por_nombre || '—' }} el {{ t.creado_en | date:'dd/MM/yyyy h:mm a' }}</p>
+          </div>
+          <div class="sp__controls">
+            <ng-container *ngIf="platform; else clientControls">
+              <label>Estado<select [ngModel]="t.estado" (ngModelChange)="setState($event)"><option *ngFor="let s of states">{{ s }}</option></select></label>
+              <label>Prioridad<select [ngModel]="t.prioridad" (ngModelChange)="setPriority($event)"><option *ngFor="let p of priorities">{{ p }}</option></select></label>
+            </ng-container>
+            <ng-template #clientControls>
+              <span class="pf__state" [ngClass]="stateClass(t.estado)">{{ t.estado }}</span>
+              <button type="button" class="pf__btn pf__btn--ghost" *ngIf="t.estado !== 'Cerrado'" (click)="setState('Cerrado')">Cerrar ticket</button>
+              <button type="button" class="pf__btn pf__btn--ghost" *ngIf="t.estado === 'Cerrado' || t.estado === 'Resuelto'" (click)="setState('Abierto')">Reabrir</button>
+            </ng-template>
+          </div>
+        </div>
+
+        <div class="sp__thread">
+          <div *ngFor="let m of messages" class="sp__msg" [class.is-support]="m.es_soporte">
+            <small>{{ m.es_soporte ? 'SaltorSystem' : (m.autor_nombre || 'Cliente') }}{{ m.es_soporte && platform && m.autor_nombre ? ' (' + m.autor_nombre + ')' : '' }} · {{ m.creado_en | date:'dd/MM/yyyy h:mm a' }}</small>{{ m.mensaje }}
+          </div>
+        </div>
+
+        <form class="sp__reply" (ngSubmit)="send()">
+          <textarea name="reply" [(ngModel)]="reply" data-enter="native" data-case="native" [placeholder]="platform ? 'Escribe la respuesta al cliente…' : 'Escribe tu mensaje…'"></textarea>
+          <div class="sp__reply-actions">
+            <small>{{ platform ? 'Al responder, el ticket pasa a "Esperando cliente".' : (t.estado === 'Cerrado' ? 'Si escribes, el ticket se reabre.' : '') }}</small>
+            <span style="display:flex; gap:8px">
+              <button type="button" class="pf__btn pf__btn--ghost" *ngIf="platform && t.estado !== 'Resuelto'" (click)="setState('Resuelto')">Marcar resuelto</button>
+              <button type="submit" class="pf__btn" [disabled]="isSending || !reply.trim()">{{ isSending ? 'Enviando…' : 'Enviar' }}</button>
+            </span>
+          </div>
+        </form>
+      </ng-container>
+
+      <div *ngIf="!draft && !selected" class="sp__empty-detail">
+        <p>Elige un ticket de la lista{{ platform ? '' : ' o abre uno nuevo' }}.</p>
+      </div>
+    </div>
+  </div>
+</section>

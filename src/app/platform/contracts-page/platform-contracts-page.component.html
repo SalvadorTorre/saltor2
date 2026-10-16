@@ -1,0 +1,99 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Contratos</h2>
+      <span>Contratos con cada empresa: modalidad, monto, vigencia, cláusulas y el documento firmado.</span>
+    </div>
+    <div class="pf__header-actions"><button type="button" class="pf__btn" (click)="newContract()">+ Nuevo contrato</button></div>
+  </header>
+
+  <section class="pf__filters">
+    <div class="pf__chips" style="align-items:flex-end; gap:10px">
+      <label>Empresa<select [(ngModel)]="companyId"><option [ngValue]="null">Todas</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select></label>
+      <label>Estado<select [(ngModel)]="stateFilter"><option *ngFor="let s of stateOptions" [value]="s">{{ s || 'Todos' }}</option></select></label>
+    </div>
+    <input type="search" [(ngModel)]="text" placeholder="Buscar número, empresa, representante…" aria-label="Buscar contrato">
+  </section>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="pf__table-wrap">
+    <table class="pf__table">
+      <thead><tr><th>Contrato</th><th>Empresa</th><th>Tipo</th><th>Vigencia</th><th class="num">Monto</th><th>Estado</th><th>Firmado</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let c of visible" tabindex="0" (click)="edit(c)" (keydown.enter)="edit(c)" [class.is-void]="c.estado === 'Cancelado'">
+          <td><b>{{ c.numero }}</b><small>{{ c.descripcion }}</small></td>
+          <td>{{ companyName(c.empresa_id) }}<small *ngIf="c.representante_nombre">{{ c.representante_nombre }}</small></td>
+          <td>{{ c.tipo }}<small *ngIf="planName(c.plan_id)">Plan {{ planName(c.plan_id) }}</small></td>
+          <td>{{ date(c.fecha_inicio) }} – {{ c.fecha_fin ? date(c.fecha_fin) : 'Indefinido' }}<small *ngIf="c.renovacion_automatica">Renovación automática</small></td>
+          <td class="num">{{ c.monto | number:'1.2-2' }}<small>{{ c.periodicidad }}</small></td>
+          <td><span class="pf__state" [ngClass]="stateClass(state(c))">{{ state(c) }}</span></td>
+          <td>{{ date(c.firmado_en) }}<small *ngIf="c.archivo_nombre">📎 {{ c.archivo_nombre }}</small></td>
+          <td class="pf__row-actions" (click)="$event.stopPropagation()">
+            <button type="button" (click)="print(c)">Imprimir</button>
+            <button type="button" *ngIf="c.archivo_nombre" (click)="openFile(c)">Ver firmado</button>
+          </td>
+        </tr>
+        <tr *ngIf="!visible.length && !isLoading"><td colspan="8" class="pf__empty">No hay contratos para este filtro.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</section>
+
+<div class="pf-drawer" *ngIf="form as f" role="dialog" aria-modal="true" aria-label="Contrato">
+  <div class="pf-drawer__backdrop" (click)="close()"></div>
+  <aside class="pf-drawer__panel">
+    <header class="pf-drawer__head">
+      <div>
+        <h3>{{ f.numero ? 'Contrato ' + f.numero : 'Nuevo contrato' }}</h3>
+        <p><span class="pf__state" [ngClass]="stateClass(state(f))">{{ state(f) }}</span> {{ f.empresa_id ? companyName(f.empresa_id) : '' }}</p>
+      </div>
+      <button type="button" class="pf-drawer__close" (click)="close()" aria-label="Cerrar">×</button>
+    </header>
+
+    <div class="pf-drawer__quick" *ngIf="f.id">
+      <button type="button" class="pf__btn pf__btn--ghost" (click)="print(f)">Imprimir</button>
+      <button type="button" class="pf__btn" *ngIf="f.estado === 'Borrador'" (click)="markSigned()">Marcar firmado y vigente</button>
+      <button type="button" class="pf__btn pf__btn--ghost" *ngIf="f.estado === 'Vigente'" (click)="save({ estado: 'Finalizado' })">Finalizar</button>
+      <button type="button" class="pf__btn pf__btn--ghost pf__btn--danger" *ngIf="f.estado === 'Borrador' || f.estado === 'Vigente'" (click)="cancelContract()">Cancelar contrato</button>
+      <button type="button" class="pf__btn pf__btn--ghost pf__btn--danger" *ngIf="f.estado === 'Borrador' && !f.firmado_en" (click)="remove()">Eliminar borrador</button>
+    </div>
+
+    <p class="pf__error" *ngIf="formError">{{ formError }}</p>
+
+    <form class="pf-form" (ngSubmit)="save()">
+      <label>Empresa
+        <select name="empresa" [(ngModel)]="f.empresa_id" (ngModelChange)="onCompanyChange()" [disabled]="!!f.id" required>
+          <option [ngValue]="null" disabled>Elige…</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option>
+        </select>
+      </label>
+      <label>Tipo<select name="tipo" [(ngModel)]="f.tipo"><option *ngFor="let t of types">{{ t }}</option></select></label>
+      <label>Plan<select name="plan" [(ngModel)]="f.plan_id" (ngModelChange)="onPlanChange()"><option [ngValue]="null">Sin plan</option><option *ngFor="let p of plans" [ngValue]="p.id">{{ p.nombre }}</option></select></label>
+      <label>Descripción<input name="desc" type="text" [(ngModel)]="f.descripcion" placeholder="Ej.: Sistema completo, 2 cajas"></label>
+      <label>Monto (RD$)<input name="monto" type="number" min="0" step="0.01" [(ngModel)]="f.monto"></label>
+      <label>Periodicidad<select name="per" [(ngModel)]="f.periodicidad"><option *ngFor="let p of periods">{{ p }}</option></select></label>
+      <label>Inicio<input name="ini" type="date" [(ngModel)]="f.fecha_inicio" required></label>
+      <label>Fin (vacío = indefinido)<input name="fin" type="date" [(ngModel)]="f.fecha_fin"></label>
+      <label style="display:flex; align-items:center; gap:8px"><input name="renov" type="checkbox" [(ngModel)]="f.renovacion_automatica"> Renovación automática</label>
+      <label>Firmado el<input name="firma" type="date" [(ngModel)]="f.firmado_en"></label>
+      <label>Representante del cliente<input name="rep" type="text" [(ngModel)]="f.representante_nombre"></label>
+      <label>Cédula del representante<input name="ced" type="text" [(ngModel)]="f.representante_cedula"></label>
+      <label>Cargo<input name="cargo" type="text" [(ngModel)]="f.representante_cargo" placeholder="Gerente, propietario…"></label>
+      <label>Estado<select name="estado" [(ngModel)]="f.estado"><option>Borrador</option><option>Vigente</option><option>Finalizado</option><option>Cancelado</option></select></label>
+      <label class="pf-form__wide">Cláusulas<textarea name="cond" rows="10" [(ngModel)]="f.condiciones" data-enter="native" data-case="native"></textarea></label>
+      <label class="pf-form__wide">Contrato firmado (PDF o imagen, máx. 3 MB)
+        <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <input type="file" accept="application/pdf,image/*" (change)="onFile($event)" style="padding-top:8px">
+          <small *ngIf="pendingFile">Se guardará: {{ pendingFile.name }}</small>
+          <button type="button" class="pf__btn pf__btn--ghost" *ngIf="!pendingFile && f.archivo_nombre && f.id" (click)="openFile(f)">Ver {{ f.archivo_nombre }}</button>
+        </span>
+      </label>
+      <label class="pf-form__wide">Notas internas<textarea name="notas" rows="2" [(ngModel)]="f.notas"></textarea></label>
+      <div class="pf-form__wide pf-form__actions">
+        <small>Las cláusulas son una plantilla: revísalas con tu abogado antes de usarlas.</small>
+        <button type="submit" class="pf__btn" [disabled]="isSaving">{{ isSaving ? 'Guardando…' : 'Guardar contrato' }}</button>
+      </div>
+    </form>
+  </aside>
+</div>

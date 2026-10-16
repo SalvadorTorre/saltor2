@@ -28,6 +28,7 @@
             "assets": [
               "src/favicon.ico",
               "src/assets",
+              "src/config.js",
               {
                 "glob": ".htaccess",
                 "input": "src",
@@ -41,7 +42,15 @@
             "allowedCommonJsDependencies": [
               "alertifyjs",
               "sweetalert2",
-              "node-forge"
+              "node-forge",
+              "qz-tray",
+              "jsbarcode",
+              "qrcode",
+              "html2canvas",
+              "core-js",
+              "raf",
+              "rgbcolor",
+              "dompurify"
             ]
           },
           "configurations": {
@@ -101,6 +110,7 @@
             "assets": [
               "src/favicon.ico",
               "src/assets",
+              "src/config.js",
               {
                 "glob": ".htaccess",
                 "input": "src",
@@ -110,11 +120,7 @@
             "styles": [
               "src/styles.scss"
             ],
-            "scripts": [],
-            "allowedCommonJsDependencies": [
-              "alertifyjs",
-              "sweetalert2"
-            ]
+            "scripts": []
           }
         }
       }

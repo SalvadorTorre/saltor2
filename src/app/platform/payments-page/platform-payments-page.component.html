@@ -1,0 +1,52 @@
+<section class="pf">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma</p>
+      <h2>Pagos recibidos</h2>
+      <span>Recibos de pago de las suscripciones. Para registrar un pago abre la empresa en Empresas.</span>
+    </div>
+  </header>
+
+  <section class="pf__filters">
+    <div class="pf__chips" style="align-items:flex-end; gap:10px">
+      <label>Desde<input type="date" [(ngModel)]="from"></label>
+      <label>Hasta<input type="date" [(ngModel)]="to"></label>
+      <label>Empresa
+        <select [(ngModel)]="companyId"><option [ngValue]="null">Todas</option><option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}</option></select>
+      </label>
+      <button type="button" class="pf__btn" (click)="load()" [disabled]="isLoading">{{ isLoading ? 'Consultando…' : 'Consultar' }}</button>
+    </div>
+    <div class="pf__chips" style="align-items:flex-end">
+      <label style="display:flex; align-items:center; gap:6px; height:40px"><input type="checkbox" [(ngModel)]="showVoided" style="min-width:0; height:auto"> Mostrar anulados</label>
+      <button type="button" class="pf__btn pf__btn--ghost" (click)="exportCsv()" [disabled]="!visible.length">Exportar Excel (CSV)</button>
+    </div>
+  </section>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="pf__kpis">
+    <article class="is-ok"><span>Total cobrado</span><b>{{ total | currency:'RD$ ':'symbol':'1.2-2' }}</b><small>{{ count }} pago(s) activos en el período</small></article>
+  </section>
+
+  <section class="pf__table-wrap">
+    <table class="pf__table">
+      <thead><tr><th>Recibo</th><th>Fecha</th><th>Empresa</th><th>Período</th><th class="num">Monto</th><th>Forma de pago</th><th>Registrado por</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let p of visible" [class.is-void]="p.estado === 'Anulado'">
+          <td><b>{{ p.numero }}</b><small *ngIf="p.estado === 'Anulado'">Anulado: {{ p.motivo_anulacion }}</small></td>
+          <td>{{ date(p.fecha) }}</td>
+          <td>{{ companyName(p.empresa_id) }}</td>
+          <td>{{ date(p.periodo_desde) }} – {{ date(p.periodo_hasta) }}<small>{{ p.meses }} mes(es)</small></td>
+          <td class="num">{{ p.monto | number:'1.2-2' }}</td>
+          <td>{{ p.forma_pago }}<small *ngIf="p.referencia">{{ p.referencia }}</small></td>
+          <td>{{ p.registrado_por || '—' }}</td>
+          <td class="pf__row-actions">
+            <button type="button" (click)="print(p)">Imprimir</button>
+            <button type="button" *ngIf="p.estado === 'Activo'" class="is-danger" (click)="voidPayment(p)">Anular</button>
+          </td>
+        </tr>
+        <tr *ngIf="!visible.length"><td colspan="8" class="pf__empty">No hay pagos en este período.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</section>

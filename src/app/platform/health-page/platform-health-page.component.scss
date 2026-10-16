@@ -1,0 +1,18 @@
+@use '../platform-shared';
+.hl { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.hl__card { padding: 16px 18px; border: 1px solid #dce7f4; border-top: 5px solid #10b981; border-radius: 12px; background: #fff; }
+.hl__card.is-warn { border-top-color: #f59e0b; }
+.hl__card.is-bad { border-top-color: #e11d48; }
+.hl__head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.hl__head h3 { margin: 0; font-size: 17px; color: #102f52; }
+.hl__head small { color: #6b819d; }
+.hl__checks { display: grid; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
+.hl__checks li { display: grid; grid-template-columns: 14px 92px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 14px; }
+.hl__checks b { color: #4d6a8a; font-size: 12px; text-transform: uppercase; }
+.hl__dot { width: 10px; height: 10px; border-radius: 50%; background: #10b981; }
+.hl__dot.is-warn { background: #f59e0b; } .hl__dot.is-bad { background: #e11d48; } .hl__dot.is-info { background: #8b5cf6; }
+.hl__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.hl__actions .pf__btn { height: 34px; font-size: 13px; padding: 0 12px; }
+.hl__export { margin-top: 12px; padding: 10px; border-radius: 8px; background: #f5f8fc; font-size: 13px; }
+.hl__export ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.hl__export button { padding: 4px 8px; border: 1px solid #cbdaeb; border-radius: 6px; background: #fff; color: #24476f; font: 12px Arial, sans-serif; cursor: pointer; }

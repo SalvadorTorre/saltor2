@@ -99,14 +99,14 @@ export class ClientsService {
     };
   }
 
-  private toInsertRow(form: ClientFormModel, lastPurchase: string): Omit<ClientRow, 'id'> {
+  private toInsertRow(form: ClientFormModel, lastPurchase: string): Omit<ClientRow, 'id' | 'balance'> {
     return {
       ...this.toUpdateRow(form),
       ultima_compra: lastPurchase
     };
   }
 
-  private toUpdateRow(form: ClientFormModel): Omit<ClientRow, 'id' | 'ultima_compra'> {
+  private toUpdateRow(form: ClientFormModel): Omit<ClientRow, 'id' | 'ultima_compra' | 'balance'> {
     return {
       codigo: form.code.trim(),
       nombre_completo: form.fullName.trim(),
@@ -119,7 +119,7 @@ export class ClientsService {
       ciudad: form.city.trim() || null,
       categoria: form.category,
       limite_credito: Number(form.creditLimit || 0),
-      balance: Number(form.balance || 0),
+      // El balance lo calcula la base (facturas a crédito - cobros); no se escribe desde aquí.
       estado: form.status
     };
   }

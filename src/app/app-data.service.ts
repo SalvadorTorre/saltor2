@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   Company, UserRecord, NcfCompany, NcfSequence, NcfType, RncRecord, ProductRecord, ClientRecord, SupplierRecord,
-  InvoiceFormModel, InvoiceLine, ViewMode, NavigationItem, ModuleItem
+  InvoiceFormModel, InvoiceLine
 } from './app.models';
 
 @Injectable({ providedIn: 'root' })
@@ -25,25 +25,6 @@ export class AppDataService {
     '45 - Comprobante Electronico Gubernamental',
     '46 - Comprobante Electronico para Exportaciones',
     '47 - Comprobante Electronico para Pagos al Exterior'
-  ];
-
-  readonly navDashboard: NavigationItem = { label: 'Dashboard', icon: '#' };
-
-  readonly navModules: ModuleItem[] = [
-    { label: 'Facturacion', icon: '#', children: ['Nueva Factura', 'Historial', 'Cotizaciones'] },
-    { label: 'Inventario', icon: '#', key: 'products', children: ['Productos'] },
-    { label: 'Contactos', icon: '#', children: ['Clientes', 'Suplidores'] },
-    { label: 'Caja', icon: '#', children: ['Apertura', 'Cierre', 'Movimientos'] },
-    { label: 'e-NCF', icon: '#', key: 'ncf', children: ['Empresas', 'Secuencias'] },
-    { label: 'Contabilidad', icon: '#', key: 'accounting', children: ['Mayores y auxiliares'] },
-    { label: 'Reportes', icon: '#', key: 'report', children: ['Ver reportes'] }
-  ];
-
-  readonly navSettings: ModuleItem[] = [
-    { label: 'Empresas', icon: '#', key: 'company', children: ['Sucursales y Datos'] },
-    { label: 'Usuarios', icon: '#', key: 'users', children: ['Accesos y Roles'] },
-    { label: 'RNC', icon: '#', key: 'rnc', children: ['Directorio DGII'] },
-    { label: 'Otros', icon: '#', key: 'settings_other', children: ['Preferencias'] }
   ];
 
   nextCompanyId = 2;
@@ -290,14 +271,4 @@ export class AppDataService {
   ];
 
   invoiceCounter = 1;
-
-  activeView: ViewMode = 'dashboard';
-  activeModuleLabel = '';
-  activeModuleChild = '';
-  expandedSections: Record<string, boolean> = {
-    dashboard: true, company: false, users: false, ncf: false, rnc: false, settings_other: false,
-    products: false, clients: false, suppliers: false, invoice_new: false, invoice_history: false,
-    quotation: false, cash_opening: false, cash_closing: false, cash_movements: false,
-    accounting: false, report: false, reports: false
-  };
 }
