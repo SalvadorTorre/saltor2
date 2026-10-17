@@ -8,7 +8,7 @@
       <div class="dashboard-header__pill">{{ isEditingExistingInvoice ? 'Editando factura' : 'Nueva Factura' }}</div>
       <button class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
       <button *ngIf="!invoiceSaved" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
-      <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando DGII...' : 'Enviar a DGII' }}</button>
+      <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
       <button *ngIf="invoiceSaved" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
     </div>
   </div>
@@ -56,11 +56,11 @@
   <div *ngIf="isDgiiSendConfirmationVisible" class="dgii-process-dialog" role="dialog" aria-modal="true" aria-labelledby="dgiiSendConfirmTitle">
     <div class="dgii-process-dialog__panel">
       <div class="dgii-process-dialog__confirm-icon" aria-hidden="true">?</div>
-      <h3 id="dgiiSendConfirmTitle">Enviar a DGII</h3>
-      <p>¿Deseas enviar la factura {{ savedInvoice?.numero_factura }} a DGII?</p>
+      <h3 id="dgiiSendConfirmTitle">{{ isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</h3>
+      <p>{{ isProforma ? '¿Deseas firmar la proforma ' + savedInvoice?.numero_factura + '?' : '¿Deseas enviar la factura ' + savedInvoice?.numero_factura + ' a DGII?' }}</p>
       <div class="dgii-process-dialog__actions">
         <button class="secondary-action" type="button" (click)="cancelSendInvoiceToDgii()">Cancelar</button>
-        <button class="primary-action" type="button" (click)="confirmSendInvoiceToDgii()">Sí, enviar</button>
+        <button class="primary-action" type="button" (click)="confirmSendInvoiceToDgii()">{{ isProforma ? 'Sí, firmar' : 'Sí, enviar' }}</button>
       </div>
     </div>
   </div>
@@ -72,7 +72,7 @@
       </div>
       <h3 id="dgiiProcessTitle">{{ dgiiDialog === 'processing' ? 'Procesando...' : dgiiDialog === 'success' ? 'Completado' : 'Error al enviar' }}</h3>
       <p>{{ dgiiDialogMessage }}</p>
-      <button *ngIf="dgiiDialog !== 'processing'" class="primary-action dgii-process-dialog__button" type="button" (click)="closeDgiiDialog()">OK</button>
+      <button class="primary-action dgii-process-dialog__button" type="button" (click)="closeDgiiDialog()">{{ dgiiDialog === 'processing' ? 'Cerrar y continuar' : 'OK' }}</button>
     </div>
   </div>
   <section class="panel invoice-panel">
@@ -272,7 +272,7 @@
               </div>
               <button *ngIf="!invoiceSaved" class="primary-action invoice-summary__save" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
               <div *ngIf="invoiceSaved" class="invoice-summary__actions">
-                <button *ngIf="requiresDgiiOnSave" class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : 'Enviar a DGII' }}</button>
+                <button *ngIf="requiresDgiiOnSave" class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
                 <button class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
               </div>
             </aside>

@@ -113,6 +113,14 @@
           <option value="Caja">Cobro en caja: el vendedor guarda y la cajera cobra e imprime</option>
         </select>
       </label>
+      <section class="pf-form__wide pf-proforma" aria-label="Factura proforma E332">
+        <div class="pf-proforma__heading"><div><strong>Factura proforma <span>E332</span></strong><p>Numeración interna, sin autorización DGII. Al activarla, aparece primero en el grid de secuencias.</p></div>
+          <label class="pf-proforma__switch"><input type="checkbox" name="proformaEnabled" role="switch" aria-label="Activar factura proforma" [ngModel]="proformaEnabled" (ngModelChange)="changeProforma($event)" [disabled]="!proforma || isSavingProforma" /><span>{{ proformaEnabled ? 'Activa' : 'Inactiva' }}</span></label>
+        </div>
+        <div class="pf-proforma__counter" *ngIf="proforma?.enabled"><label>Número actual (último utilizado)<input type="number" name="proformaCurrent" [(ngModel)]="proformaCurrent" min="0" [max]="proformaMax" step="1" [disabled]="isSavingProforma" /></label>
+          <button class="pf__btn pf__btn--ghost" type="button" (click)="saveProformaCounter()" [disabled]="isSavingProforma">{{ isSavingProforma ? 'Guardando…' : 'Guardar contador' }}</button>
+        </div>
+      </section>
       <label>Precio mensual (RD$)<input name="precio" type="number" min="0" step="0.01" [(ngModel)]="form.precio_mensual"></label>
       <label>Días de gracia<input name="gracia" type="number" min="0" max="60" [(ngModel)]="form.dias_gracia"></label>
       <label>Prueba hasta<input name="prueba" type="date" [(ngModel)]="form.prueba_hasta"></label>

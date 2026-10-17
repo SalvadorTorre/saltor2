@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { SupabaseService } from '../supabase/supabase.service';
 
-export type MinorExpenseStatus = 'Borrador' | 'Enviado' | 'Aceptado' | 'Aceptado condicional' | 'Rechazado' | 'Error';
+export type MinorExpenseStatus = 'Borrador' | 'Preparando envío' | 'En cola' | 'Enviando DGII' | 'En proceso DGII' | 'Envío por confirmar' | 'Enviado' | 'Aceptado' | 'Aceptado condicional' | 'Rechazado' | 'Error';
 
 export interface MinorExpenseRecord {
   id: number;

@@ -60,7 +60,7 @@
         <label class="field"><span>Ambiente</span><select [(ngModel)]="ecfConfiguration.ambiente"><option value="TEST">TEST</option><option value="PROD">PROD</option></select></label>
         <label class="field"><span>Tipo de ingreso</span><input type="text" maxlength="2" [(ngModel)]="ecfConfiguration.tipo_ingreso" /></label>
         <label class="field field--full"><span>URL base del servicio</span><input type="text" [(ngModel)]="ecfConfiguration.url_base" /></label>
-        <label class="field field--full"><span><input type="checkbox" [(ngModel)]="ecfConfiguration.persistir_certificado" /> Permitir persistencia del certificado en el servicio</span></label>
+        <p class="field field--full">Los envíos en cola requieren conservar el certificado en el servicio. Las proformas solo se firman.</p>
       </div>
       <div class="settings-actions"><span>{{ ecfMessage }}</span><button class="primary-action" type="button" (click)="saveEcfConfiguration()">Guardar configuración e-CF</button></div>
     </section>

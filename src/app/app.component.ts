@@ -1,3 +1,4 @@
+import { EcfService } from './core/services/ecf/ecf.service';
 import { Component, DestroyRef, HostListener, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
@@ -58,6 +59,7 @@ const SECTION_BY_SEGMENT: Record<string, string> = {
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent implements OnInit {
+  private readonly ecf = inject(EcfService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -272,6 +274,7 @@ export class AppComponent implements OnInit {
     this.displayPreferences.applyTheme(this.displayPreferences.getTheme());
     this.branding.logo$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((logo) => this.companyLogo = logo);
     this.activeUser = await this.auth.restoreSession();
+    if (this.activeUser) void this.ecf.resumePending(this.activeUser.companyId, this.activeUser.branchId);
     void this.branding.load(this.activeUser?.companyId);
     void this.loadSessionExtras();
     this.isCheckingSession = false;
@@ -304,11 +307,14 @@ export class AppComponent implements OnInit {
 
   onLoggedIn(user: ActiveUserSession): void {
     this.activeUser = user;
+    this.ecf.stopTracking();
+    void this.ecf.resumePending(user.companyId, user.branchId);
     void this.branding.load(user.companyId);
     void this.loadSessionExtras();
   }
 
   async logout(): Promise<void> {
+    this.ecf.stopTracking();
     this.isUserMenuOpen = false;
     try {
       await this.auth.signOut();

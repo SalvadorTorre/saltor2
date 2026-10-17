@@ -1,1 +1,20 @@
 @use '../platform-shared';
+
+.pf-proforma { border: 1px solid var(--app-border); border-radius: 10px; padding: 16px; background: var(--app-background); }
+.pf-proforma__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.pf-proforma strong { font-size: 13px; color: var(--app-text); }
+.pf-proforma strong span { margin-left: 5px; color: var(--app-primary); }
+.pf-proforma p { margin: 6px 0 0; color: var(--app-muted); font-size: 12px; line-height: 1.5; }
+.pf-proforma__switch { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.pf-proforma__switch input { width: 36px; min-height: 20px; accent-color: var(--app-primary); }
+.pf-proforma__counter { display: flex; align-items: flex-end; gap: 12px; margin-top: 14px; }
+.pf-proforma__counter label { flex: 1; }
+@media(max-width:600px) { .pf-proforma__heading, .pf-proforma__counter { align-items: flex-start; flex-direction: column; } }
+.pf-form .pf-proforma__switch { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.pf-form .pf-proforma__switch input { appearance: none; position: relative; width: 38px; height: 22px; min-height: 22px; padding: 2px; margin: 0; border: 1px solid var(--app-border); border-radius: 20px; background: var(--app-border); cursor: pointer; flex-shrink: 0; }
+.pf-form .pf-proforma__switch input::before { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--app-surface); transition: transform .15s; }
+.pf-form .pf-proforma__switch input:checked { background: var(--app-primary); border-color: var(--app-primary); }
+.pf-form .pf-proforma__switch input:checked::before { transform: translateX(16px); }
+.pf-form .pf-proforma__switch input:disabled { cursor: default; opacity: .5; }
+.pf-form .pf-proforma__switch input:focus-visible { outline: 2px solid var(--app-primary); outline-offset: 3px; }
+@media(prefers-reduced-motion:reduce) { .pf-form .pf-proforma__switch input::before { transition: none; } }

@@ -19,7 +19,7 @@ export class DigitalSignaturePageComponent implements OnInit {
   certificateMetadata: DigitalCertificateMetadata | null = null;
   isLoadingCertificate = false;
   isUploadingCertificate = false;
-  ecfConfiguration: EcfConfiguration = { ambiente: 'TEST', url_base: 'https://ecf-propio.tail2c2b0a.ts.net/ecf', tipo_ingreso: '01', persistir_certificado: true };
+  ecfConfiguration: EcfConfiguration = { ambiente: 'TEST', url_base: 'https://ecf-propio.tail2c2b0a.ts.net/', tipo_ingreso: '01', persistir_certificado: true };
   ecfMessage = '';
 
   constructor(

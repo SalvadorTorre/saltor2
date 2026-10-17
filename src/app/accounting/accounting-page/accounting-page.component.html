@@ -949,7 +949,7 @@
       [style.color]="dgiiSendDialog.phase === 'success' ? '#6dbb56' : '#dc2626'"
       style="display: grid; place-items: center; width: 63px; height: 63px; margin: 0 auto; border: 3px solid; border-radius: 50%; font-size: 40px; font-weight: 800;"
     >{{ dgiiSendDialog.phase === 'success' ? '✓' : '!' }}</div>
-    <h2 style="margin: 13px 0 10px; color: #3f3f46; font-size: 25px;">{{ dgiiSendDialog.phase === 'confirm' ? 'Confirmar envío' : dgiiSendDialog.phase === 'processing' ? 'Procesando...' : dgiiSendDialog.phase === 'success' ? 'Completado' : 'Error al enviar' }}</h2>
+    <h2 style="margin: 13px 0 10px; color: #3f3f46; font-size: 25px;">{{ dgiiSendDialog.phase === 'confirm' ? 'Confirmar envío' : dgiiSendDialog.phase === 'processing' ? 'Procesando...' : dgiiSendDialog.phase === 'success' ? 'Solicitud registrada' : 'Error al enviar' }}</h2>
     <p style="margin: 0; color: #5e6470; font-size: 15px; line-height: 1.45;">{{ dgiiSendDialog.phase === 'confirm' ? 'Vas a enviar la factura ' + dgiiSendDialog.invoiceNumber + ' a DGII. ¿Deseas continuar?' : dgiiSendDialog.phase === 'processing' ? dgiiSendDialog.message : 'Factura ' + dgiiSendDialog.invoiceNumber + ': ' + dgiiSendDialog.message }}</p>
     <div *ngIf="dgiiSendDialog.phase === 'confirm'" style="display: flex; justify-content: center; gap: 10px; margin-top: 23px;">
       <button type="button" (click)="closeDgiiSendDialog()" style="padding: 10px 18px; border: 1px solid #94a3b8; border-radius: 4px; background: #fff; color: #475569; font-weight: 800; cursor: pointer;">Cancelar</button>

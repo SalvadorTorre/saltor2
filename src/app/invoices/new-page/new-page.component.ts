@@ -1,4 +1,6 @@
-import { Component, ElementRef, OnInit } from '@angular/core';
+import { ProformaService } from '../../core/services/proforma/proforma.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, inject, ElementRef, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { InvoiceFormModel, InvoiceLine, ClientRecord, ProductRecord, NcfSequence, NcfType, RncRecord } from '../../app.models';
@@ -35,6 +37,10 @@ interface InvoiceFormModelExtended extends InvoiceFormModel {
   styleUrls: ['./new-page.component.scss']
 })
 export class InvoiceNewPageComponent implements OnInit {
+  private readonly proforma = inject(ProformaService);
+  proformaEnabled = false;
+  private printAfterOperation: number | null = null;
+  private readonly destroyRef = inject(DestroyRef);
   billingTab: 'create' | 'consultation' = 'create';
   ncfTypes: string[] = [];
   paymentMethods: PaymentMethod[] = [];
@@ -242,6 +248,17 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    void this.auth.restoreSession().then(async session => {
+      if (session) this.proformaEnabled = (await this.proforma.getSettings(session.companyId)).enabled;
+    }).catch(() => this.proformaEnabled = false);
+    this.ecfService.updates$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (event.kind !== 'FACTURA' || this.savedInvoice?.id !== event.documentId) return;
+      this.applyOperationResult(event.result);
+      if (this.printAfterOperation === event.documentId && ['Aceptado', 'Aceptado condicional', 'Firmada'].includes(event.result.dgii_estado ?? '')) {
+        this.printAfterOperation = null;
+        void this.printInvoice();
+      }
+    });
     void this.loadProducts();
     void this.loadNcfTypes();
     void this.loadRncRecords();
@@ -322,7 +339,7 @@ export class InvoiceNewPageComponent implements OnInit {
     const allowedTypes = this.hasValidInvoiceRnc
       ? activeTypes.filter((type) => type.type === 1 && type.code !== '32')
       : activeTypes.filter((type) => type.code === '32');
-    return this.toNcfOptions(allowedTypes);
+    return [...(this.proformaEnabled ? ['332 - Factura proforma'] : []), ...this.toNcfOptions(allowedTypes.filter(type => type.code !== '332'))];
   }
 
   get isEditingExistingInvoice(): boolean {
@@ -334,19 +351,23 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   get canSendToDgii(): boolean {
-    return this.requiresDgiiOnSave && !['Aceptado', 'Rechazado'].includes(this.dgiiStatus);
+    return this.requiresDgiiOnSave && !['Aceptado', 'Aceptado condicional', 'Rechazado', 'Firmada', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(this.dgiiStatus);
   }
 
   /** Modo de la empresa: en "Caja" la factura se guarda pendiente y se cobra en Caja → Cobro de facturas. */
   billingMode: BillingMode = 'Directo';
   get isCashierMode(): boolean { return this.billingMode === 'Caja'; }
 
+  get isProforma(): boolean { return /(?:^|\D)332(?:\D|$)/.test(this.invoiceForm.ncfType); }
+
   get requiresDgiiOnSave(): boolean {
+    if (this.isProforma) return true;
     const typeCode = this.invoiceForm.ncfType.match(/(?:^|\D)(31|44|45|46)(?:\D|$)/)?.[1];
     return !!typeCode;
   }
 
   get saveInvoiceLabel(): string {
+    if (this.isProforma) return this.isSavingInvoice ? 'Guardando y firmando...' : 'Guardar y firmar proforma';
     if (this.isCashierMode) return this.isSavingInvoice ? 'Enviando a caja...' : 'Guardar y enviar a caja';
     if (this.isSavingInvoice) return this.requiresDgiiOnSave ? 'Guardando y enviando...' : 'Guardando...';
     return this.requiresDgiiOnSave ? 'Guardar y enviar a DGII' : 'Guardar';
@@ -1257,7 +1278,7 @@ export class InvoiceNewPageComponent implements OnInit {
 
     this.isPaymentConfirmationVisible = false;
 
-    if (!this.invoiceForm.ncf && !this.isCashierMode) {
+    if (!this.invoiceForm.ncf && !this.isCashierMode && !this.isProforma) {
       const sequence = this.ncfSequences
         .filter((s) => s.status === 'Activa' && s.ncfType === this.invoiceForm.ncfType && s.total > 0)
         .find((s) => s.used < s.total);
@@ -1406,19 +1427,13 @@ export class InvoiceNewPageComponent implements OnInit {
     if (!this.savedInvoice || this.isSendingDgii) return;
     this.isSendingDgii = true;
     this.dgiiDialog = 'processing';
-    this.dgiiDialogMessage = 'Enviando la factura a DGII. Por favor espera...';
+    this.dgiiDialogMessage = this.isProforma ? 'Firmando proforma...' : 'Enviando la factura a la cola...';
     try {
-      this.savedInvoice = await this.ecfService.sendInvoice(this.savedInvoice.id);
-      this.invoiceForm.ncf = this.savedInvoice.ncf ?? this.invoiceForm.ncf;
-      this.invoiceMessage = this.savedInvoice.dgii_mensaje_respuesta ?? 'La factura fue enviada al servicio e-CF.';
-      const hasDgiiError = ['Rechazado', 'Error'].includes(this.savedInvoice.dgii_estado ?? '');
-      this.dgiiDialog = hasDgiiError ? 'error' : 'success';
-      this.dgiiDialogMessage = this.savedInvoice.dgii_mensaje_respuesta
-        ?? (hasDgiiError
-          ? `La factura ${this.savedInvoice.numero_factura} no fue aceptada por DGII.`
-          : `La factura ${this.savedInvoice.numero_factura} fue enviada a DGII.`);
-      if (printAfterSend && !hasDgiiError) {
-        await this.printInvoice();
+      const result = await this.ecfService.sendInvoice(this.savedInvoice.id);
+      this.applyOperationResult(result);
+      if (printAfterSend) {
+        if (['Aceptado', 'Aceptado condicional', 'Firmada'].includes(result.dgii_estado ?? '')) await this.printInvoice();
+        else if (['En cola', 'Enviando DGII', 'En proceso DGII'].includes(result.dgii_estado ?? '')) this.printAfterOperation = result.id;
       }
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo enviar la factura a DGII.');
@@ -1429,8 +1444,19 @@ export class InvoiceNewPageComponent implements OnInit {
     }
   }
 
+  private applyOperationResult(result: InvoiceRow): void {
+    if (!this.savedInvoice) return;
+    this.savedInvoice = { ...this.savedInvoice, ...result };
+    this.invoiceForm.ncf = result.ncf ?? this.invoiceForm.ncf;
+    this.invoiceMessage = result.dgii_mensaje_respuesta ?? result.dgii_estado ?? '';
+    if (this.dgiiDialog) {
+      this.dgiiDialog = ['Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII'].includes(result.dgii_estado ?? '')
+        ? 'processing' : ['Aceptado', 'Aceptado condicional', 'Firmada'].includes(result.dgii_estado ?? '') ? 'success' : 'error';
+      this.dgiiDialogMessage = this.invoiceMessage;
+    }
+  }
+
   closeDgiiDialog(): void {
-    if (this.dgiiDialog === 'processing') return;
     this.dgiiDialog = null;
   }
 
@@ -1440,7 +1466,7 @@ export class InvoiceNewPageComponent implements OnInit {
     const savedInvoiceId = this.savedInvoice.id;
 
     const isAcceptedByDgii = this.dgiiStatus === 'Aceptado';
-    const documentTitle = isAcceptedByDgii ? 'Factura electrónica' : 'Factura de consumo final';
+    const documentTitle = this.isProforma ? 'Factura PROFORMA' : isAcceptedByDgii ? 'Factura electrónica' : 'Factura de consumo final';
     const session = await this.auth.restoreSession();
     const seller = session?.fullName ?? this.data.userName;
     const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId) ?? this.data.companies[0];
@@ -1607,12 +1633,12 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   private toStoredNcfType(value: string): string {
-    const code = value.match(/\d{2}/)?.[0];
+    const code = value.match(/332|\d{2}/)?.[0];
     return code ? `E${code}` : value.trim().toUpperCase();
   }
 
   private getNcfOptionByStoredType(value: string): string {
-    const code = value.match(/\d{2}/)?.[0];
+    const code = value.match(/332|\d{2}/)?.[0];
     return code
       ? this.ncfTypes.find((option) => this.isNcfCode(option, code)) ?? value
       : value;

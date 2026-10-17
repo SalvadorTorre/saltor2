@@ -1,282 +1,113 @@
-<section class="dashboard-content ncf-content">
-  <div class="ncf-shell">
-    <header class="ecf-hero">
-      <div>
-        <small>GESTIÓN FISCAL</small>
-        <h2>Gestión de e-CF</h2>
-        <p>Configura y controla secuencias electrónicas por empresa para facturación DGII.</p>
-      </div>
-      <button class="ecf-hero__new" type="button" (click)="startCreateNcfSequence()">+ Nuevo e-NCF</button>
-    </header>
+<ng-template #icon let-name>
+  <svg class="sequence-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [ngSwitch]="name">
+    <path *ngSwitchCase="'plus'" d="M12 5v14M5 12h14" />
+    <path *ngSwitchCase="'search'" d="m21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0" />
+    <path *ngSwitchCase="'refresh'" d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18a8 8 0 0 1-13-3" />
+    <path *ngSwitchCase="'edit'" d="m4 16-1 5 5-1L21 7l-4-4L4 16Zm11-11 4 4" />
+    <path *ngSwitchCase="'history'" d="M3 12a9 9 0 1 0 3-7L3 8m0-5v5h5m4-1v5l3 2" />
+    <path *ngSwitchCase="'close'" d="m6 6 12 12M6 18 18 6" />
+    <path *ngSwitchDefault d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8M8 17h5" />
+  </svg>
+</ng-template>
 
-    <div class="ncf-stats-grid ecf-stats-grid">
-      <article *ngFor="let stat of ncfStats" class="ncf-stat-card" [class]="'ncf-stat-card ncf-stat-card--' + stat.tone">
-        <div class="ncf-stat-card__icon"></div>
-        <div>
-          <strong>{{ stat.value }}</strong>
-          <span>{{ stat.label }}</span>
-        </div>
-      </article>
+<section class="sequence-page" aria-labelledby="sequence-title">
+  <header class="sequence-header">
+    <div class="sequence-heading">
+      <span class="sequence-heading__icon"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'document' }" /></span>
+      <div><span class="sequence-eyebrow">CONTABILIDAD · CONTROL FISCAL</span><h2 id="sequence-title">Secuencias e-NCF</h2><p>Configura tus rangos autorizados y da seguimiento a cada solicitud.</p></div>
     </div>
+    <button class="sequence-primary" type="button" (click)="newRequest()" [disabled]="isLoading || isSaving || !!loadError || !companyId">
+      <ng-container *ngTemplateOutlet="icon; context: { $implicit: 'plus' }" /> Nueva solicitud
+    </button>
+  </header>
 
-    <!-- <div class="ncf-section">
-      <div class="ncf-toolbar">
-        <label class="ncf-search">
-          <span>Q</span>
-          <input type="text" [(ngModel)]="ncfSearch" placeholder="Buscar por RNC o razon social..." />
-        </label>
-        <button class="ncf-primary-button" type="button" (click)="startCreateNcfCompany()">+ Nueva Empresa</button>
-      </div>
-
-      <div class="ncf-layout">
-        <section class="ncf-table-panel">
-          <div class="ncf-table">
-            <div class="ncf-table__row ncf-table__row--head">
-              <span>RNC</span>
-              <span>Razon Social</span>
-              <span>Nombre Comercial</span>
-              <span>Telefono</span>
-              <span>Fecha Registro</span>
-              <span>Estado</span>
-              <span>Acciones</span>
-            </div>
-
-            <div *ngFor="let company of filteredNcfCompanies" class="ncf-table__row" [class.ncf-table__row--active]="isSelectedNcfCompany(company)" (click)="selectNcfCompany(company)">
-              <span>{{ company.rnc }}</span>
-              <strong>{{ company.legalName }}</strong>
-              <span>{{ company.tradeName }}</span>
-              <span>{{ company.phone }}</span>
-              <span>{{ company.createdAt }}</span>
-              <span class="ncf-status-pill">{{ company.status }}</span>
-              <div class="ncf-actions-dropdown" (click)="$event.stopPropagation()">
-                <button
-                  type="button"
-                  class="ncf-actions-dropdown__trigger"
-                  [class.ncf-actions-dropdown__trigger--open]="openNcfCompanyActionsId === company.id"
-                  (click)="toggleNcfCompanyActions(company.id)">
-                  <span>Acciones</span>
-                  <span class="ncf-actions-dropdown__arrow">v</span>
-                </button>
-
-                <div *ngIf="openNcfCompanyActionsId === company.id" class="ncf-actions-dropdown__menu">
-                  <button type="button" (click)="viewNcfCompanySequences(company)">Secuencias</button>
-                  <button type="button" (click)="selectNcfCompany(company)">Editar</button>
-                  <button type="button" [disabled]="!canDeleteNcfCompany(company)" (click)="deleteNcfCompany(company)">Eliminar</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p class="ncf-footnote">{{ isLoadingNcf ? 'Cargando empresas NCF desde Supabase...' : ('Mostrando ' + filteredNcfCompanies.length + ' de ' + data.ncfCompanies.length + ' empresas') }}</p>
-        </section>
-
-        <section class="panel company-form-panel">
-          <div class="panel__header company-panel-header">
-            <div>
-              <h3>{{ ncfCompanyEditorMode === 'create' ? 'Registrar empresa NCF' : 'Editar empresa NCF' }}</h3>
-              <p>{{ ncfCompanyMessage }}</p>
-            </div>
-            <div class="company-form__chip">{{ ncfCompanyEditorMode === 'create' ? 'Nueva empresa' : 'Modo edicion' }}</div>
-          </div>
-
-          <form class="company-form" (ngSubmit)="saveNcfCompany()">
-            <div class="company-form__hero">
-              <div class="company-form__logo">NCF</div>
-              <div>
-                <strong>{{ ncfCompanyForm.tradeName || 'Nueva empresa' }}</strong>
-                <p>Datos de la empresa autorizada para comprobantes fiscales.</p>
-              </div>
-            </div>
-
-            <div class="company-form__grid">
-              <label class="field">
-                <span>RNC</span>
-                <input type="text" name="ncfCompanyRnc" [(ngModel)]="ncfCompanyForm.rnc" placeholder="101234567" />
-              </label>
-
-              <label class="field">
-                <span>Razon social</span>
-                <input type="text" name="ncfCompanyLegalName" [(ngModel)]="ncfCompanyForm.legalName" placeholder="Comercial ABC, SRL" />
-              </label>
-
-              <label class="field">
-                <span>Nombre comercial</span>
-                <input type="text" name="ncfCompanyTradeName" [(ngModel)]="ncfCompanyForm.tradeName" placeholder="ABC Store" />
-              </label>
-
-              <label class="field">
-                <span>Telefono</span>
-                <input type="text" name="ncfCompanyPhone" [(ngModel)]="ncfCompanyForm.phone" placeholder="809-555-1234" />
-              </label>
-
-              <label class="field field--full">
-                <span>Direccion</span>
-                <input type="text" name="ncfCompanyAddress" [(ngModel)]="ncfCompanyForm.address" placeholder="Av. 27 de Febrero 10, Santo Domingo" />
-              </label>
-
-              <label class="field">
-                <span>Correo electronico</span>
-                <input type="email" name="ncfCompanyEmail" [(ngModel)]="ncfCompanyForm.email" placeholder="info@empresa.com" />
-              </label>
-
-              <label class="field">
-                <span>Estado</span>
-                <select name="ncfCompanyStatus" [(ngModel)]="ncfCompanyForm.status">
-                  <option value="Activa">Activa</option>
-                  <option value="Inactiva">Inactiva</option>
-                </select>
-              </label>
-            </div>
-
-            <div class="company-form__actions">
-              <button class="secondary-action" type="button" (click)="startCreateNcfCompany()">Limpiar</button>
-              <button class="primary-action" type="submit" [disabled]="isSavingNcfCompany">
-                {{ isSavingNcfCompany ? 'Guardando...' : (ncfCompanyEditorMode === 'create' ? 'Guardar empresa' : 'Actualizar empresa') }}
-              </button>
-            </div>
-          </form>
-        </section>
-      </div>
-    </div> -->
-
-    <div class="ncf-section ecf-section" id="ncf-sequences-section">
-      <div class="ncf-toolbar ncf-toolbar--filters ecf-toolbar">
-        <label class="ncf-search">
-          <span>Q</span>
-          <input type="text" [(ngModel)]="ncfSequenceSearch" placeholder="Buscar por empresa o tipo" />
-        </label>
-
-        <select [(ngModel)]="ncfSequenceCompanyFilter" aria-label="Empresa">
-          <option value="all">Todas las empresas</option>
-          <option *ngFor="let company of data.companies" [value]="company.id">{{ company.legalName }}</option>
-        </select>
-
-        <select [(ngModel)]="ncfSequenceTypeFilter" aria-label="Tipo e-NCF">
-          <option value="all">Todos los tipos</option>
-          <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>
-        </select>
-
-        <button class="ecf-toolbar__search" type="button">Buscar</button>
-        <button class="ecf-toolbar__refresh" type="button" (click)="ngOnInit()" title="Actualizar">↻</button>
-      </div>
-
-      <div class="ncf-layout ncf-layout--single">
-        <section class="ncf-table-panel">
-          <div class="ncf-table">
-            <div class="ncf-table__row ncf-table__row--head ncf-table__row--sequence ecf-table-row">
-              <span>Empresa</span>
-              <span>Tipo</span>
-              <span>Rango</span>
-              <span>Cantidad</span>
-              <span>Contador</span>
-              <span>Vigencia</span>
-              <span>Alerta</span>
-              <span>Acciones</span>
-            </div>
-
-            <div *ngFor="let sequence of filteredNcfSequences" class="ncf-table__row ncf-table__row--sequence ecf-table-row" [class.ncf-table__row--active]="isSelectedNcfSequence(sequence)">
-              <div (click)="selectNcfSequence(sequence)">
-                <strong>{{ getNcfCompanyName(sequence.companyId) }}</strong>
-                <small>{{ getNcfCompanyRnc(sequence.companyId) }}</small>
-              </div>
-              <span class="ecf-type-pill" (click)="selectNcfSequence(sequence)">{{ sequence.series }} - {{ sequence.ncfType }}</span>
-              <div (click)="selectNcfSequence(sequence)">
-                <strong>{{ sequence.rangeStart.replace(sequence.series, '') }} → {{ sequence.rangeEnd.replace(sequence.series, '') }}</strong>
-              </div>
-              <strong (click)="selectNcfSequence(sequence)">{{ sequence.total | number }}</strong>
-              <span class="ecf-counter" (click)="selectNcfSequence(sequence)">{{ sequence.used | number }}</span>
-              <span (click)="selectNcfSequence(sequence)">{{ sequence.expiresAt }}</span>
-              <span class="ecf-alert" [class.ecf-alert--active]="sequence.alert">{{ sequence.alertPercent }}%</span>
-              <div class="ncf-actions">
-                <button type="button" title="Editar secuencia" aria-label="Editar secuencia" (click)="selectNcfSequence(sequence)"><img src="assets/icons/invoice-edit.svg" alt="" /></button>
-                <button class="ecf-delete-button" type="button" title="Eliminar secuencia" aria-label="Eliminar secuencia" (click)="deleteNcfSequence(sequence)"><img src="assets/icons/line-trash-red.svg" alt="" /></button>
-              </div>
-            </div>
-          </div>
-
-          <p class="ncf-footnote">{{ isLoadingNcf ? 'Cargando secuencias NCF desde Supabase...' : ('Mostrando ' + filteredNcfSequences.length + ' de ' + data.ncfSequences.length + ' secuencias') }}</p>
-        </section>
-
-        <div *ngIf="isSequenceEditorModalVisible" class="ecf-sequence-modal" role="dialog" aria-modal="true" aria-labelledby="ecfSequenceEditorTitle">
-        <section class="panel company-form-panel ecf-sequence-modal__panel">
-          <div class="panel__header company-panel-header">
-            <div>
-              <h3 id="ecfSequenceEditorTitle">{{ ncfSequenceEditorMode === 'create' ? 'Asignar secuencia NCF' : 'Editar secuencia NCF' }}</h3>
-              <p>{{ ncfSequenceMessage }}</p>
-            </div>
-            <div class="ecf-sequence-modal__header-actions"><div class="company-form__chip">{{ ncfSequenceEditorMode === 'create' ? 'Nuevo rango' : 'Modo edicion' }}</div><button type="button" class="ecf-sequence-modal__close" title="Cerrar" aria-label="Cerrar" (click)="closeNcfSequenceEditor()">×</button></div>
-          </div>
-
-          <form class="company-form" (ngSubmit)="saveNcfSequence()">
-            <div class="company-form__grid">
-              <label class="field">
-                <span>Empresa</span>
-                <ng-container *ngIf="hasSingleCompany && singleCompany as onlyCompany">
-                  <input type="hidden" name="ncfSequenceCompany" [(ngModel)]="ncfSequenceForm.companyId" />
-                  <div class="company-form__readonly">
-                    <strong>{{ onlyCompany.legalName }}</strong>
-                    <small>RNC {{ onlyCompany.rnc }} - {{ onlyCompany.tradeName }}</small>
-                  </div>
-                </ng-container>
-                <select *ngIf="!hasSingleCompany" name="ncfSequenceCompanySelect" [(ngModel)]="ncfSequenceForm.companyId">
-                  <option *ngFor="let company of data.companies" [ngValue]="company.id">{{ company.legalName }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Tipo NCF</span>
-                <select name="ncfSequenceType" [(ngModel)]="ncfSequenceForm.ncfType">
-                  <option *ngFor="let type of data.ncfTypes" [value]="type">{{ type }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Serie automatica</span>
-                <input type="text" name="ncfSequenceSeries" [(ngModel)]="ncfSequenceForm.series" placeholder="E31" />
-              </label>
-              <label class="field">
-                <span>Contador (usados)</span>
-                <input type="number" min="0" step="1" name="ncfSequenceUsed" [(ngModel)]="ncfSequenceForm.used" />
-              </label>
-              <label class="field">
-                <span>% Alerta (solicitar)</span>
-                <input type="number" min="0" max="100" step="1" name="ncfSequenceAlertPercent" [(ngModel)]="ncfSequenceForm.alertPercent" />
-              </label>
-              <label class="field">
-                <span>Estado</span>
-                <select name="ncfSequenceStatus" [(ngModel)]="ncfSequenceForm.status">
-                  <option value="Activa">Activa</option>
-                  <option value="Agotada">Agotada</option>
-                  <option value="Vencida">Vencida</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Rango inicial</span>
-                <input type="text" name="ncfSequenceStart" [(ngModel)]="ncfSequenceForm.rangeStart" placeholder="E3100000001" />
-              </label>
-              <label class="field">
-                <span>Rango final</span>
-                <input type="text" name="ncfSequenceEnd" [(ngModel)]="ncfSequenceForm.rangeEnd" placeholder="E3100000500" />
-              </label>
-              <label class="field">
-                <span>Fecha autorizacion</span>
-                <input type="text" name="ncfSequenceAuthorizedAt" [(ngModel)]="ncfSequenceForm.authorizedAt" placeholder="01/01/2026" />
-              </label>
-              <label class="field field--full">
-                <span>Fecha vencimiento</span>
-                <input type="text" name="ncfSequenceExpiresAt" [(ngModel)]="ncfSequenceForm.expiresAt" placeholder="30/12/2026" />
-              </label>
-            </div>
-
-            <div class="company-form__actions">
-              <button class="secondary-action" type="button" (click)="startCreateNcfSequence()">Limpiar</button>
-              <button class="primary-action" type="submit" [disabled]="isSavingNcfSequence">
-                {{ isSavingNcfSequence ? 'Guardando...' : (ncfSequenceEditorMode === 'create' ? 'Guardar secuencia' : 'Actualizar secuencia') }}
-              </button>
-            </div>
-          </form>
-        </section>
-        </div>
-
-      </div>
-    </div>
+  <div class="sequence-overview" *ngIf="!isLoading && !loadError" aria-label="Resumen de secuencias">
+    <span><strong>{{ summary.configured }}</strong> rangos registrados</span>
+    <span><i class="sequence-dot sequence-dot--active" aria-hidden="true"></i><strong>{{ summary.available }}</strong> disponibles</span>
+    <span><i class="sequence-dot" aria-hidden="true"></i><strong>{{ summary.pending }}</strong> por configurar</span>
   </div>
+
+  <div *ngIf="message" class="sequence-feedback" [class.sequence-feedback--error]="messageIsError" [attr.role]="messageIsError ? 'alert' : 'status'">{{ message }}</div>
+
+  <section *ngIf="editorVisible" class="sequence-editor" aria-labelledby="sequence-editor-title">
+    <header><div><h3 #editorTitle tabindex="-1" id="sequence-editor-title">{{ editingProforma ? 'Ajustar contador E332 · Proforma' : editing ? 'Editar autorización #' + editing.id : 'Registrar nueva solicitud' }}</h3>
+      <p>{{ editingProforma ? 'Solo indica el último número utilizado. Puedes adelantar o corregir el contador; cada ajuste conserva su historial.' : editing ? 'Los cambios conservan la versión anterior. Para otro rango, registra una nueva solicitud.' : 'Sustituye el rango predeterminado por el rango autorizado y completa la referencia, cantidades y fechas.' }}</p></div>
+      <button class="sequence-icon-button" type="button" (click)="cancel()" [disabled]="isSaving" aria-label="Cerrar formulario"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'close' }" /></button>
+    </header>
+    <form *ngIf="!editingProforma" (ngSubmit)="save()" #requestForm="ngForm">
+      <fieldset [disabled]="isSaving" class="sequence-fields">
+        <label class="sequence-fields__wide">Tipo de comprobante<select name="type" [(ngModel)]="form.ncfType" (ngModelChange)="changeType()" [disabled]="!!editing" required><option *ngFor="let type of fiscalTypes" [value]="type">{{ type }}</option></select></label>
+        <label>Serie<input name="series" [(ngModel)]="form.series" readonly /></label>
+        <label>Autorización<input name="authorization" [(ngModel)]="form.authorization" placeholder="Número / referencia" required maxlength="120" /></label>
+        <label>Fecha de autorización<input type="date" name="authorizedAt" [(ngModel)]="form.authorizedAt" required /></label>
+        <label>Solicitados<input type="number" name="requested" [(ngModel)]="form.requested" min="1" max="2147483647" step="1" required /></label>
+        <label>Aceptados<input type="number" name="accepted" [(ngModel)]="form.accepted" min="1" [max]="form.requested || 2147483647" step="1" required [readonly]="!!editing?.used" /></label>
+        <label>Desde<input name="from" [(ngModel)]="form.rangeStart" placeholder="1" required [readonly]="!!editing?.used" /></label>
+        <label>Hasta<input name="to" [(ngModel)]="form.rangeEnd" placeholder="500" required [readonly]="!!editing?.used" /></label>
+        <label>Fecha de vencimiento<input type="date" name="expiresAt" [(ngModel)]="form.expiresAt" required [min]="form.authorizedAt" /></label>
+        <label>Utilizados<input type="number" name="used" [(ngModel)]="form.used" min="0" [max]="form.accepted || 0" step="1" required [readonly]="!!editing" /></label>
+        <label>Estado<select name="status" [(ngModel)]="form.status"><option>Activa</option><option>Agotada</option><option>Vencida</option></select></label>
+        <label>Alerta de consumo (%)<input type="number" name="alert" [(ngModel)]="form.alertPercent" min="0" max="100" step="1" required /></label>
+      </fieldset>
+      <div class="sequence-editor__footer"><p>Rango: <strong>{{ rangeCount | number }}</strong> comprobantes. «Utilizados» indica cuántos números del rango ya se consumieron.</p>
+        <div><button class="sequence-secondary" type="button" (click)="cancel()" [disabled]="isSaving">Cancelar</button>
+        <button class="sequence-primary" type="submit" [disabled]="isSaving || requestForm.invalid">{{ isSaving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar solicitud' }}</button></div>
+      </div>
+    </form>
+    <form *ngIf="editingProforma" (ngSubmit)="saveProforma()" #counterForm="ngForm">
+      <fieldset [disabled]="isSaving" class="sequence-fields sequence-fields--proforma">
+        <label>Número actual (último utilizado)<input type="number" name="proformaCurrent" [(ngModel)]="proformaCurrent" min="0" [max]="proformaMax" step="1" required /></label>
+        <div class="sequence-proforma-note"><strong>Proforma · Numeración interna</strong><p>Sin autorización ni vencimiento DGII. El próximo número será {{ proformaCurrent < proformaMax ? (proformaCurrent + 1 | number) : 'No disponible' }}.</p></div>
+      </fieldset>
+      <div class="sequence-editor__footer"><p>El cambio se aplica únicamente a la numeración E332 de esta empresa.</p><div><button class="sequence-secondary" type="button" (click)="cancel()" [disabled]="isSaving">Cancelar</button><button class="sequence-primary" type="submit" [disabled]="isSaving || counterForm.invalid">{{ isSaving ? 'Guardando…' : 'Guardar contador' }}</button></div></div>
+    </form>
+  </section>
+
+  <section class="sequence-register" aria-label="Gestión de rangos">
+    <div class="sequence-toolbar">
+      <label class="sequence-search"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'search' }" /><input aria-label="Buscar secuencias" [(ngModel)]="search" placeholder="Buscar por tipo, autorización o rango…" /></label>
+      <select aria-label="Filtrar por tipo" [(ngModel)]="typeFilter"><option value="all">Todos los tipos</option><option *ngFor="let type of types" [value]="type">{{ type }}</option></select>
+      <button class="sequence-secondary" type="button" (click)="load()" [disabled]="isLoading || isSaving || editorVisible"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'refresh' }" />Actualizar</button>
+    </div>
+    <p *ngIf="proformaError" class="sequence-feedback sequence-feedback--error" role="alert">{{ proformaError }}</p>
+    <p *ngIf="loadError" class="sequence-feedback sequence-feedback--error" role="alert">{{ loadError }}</p>
+    <div class="sequence-grid sequence-grid--register" role="region" aria-label="Registro de solicitudes e-NCF" tabindex="0" [attr.aria-busy]="isLoading">
+      <table>
+        <caption class="visually-hidden">Solicitudes de secuencias, autorizaciones y consumo actual</caption>
+        <thead><tr><th scope="col">Tipo de comprobante</th><th scope="col">Autorización</th><th scope="col" class="sequence-numeric">Solicitados</th><th scope="col" class="sequence-numeric">Aceptados</th><th scope="col">Desde</th><th scope="col">Hasta</th><th scope="col">Número actual</th><th scope="col" class="sequence-numeric">Utilizados</th><th scope="col">Vencimiento</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead>
+        <tbody>
+          <tr *ngIf="isLoading"><td colspan="11" class="sequence-empty" role="status"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'refresh' }" /> Cargando tus secuencias…</td></tr>
+          <ng-container *ngIf="!isLoading && !loadError">
+            <tr *ngFor="let sequence of filteredSequences" [class.sequence-row--default]="sequence.isDefault" [class.sequence-row--proforma]="sequence.isProforma">
+              <td class="sequence-type"><div class="sequence-type__title"><span class="sequence-series">{{ sequence.series }}</span><span class="sequence-record" *ngIf="!sequence.isDefault && !sequence.isProforma">#{{ sequence.id }}</span></div><span class="sequence-type__name">{{ typeName(sequence.ncfType) }}</span></td>
+              <td><span [class.sequence-muted]="!sequence.authorization">{{ sequence.isProforma ? 'No requiere' : sequence.authorization || 'Por configurar' }}</span><small *ngIf="sequence.authorizedAt">{{ displayDate(sequence.authorizedAt) }}</small></td>
+              <td class="sequence-numeric">{{ sequence.isProforma || sequence.requested == null ? '—' : (sequence.requested | number) }}</td>
+              <td class="sequence-numeric sequence-approved">{{ sequence.isProforma ? '—' : (sequence.accepted ?? sequence.total | number) }}</td>
+              <td class="sequence-number">{{ sequence.rangeStart }}</td><td class="sequence-number">{{ sequence.rangeEnd }}</td>
+              <td class="sequence-number"><strong>{{ currentNumber(sequence) }}</strong><small *ngIf="!sequence.isDefault">Próximo: {{ nextNumber(sequence) }}</small></td>
+              <td class="sequence-numeric"><strong>{{ sequence.isProforma ? '—' : (sequence.used | number) }}</strong><small *ngIf="!sequence.isDefault && !sequence.isProforma">de {{ sequence.total | number }}</small></td>
+              <td><span [class.sequence-muted]="!sequence.expiresAt">{{ sequence.isProforma ? 'No aplica' : displayDate(sequence.expiresAt) }}</span></td>
+              <td><span class="sequence-status" [class.sequence-status--internal]="sequence.isProforma" [class.sequence-status--pending]="sequence.isDefault" [class.sequence-status--inactive]="!sequence.isDefault && status(sequence) !== 'Activa'"><i aria-hidden="true"></i>{{ sequence.isProforma ? 'Interna' : sequence.isDefault ? 'Por configurar' : status(sequence) }}</span></td>
+              <td><div class="sequence-actions"><button type="button" class="sequence-icon-button" (click)="edit(sequence)" [disabled]="isSaving" [attr.aria-label]="sequence.isProforma ? 'Ajustar contador E332' : sequence.isDefault ? 'Configurar ' + sequence.series : 'Editar solicitud ' + sequence.id" [title]="sequence.isProforma ? 'Ajustar contador proforma' : sequence.isDefault ? 'Configurar rango autorizado' : 'Editar autorización'"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'edit' }" /></button>
+                <button *ngIf="!sequence.isDefault" type="button" class="sequence-icon-button" (click)="showHistory(sequence)" [attr.aria-label]="sequence.isProforma ? 'Ver historial E332' : 'Ver historial de solicitud ' + sequence.id" title="Ver historial"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'history' }" /></button></div></td>
+            </tr>
+            <tr *ngIf="!filteredSequences.length"><td colspan="11" class="sequence-empty">No hay secuencias que coincidan con los filtros.</td></tr>
+          </ng-container>
+          <tr *ngIf="!isLoading && loadError"><td colspan="11" class="sequence-empty">No se pudo cargar el registro. Pulsa Actualizar para reintentar.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <footer class="sequence-grid-footer"><span><strong>{{ filteredSequences.length }}</strong> de {{ gridSequences.length }} filas</span><span>Los rangos predeterminados esperan autorización. Cada solicitud conserva su historial.</span></footer>
+  </section>
+
+  <section *ngIf="historyFor as selected" class="sequence-history" aria-labelledby="sequence-history-title">
+    <header><div><h3 #historyTitle tabindex="-1" id="sequence-history-title">{{ selected.isProforma ? 'Historial E332 · Proforma' : 'Historial de solicitud #' + selected.id + ' · ' + selected.series }}</h3><p>Últimos 100 movimientos, del más reciente al más antiguo. Los registros importados comienzan con su estado disponible.</p></div>
+      <button class="sequence-icon-button" type="button" (click)="historyFor = null" aria-label="Cerrar historial"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'close' }" /></button></header>
+    <p *ngIf="isLoadingHistory" role="status">Cargando historial…</p><p *ngIf="historyError" role="alert">{{ historyError }}</p>
+    <div class="sequence-grid" *ngIf="!selected.isProforma && !isLoadingHistory && !historyError" role="region" aria-label="Movimientos de la solicitud" tabindex="0"><table><thead><tr><th>Fecha / movimiento</th><th>Autorización</th><th>Solicitados</th><th>Aceptados</th><th>Desde / Hasta</th><th>Número actual</th><th>Vencimiento</th><th>Estado</th></tr></thead><tbody>
+      <tr *ngFor="let item of history"><td><strong>{{ item.accion }}</strong><small>{{ item.registrado_en | date:'dd/MM/yyyy HH:mm:ss':'-0400' }}</small></td><td>{{ item.datos.authorization || 'Sin registrar' }}</td><td>{{ item.datos.requested == null ? 'Sin registrar' : (item.datos.requested | number) }}</td><td>{{ item.datos.accepted | number }}</td><td>{{ item.datos.rangeStart }} → {{ item.datos.rangeEnd }}</td><td>{{ currentNumber(item.datos) }}</td><td>{{ displayDate(item.datos.expiresAt) }}</td><td>{{ item.datos.status }}</td></tr>
+      <tr *ngIf="!history.length"><td colspan="8" class="sequence-empty">No hay movimientos registrados.</td></tr>
+    </tbody></table></div>
+    <div class="sequence-grid" *ngIf="selected.isProforma && !isLoadingHistory && !historyError" role="region" aria-label="Movimientos del contador proforma" tabindex="0"><table><thead><tr><th>Fecha</th><th>Movimiento</th><th>Número anterior</th><th>Número actual</th><th>Proforma</th></tr></thead><tbody><tr *ngFor="let item of proformaHistory"><td>{{ item.registrado_en | date:'dd/MM/yyyy HH:mm:ss':'-0400' }}</td><td>{{ item.accion }}</td><td>{{ item.numero_anterior | number }}</td><td>{{ item.numero_actual | number }}</td><td>{{ item.activa ? 'Activa' : 'Inactiva' }}</td></tr><tr *ngIf="!proformaHistory.length"><td colspan="5" class="sequence-empty">Sin movimientos registrados.</td></tr></tbody></table></div>
+  </section>
 </section>

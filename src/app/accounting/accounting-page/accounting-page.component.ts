@@ -1,4 +1,5 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, inject, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
@@ -31,6 +32,7 @@ const currentMonthRange = (): { from: string; to: string } => {
 
 @Component({ selector: 'app-accounting-page', standalone: true, imports: [CommonModule, FormsModule], templateUrl: './accounting-page.component.html', styleUrls: ['./accounting-page.component.scss'] })
 export class AccountingPageComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   active: FiscalView = 'rep607';
   message = 'Selecciona los filtros y pulsa Filtrar para consultar.';
   filters = { branchId: 'Todas', type: 'Todos', status: 'Todos', invoice: '', encf: '', ...currentMonthRange() };
@@ -487,6 +489,14 @@ export class AccountingPageComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.ecfService.updates$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (event.kind === 'FACTURA') { void this.loadPendingInvoices(); void this.loadRep607(); }
+      if (event.kind === 'NOTA_CREDITO') {
+        void this.loadCreditNotes();
+        if (this.lastSavedCreditNoteId === event.documentId) this.creditDgii = { status: event.result.dgii_estado ?? '', trackId: event.result.dgii_track_id || '-', securityCode: event.result.dgii_codigo_seguridad || '-' };
+      }
+      if (event.kind === 'GASTO_MENOR') void this.loadMinorData();
+    });
     this.initialized = true;
     void this.loadMinorData();
     void this.loadRep607();
@@ -597,7 +607,7 @@ export class AccountingPageComponent implements OnInit {
   private escapeHtml(value: string): string { return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] ?? character)); }
 
   canSendCreditNote(note: CreditNoteRecord): boolean {
-    return !['Aceptado', 'Aceptado condicional'].includes(note.status);
+    return !['Aceptado', 'Aceptado condicional', 'Firmada', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(note.status);
   }
 
   isRejectedCreditNote(note: CreditNoteRecord): boolean {
@@ -683,7 +693,7 @@ export class AccountingPageComponent implements OnInit {
   }
 
   canSendPending(invoice: PendingInvoice): boolean {
-    return !['Aceptado', 'Aceptado condicional'].includes(invoice.status);
+    return !['Aceptado', 'Aceptado condicional', 'Firmada', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(invoice.status);
   }
 
   sendPendingInvoice(invoice: PendingInvoice): void {
@@ -697,8 +707,8 @@ export class AccountingPageComponent implements OnInit {
     this.openDgiiSendDialog(invoice.number);
     try {
       const result = await this.ecfService.sendInvoice(invoice.id);
-      this.pendingActionMessage = `Factura ${invoice.number} enviada a DGII.`;
-      this.completeDgiiSendDialog('success', result.dgii_mensaje_respuesta || `La factura ${invoice.number} fue procesada por DGII.`);
+      this.pendingActionMessage = result.dgii_mensaje_respuesta || result.dgii_estado || 'Solicitud registrada.';
+      this.completeDgiiSendDialog(['Error', 'Rechazado', 'Envío por confirmar'].includes(result.dgii_estado ?? '') ? 'error' : 'success', result.dgii_mensaje_respuesta || result.dgii_estado || 'Solicitud registrada.');
       await this.loadPendingInvoices();
     } catch (error) {
       this.pendingActionMessage = error instanceof Error ? error.message : 'No se pudo enviar la factura a DGII.';
@@ -755,7 +765,7 @@ export class AccountingPageComponent implements OnInit {
       this.dgiiSendTarget = null;
     }
   }
-  canResend(invoice: Rep607Invoice): boolean { return !['Aceptado', 'Aceptado condicional'].includes(invoice.status); }
+  canResend(invoice: Rep607Invoice): boolean { return !['Aceptado', 'Aceptado condicional', 'Firmada', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(invoice.status); }
   isAcceptedStatus(status: string): boolean { return status === 'Aceptado'; }
   isRejectedStatus(status: string): boolean { return status === 'Rechazado'; }
 
@@ -814,8 +824,8 @@ export class AccountingPageComponent implements OnInit {
     this.openDgiiSendDialog(invoice.number);
     try {
       const result = await this.ecfService.sendInvoice(invoice.id);
-      this.actionMessage = `Factura ${invoice.number} reenviada a DGII.`;
-      this.completeDgiiSendDialog('success', result.dgii_mensaje_respuesta || `La factura ${invoice.number} fue procesada por DGII.`);
+      this.actionMessage = result.dgii_mensaje_respuesta || result.dgii_estado || 'Solicitud registrada.';
+      this.completeDgiiSendDialog(['Error', 'Rechazado', 'Envío por confirmar'].includes(result.dgii_estado ?? '') ? 'error' : 'success', result.dgii_mensaje_respuesta || result.dgii_estado || 'Solicitud registrada.');
       await this.loadRep607();
     } catch (error) {
       this.actionMessage = error instanceof Error ? error.message : 'No se pudo reenviar la factura a DGII.';
@@ -969,6 +979,8 @@ export class AccountingPageComponent implements OnInit {
       case 'Borrador': return '#64748b';
       case 'Rechazado':return '#dc2626';
       case 'Error': return '#dc2626';
+      case 'Envío por confirmar': return '#b45309';
+      default: return '#2563eb';
     }
   }
 

@@ -59,6 +59,10 @@ export interface NcfCompany {
 }
 
 export interface NcfSequence {
+  authorization?: string;
+  requested?: number | null;
+  accepted?: number;
+  updatedAt?: string;
   id: number;
   companyId: number;
   ncfType: string;
@@ -84,6 +88,9 @@ export interface NcfCompanyFormModel {
   status: 'Activa' | 'Inactiva';
 }
 export interface NcfSequenceFormModel {
+  authorization?: string;
+  requested?: number | null;
+  accepted?: number;
   companyId: number | null;
   ncfType: string;
   series: string;

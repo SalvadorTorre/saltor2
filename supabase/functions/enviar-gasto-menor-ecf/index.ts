@@ -1,3 +1,4 @@
+import { reserveOperation, submitOperation, operationResult } from '../_shared/ecf-operation.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -9,7 +10,6 @@ const corsHeaders = {
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: corsHeaders });
 const decimal = (value: unknown): string => Number(value ?? 0).toFixed(2);
-const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const issueDate = (value: string): string => new Date(`${value}T12:00:00`).toLocaleDateString('en-GB').replaceAll('/', '-');
 
 function byteaToBase64(value: string): string {
@@ -19,8 +19,8 @@ function byteaToBase64(value: string): string {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string): Uint8Array {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+function base64ToBytes(value: string): ArrayBuffer {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)).buffer as ArrayBuffer;
 }
 
 async function decryptPassword(value: string): Promise<string> {
@@ -34,13 +34,6 @@ async function decryptPassword(value: string): Promise<string> {
   return new TextDecoder().decode(decoded);
 }
 
-function timestampFromResponse(value: unknown): string | null {
-  if (!value) return null;
-  const dominicanDate = String(value).match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}:\d{2}:\d{2}))?$/);
-  if (dominicanDate) return new Date(`${dominicanDate[3]}-${dominicanDate[2]}-${dominicanDate[1]}T${dominicanDate[4] ?? '00:00:00'}`).toISOString();
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
 
 function paymentCode(value: string | null): string {
   if (/cr[eé]dito/i.test(value ?? '')) return '2';
@@ -88,23 +81,18 @@ Deno.serve(async (request) => {
     if (!config?.ambiente || !config.url_base) return json({ error: 'Falta la configuración e-CF de la empresa.' }, 400);
     if (!certificate?.archivo || !certificate.clave_cifrada) return json({ error: 'Carga el certificado digital y su clave antes de enviar.' }, 400);
 
-    const { data: sequenceRows, error: sequenceError } = await admin.rpc('siguiente_encf_desde_secuencia_ncf_con_vencimiento', {
-      p_empresa_id: user.empresa_id,
-      p_tipo_ncf: '43'
-    });
-    const sequence = Array.isArray(sequenceRows) ? sequenceRows[0] : sequenceRows;
-    const encf = sequence?.encf as string | undefined;
-    if (sequenceError || !encf) throw sequenceError ?? new Error('No se pudo generar el e-NCF E43 desde la secuencia autorizada.');
-    const sequenceExpiry = sequence?.fecha_vencimiento as string | undefined;
-    if (!sequenceExpiry) throw new Error('La secuencia E43 no tiene una fecha de vencimiento válida.');
-    const sequenceAlert = sequence?.mensaje_alerta as string | null | undefined;
+    const certificatePassword = await decryptPassword(certificate.clave_cifrada);
+    const operation = await reserveOperation(admin, 'GASTO_MENOR', expense.id, user, '43', config);
+    if (!operation.claimed) return json(operationResult(operation));
+    const encf = operation.encf;
+    const sequenceExpiry = operation.fecha_vencimiento;
 
     // E43 (Gastos Menores) siempre se transmite como una línea exenta.
     const scenario: Record<string, string> = {
       Version: '1.0',
       TipoeCF: '43',
       ENCF: encf,
-      FechaVencimientoSecuencia: issueDate(sequenceExpiry),
+      FechaVencimientoSecuencia: issueDate(sequenceExpiry!),
       IndicadorMontoGravado: '0',
       TipoPago: paymentCode(expense.forma_pago),
       RNCEmisor: company.rnc,
@@ -122,7 +110,7 @@ Deno.serve(async (request) => {
       MontoTotal: decimal(expense.total),
       'NumeroLinea[1]': '1',
       'IndicadorFacturacion[1]': '4',
-      'NombreItem[1]': String(expense.concept || expense.beneficiario || 'GASTO MENOR').slice(0, 80),
+      'NombreItem[1]': String(expense.concepto || expense.beneficiario || 'GASTO MENOR').slice(0, 80),
       'IndicadorBienoServicio[1]': '2',
       'CantidadItem[1]': '1.00',
       'PrecioUnitarioItem[1]': decimal(expense.total),
@@ -130,64 +118,11 @@ Deno.serve(async (request) => {
     };
     if (String(config.ambiente).toUpperCase() === 'TEST') scenario.CasoPrueba = `${company.rnc}${encf}`;
 
-    const requestJson = { scenarios: [scenario] };
-    const endpoint = `${String(config.url_base).replace(/\/+$/, '')}/api/${String(config.ambiente).toLowerCase()}/test-body-direct-cert`;
-    const remote = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-cert-p12-b64': byteaToBase64(certificate.archivo),
-        'x-cert-password': await decryptPassword(certificate.clave_cifrada),
-        'x-cert-rnc': company.rnc,
-        'x-cert-persist': String(config.persistir_certificado)
-      },
-      body: JSON.stringify(requestJson)
+    const result = await submitOperation(admin, operation, scenario, {
+      'Content-Type': 'application/json', 'x-cert-p12-b64': byteaToBase64(certificate.archivo),
+      'x-cert-password': certificatePassword, 'x-cert-rnc': company.rnc
     });
-    const raw = await remote.text();
-    let response: Record<string, unknown> = {};
-    try { response = JSON.parse(raw); } catch { response = { raw }; }
-    const responseData = asRecord(response.data);
-    const responsePayload = asRecord(responseData.data);
-    const results = Array.isArray(responsePayload.results) ? responsePayload.results : Array.isArray(responseData.results) ? responseData.results : Array.isArray(response.results) ? response.results : [];
-    const result = asRecord(results[0]);
-    const responseRfce = asRecord(result.responseRFCE);
-    const dgiiResponse = asRecord(responseRfce.dgiiResponse);
-    const ecfDgii = asRecord(result.ecfDgii);
-    const rfceDgii = asRecord(result.rfceDgii);
-    const externalStatus = String(dgiiResponse.estado ?? ecfDgii.estado ?? rfceDgii.estado ?? result.ecfEstado ?? result.rfceEstado ?? response.estado ?? response.status ?? '');
-    const state = !remote.ok || /error/i.test(externalStatus) ? 'Error' : /rechaz/i.test(externalStatus) ? 'Rechazado' : /condicional/i.test(externalStatus) ? 'Aceptado condicional' : /acept/i.test(externalStatus) ? 'Aceptado' : 'Enviado';
-    const remoteMessage = String(dgiiResponse.mensaje ?? ecfDgii.mensaje ?? rfceDgii.mensaje ?? responseData.message ?? response.message ?? response.mensaje ?? response.detail ?? (remote.ok ? 'Gasto menor enviado al servicio e-CF.' : 'El servicio e-CF rechazó la solicitud.'));
-    const message = sequenceAlert ? `${remoteMessage} ${sequenceAlert}` : remoteMessage;
-    const trackId = String(dgiiResponse.trackId ?? ecfDgii.trackId ?? rfceDgii.trackId ?? result.trackId ?? response.trackId ?? response.TrackId ?? response.track_id ?? '') || null;
-    const code = String(dgiiResponse.codigo ?? ecfDgii.codigo ?? rfceDgii.codigo ?? result.ecfCodigo ?? result.rfceCodigo ?? response.code ?? response.codigo ?? remote.status);
-    const securityCode = String(responseRfce.codigoSeguridad ?? responseRfce.codigoSeguridadeCF ?? asRecord(result.rfceInfo).codigoSeguridad ?? asRecord(result.ecfInfo).codigoSeguridad ?? result.codigoSeguridadeCF ?? response.codSeguridad ?? response.codigoSeguridad ?? '') || null;
-    const qrLink = String(responseRfce.qrUrl ?? asRecord(result.rfceInfo).qrUrl ?? asRecord(result.ecfInfo).qrUrl ?? result.link_original ?? response.qr_link ?? response.qrLink ?? '') || null;
-    const signatureDate = timestampFromResponse(responseRfce.fechaHoraFirma ?? asRecord(result.rfceInfo).fechaHoraFirma ?? asRecord(result.ecfInfo).fechaHoraFirma ?? result.fechaHoraFirmaRFCE ?? response.fec_firma ?? response.fechaFirma);
-    const responseMessages = dgiiResponse.mensajes ?? ecfDgii.mensajes ?? rfceDgii.mensajes ?? response.mensajes ?? response.messages ?? response.errores ?? response.errors ?? null;
-    const now = new Date().toISOString();
-    const { error: updateError } = await admin.from('gastos_menores').update({
-      encf,
-      fecha_vencimiento_secuencia: sequenceExpiry,
-      ecf_ambiente: config.ambiente,
-      estado_dgii: state,
-      dgii_track_id: trackId,
-      dgii_codigo: code,
-      dgii_codigo_seguridad: securityCode,
-      qr_link: qrLink,
-      fec_firma: signatureDate,
-      dgii_mensaje_respuesta: message,
-      dgii_request_json: requestJson,
-      dgii_response_json: response,
-      dgii_response_raw: raw,
-      dgii_mensajes: responseMessages,
-      dgii_error_message: remote.ok ? null : message,
-      dgii_enviado_en: now,
-      dgii_updated_at: now,
-      dgii_intentos: Number(expense.dgii_intentos ?? 0) + 1
-    }).eq('id', expense.id);
-    if (updateError) throw updateError;
-
-    return json({ id: expense.id, encf, dgii_estado: state, dgii_track_id: trackId, dgii_codigo_seguridad: securityCode, dgii_mensaje_respuesta: message }, remote.ok ? 200 : 502);
+    return json(result);
   } catch (error) {
     console.error('enviar-gasto-menor-ecf', error);
     return json({ error: error instanceof Error ? error.message : 'No se pudo enviar el gasto menor.' }, 500);

@@ -151,7 +151,7 @@ export class Rep607Service {
         status: row.estado_dgii ?? row.dgii_estado ?? 'No enviado',
         branchId: row.idsucursal
       }))
-      .filter((invoice) => ['No enviado', 'Pendiente de configuración', 'Error', 'Rechazado'].includes(invoice.status));
+      .filter((invoice) => ['No enviado', 'Pendiente de configuración', 'Error', 'Rechazado', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(invoice.status));
   }
 
   async resetInvoiceEcf(invoiceId: number): Promise<void> {
@@ -177,7 +177,7 @@ export class Rep607Service {
         fechanf: null,
         dgii_updated_at: new Date().toISOString()
       })
-      .eq('id', invoiceId);
+      .eq('id', invoiceId).in('dgii_estado', ['Rechazado', 'Error']);
     if (error) throw error;
   }
 
