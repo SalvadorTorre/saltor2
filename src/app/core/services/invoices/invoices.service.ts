@@ -26,6 +26,7 @@ export type DgiiInvoiceStatus =
   | 'No enviado'
   | 'Pendiente de configuración'
   | 'Enviado'
+  | 'Preparando envío' | 'En cola' | 'Enviando DGII' | 'En proceso DGII' | 'Envío por confirmar' | 'Firmada' | 'Aceptado condicional'
   | 'Aceptado'
   | 'Rechazado'
   | 'Error';
@@ -33,6 +34,9 @@ export type DgiiInvoiceStatus =
 export interface InvoiceRow {
   id: number;
   numero_factura: string;
+  ecf_operation_id?: string | null;
+  ecf_queue_status?: string | null;
+  ecf_xml_firmado?: string | null;
   ncf?: string | null;
   dgii_estado?: DgiiInvoiceStatus;
   dgii_track_id?: string | null;

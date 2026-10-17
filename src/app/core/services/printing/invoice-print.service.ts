@@ -53,6 +53,7 @@ export class InvoicePrintService {
 
   private receiptDocumentType(value: string): string {
     const type = (value || '').toLowerCase();
+    if (/(?:^|\D)332(?:\D|$)/.test(type) || type.includes('proforma')) return 'Factura PROFORMA';
     if (type.includes('31') || type.includes('credito fiscal') || type.includes('crédito fiscal')) return 'Factura de Crédito Fiscal';
     if (type.includes('32') || type.includes('consumo')) return 'Factura de Consumo Electrónica';
     return (value || '').replace(/^\s*\d{2}\s*-\s*/, '').trim() || 'Factura';

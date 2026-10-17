@@ -1,5 +1,7 @@
+import { EcfService } from '../../core/services/ecf/ecf.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, DestroyRef, inject, EventEmitter, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DgiiInvoiceStatus, EditableInvoiceData, InvoicesService } from '../../core/services/invoices/invoices.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
@@ -32,6 +34,8 @@ interface InvoiceConsultationRow {
   styleUrls: ['./consultation-page.component.scss']
 })
 export class InvoiceConsultationPageComponent implements OnInit {
+  private readonly ecf = inject(EcfService);
+  private readonly destroyRef = inject(DestroyRef);
   @Output() editRequested = new EventEmitter<number>();
   @Output() resendRequested = new EventEmitter<number>();
   searchTerm = '';
@@ -53,6 +57,9 @@ export class InvoiceConsultationPageComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.ecf.updates$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (event.kind === 'FACTURA') void this.loadInvoices();
+    });
     void this.loadInvoices();
   }
 
@@ -206,6 +213,7 @@ export class InvoiceConsultationPageComponent implements OnInit {
 
   private receiptDocumentType(value: string): string {
     const type = value.toLowerCase();
+    if (/(?:^|\D)332(?:\D|$)/.test(type) || type.includes('proforma')) return 'Factura PROFORMA';
     if (type.includes('31') || type.includes('credito fiscal') || type.includes('crédito fiscal')) return 'Factura de Crédito Fiscal';
     if (type.includes('32') || type.includes('consumo')) return 'Factura de Consumo Electrónica';
     return value.replace(/^\s*\d{2}\s*-\s*/, '').trim() || 'Factura';

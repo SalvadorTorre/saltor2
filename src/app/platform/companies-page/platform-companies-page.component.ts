@@ -8,6 +8,8 @@ import {
   PlatformService, PlatformSummary, SubscriptionUpdate
 } from '../../core/services/platform/platform.service';
 
+import { ProformaService, ProformaSettings, PROFORMA_MAX } from '../../core/services/proforma/proforma.service';
+
 type DrawerTab = 'suscripcion' | 'pagos' | 'usuarios' | 'sucursales';
 
 @Component({
@@ -43,7 +45,13 @@ export class PlatformCompaniesPageComponent implements OnInit {
   payment = this.emptyPayment();
   billingMode: 'Directo' | 'Caja' = 'Directo';
 
-  constructor(private readonly platform: PlatformService) {}
+  proforma: ProformaSettings | null = null;
+  proformaEnabled = false;
+  proformaCurrent = 0;
+  readonly proformaMax = PROFORMA_MAX;
+  isSavingProforma = false;
+
+  constructor(private readonly platform: PlatformService, private readonly proformas: ProformaService) {}
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -107,6 +115,10 @@ export class PlatformCompaniesPageComponent implements OnInit {
     this.selected = company;
     this.tab = tab;
     this.drawerError = '';
+    this.proforma = null;
+    this.proformaEnabled = false;
+    this.proformaCurrent = 0;
+    this.isSavingProforma = false;
     this.form = {
       plan_id: company.plan_id, estado: company.estado ?? 'Prueba', prueba_hasta: company.prueba_hasta, pagado_hasta: company.pagado_hasta,
       dias_gracia: company.dias_gracia ?? 5, precio_mensual: Number(company.precio_mensual ?? 0),
@@ -125,12 +137,18 @@ export class PlatformCompaniesPageComponent implements OnInit {
     if (!this.selected) return;
     const id = this.selected.id;
     try {
-      const [payments, users, branches] = await Promise.all([
-        this.platform.getPayments({ companyId: id, limit: 200 }), this.platform.getCompanyUsers(id), this.platform.getCompanyBranches(id)
+      const [payments, users, branches, mode, proforma] = await Promise.all([
+        this.platform.getPayments({ companyId: id, limit: 200 }), this.platform.getCompanyUsers(id), this.platform.getCompanyBranches(id), this.platform.getBillingMode(id), this.proformas.getSettings(id).catch(error => {
+          if (this.selected?.id === id) this.drawerError = this.message(error);
+          return null;
+        })
       ]);
       if (this.selected?.id !== id) return;
       this.payments = payments; this.users = users; this.branches = branches;
-      this.billingMode = await this.platform.getBillingMode(id);
+      this.billingMode = mode;
+      this.proforma = proforma;
+      this.proformaEnabled = proforma?.enabled ?? false;
+      this.proformaCurrent = proforma?.current ?? 0;
     } catch (error) {
       this.drawerError = this.message(error);
     }
@@ -147,6 +165,43 @@ export class PlatformCompaniesPageComponent implements OnInit {
       this.billingMode = previous;
       this.drawerError = this.message(error);
     }
+  }
+
+  async changeProforma(enabled: boolean): Promise<void> {
+    if (!this.selected || this.isSavingProforma || !this.proforma) return;
+    const id = this.selected.id;
+    const previous = this.proforma;
+    this.proformaEnabled = enabled;
+    this.isSavingProforma = true;
+    this.drawerError = '';
+    try {
+      const saved = await this.proformas.setEnabled(id, enabled);
+      if (this.selected?.id !== id) return;
+      this.proforma = saved;
+      this.proformaEnabled = saved.enabled;
+      this.proformaCurrent = saved.current;
+      this.toast(enabled ? 'Factura proforma activada' : 'Factura proforma desactivada');
+    } catch (error) {
+      if (this.selected?.id !== id) return;
+      this.proformaEnabled = previous.enabled;
+      this.drawerError = this.message(error);
+    } finally { if (this.selected?.id === id) this.isSavingProforma = false; }
+  }
+
+  async saveProformaCounter(): Promise<void> {
+    if (!this.selected || !this.proforma?.enabled || this.isSavingProforma) return;
+    const id = this.selected.id;
+    this.isSavingProforma = true;
+    this.drawerError = '';
+    try {
+      const saved = await this.proformas.setCurrent(this.proforma, this.proformaCurrent, true);
+      if (this.selected?.id !== id) return;
+      this.proforma = saved;
+      this.proformaCurrent = saved.current;
+      this.toast('Contador E332 guardado');
+    } catch (error) {
+      if (this.selected?.id === id) this.drawerError = this.message(error);
+    } finally { if (this.selected?.id === id) this.isSavingProforma = false; }
   }
 
   onPlanChange(): void {
@@ -281,6 +336,7 @@ export class PlatformCompaniesPageComponent implements OnInit {
   }
 
   private message(error: unknown): string {
-    return String((error as { message?: string })?.message ?? error ?? 'Error desconocido');
+    const detail = String((error as { message?: string })?.message ?? error ?? 'Error desconocido');
+    return /empresas_proforma|configurar_proforma|ajustar_contador_proforma/i.test(detail) ? 'Falta aplicar la migración de factura proforma E332.' : detail;
   }
 }
