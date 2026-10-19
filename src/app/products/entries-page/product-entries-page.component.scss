@@ -15,11 +15,14 @@
 .product-entries-content .field input, .product-entries-content .field select, .product-entries-content .field textarea { font-size: 24px; }
 .entry-lines { display: grid; gap: 10px; }
 .entry-lines__heading { align-items: center; display: flex; justify-content: space-between; }
-.entry-lines__heading h3 { margin: 0; }
+.entry-lines__heading h3 { font-size: 24px; margin: 0; }
 .entry-line-editor { align-items: end; background: #f8fafc; border-radius: 9px; display: grid; gap: 12px; grid-template-columns: 1fr 2.6fr 1fr 1.5fr; padding: 14px; }
 .entry-line-editor__description { min-width: 0; }
 .entry-line-editor__product-search { position: relative; }
 .entry-product-suggestions { width: min(680px, 72vw); }
+.entry-product-suggestions .product-suggestion strong { font-size: 20px; }
+.entry-product-suggestions .product-suggestion__main small,
+.entry-product-suggestions .product-suggestion__amount small { font-size: 15px; }
 .entry-lines-table { border: 1px solid #cbd5e1; min-height: 230px; overflow: auto; }
 .entry-lines-table__row { align-items: center; border-top: 1px solid #dbe3ed; display: grid; gap: 10px; grid-template-columns: 1fr 2.6fr 1.2fr 1.2fr 1.2fr 1.1fr; min-height: 40px; padding: 7px 12px; }
 .entry-lines-table__row { font-size: 22px; }
@@ -63,10 +66,13 @@
 .entry-table__icon-button--edit { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
 .entry-table-empty { color: #64748b; padding: 22px; text-align: center; }
 .entry-dialog { align-items: center; background: rgba(15, 23, 42, .55); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 80; }
-.entry-dialog__panel { display: grid; gap: 18px; margin: auto; max-width: 760px; padding: 28px; width: 100%; }
+.entry-dialog__panel { display: grid; gap: 20px; margin: auto; max-height: calc(100dvh - 48px); max-width: 980px; overflow-y: auto; padding: 32px 36px; width: min(96vw, 980px); }
+.entry-dialog__panel--quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entry-dialog__panel--quick h3,
+.entry-dialog__panel--quick > div { grid-column: 1 / -1; }
 .entry-dialog__panel h3, .entry-dialog__panel p { margin: 0; }
 .entry-dialog__panel > div { display: flex; gap: 10px; justify-content: flex-end; }
-.entry-dialog__panel h3 { font-size: 26px; }
+.entry-dialog__panel h3 { font-size: 28px; }
 .entry-dialog__panel p { font-size: 18px; }
 .entry-dialog__panel .field span { font-size: 24px; }
 .entry-dialog__panel .field input, .entry-dialog__panel .field select, .entry-dialog__panel .field textarea { font-size: 24px; }
@@ -84,4 +90,8 @@
   .entry-table__row { font-size: 16px; }
   .entry-footer { flex-wrap: wrap; }
   .entry-footer strong { flex-basis: 100%; }
+  .entry-dialog__panel { max-height: calc(100dvh - 28px); padding: 24px 20px; width: calc(100vw - 28px); }
+  .entry-dialog__panel--quick { grid-template-columns: 1fr; }
+  .entry-dialog__panel--quick h3,
+  .entry-dialog__panel--quick > div { grid-column: auto; }
 }

@@ -18,3 +18,38 @@
 .pf-form .pf-proforma__switch input:disabled { cursor: default; opacity: .5; }
 .pf-form .pf-proforma__switch input:focus-visible { outline: 2px solid var(--app-primary); outline-offset: 3px; }
 @media(prefers-reduced-motion:reduce) { .pf-form .pf-proforma__switch input::before { transition: none; } }
+
+/* Solo el panel de la empresa seleccionada usa esta escala ampliada. */
+.pf-drawer__panel { width: min(900px, 100%); padding: 30px 34px 42px; }
+.pf-drawer__head h3 { font-size: 30px; }
+.pf-drawer__head p { font-size: 18px; line-height: 1.45; }
+.pf-drawer__close { height: 46px; font-size: 30px; width: 46px; }
+.pf-drawer__quick { gap: 10px; margin: 22px 0; }
+.pf-drawer__quick .pf__btn { font-size: 18px; height: 46px; }
+.pf-drawer__tabs { gap: 8px; margin-bottom: 20px; }
+.pf-drawer__tabs button { font-size: 18px; padding: 13px 18px; }
+.pf-drawer__panel .pf__error { font-size: 18px; }
+.pf-drawer__panel .pf-form { gap: 18px 20px; }
+.pf-drawer__panel .pf-form label { font-size: 18px; gap: 7px; }
+.pf-drawer__panel .pf-form input,
+.pf-drawer__panel .pf-form select,
+.pf-drawer__panel .pf-form textarea { font-size: 20px; min-height: 48px; padding: 0 13px; }
+.pf-drawer__panel .pf-form textarea { padding: 11px 13px; }
+.pf-drawer__panel .pf-form__actions small { font-size: 16px; }
+.pf-drawer__panel .pf-form__actions .pf__btn { font-size: 18px; height: 46px; }
+.pf-drawer__panel .pf-facts { gap: 14px; padding: 16px; }
+.pf-drawer__panel .pf-facts dt { font-size: 16px; }
+.pf-drawer__panel .pf-facts dd { font-size: 19px; }
+.pf-drawer__panel .pf-proforma { padding: 19px; }
+.pf-drawer__panel .pf-proforma strong { font-size: 18px; }
+.pf-drawer__panel .pf-proforma p { font-size: 16px; }
+.pf-drawer__panel .pf-proforma__switch span { font-size: 18px; }
+.pf-drawer__panel .pf__table th { font-size: 15px; }
+.pf-drawer__panel .pf__table td { font-size: 18px; }
+.pf-drawer__panel .pf__table td small { font-size: 15px; }
+
+@media (max-width: 760px) {
+  .pf-drawer__panel { padding: 22px 18px 30px; }
+  .pf-drawer__head h3 { font-size: 26px; }
+  .pf-drawer__tabs button { font-size: 16px; padding: 11px 13px; }
+}
