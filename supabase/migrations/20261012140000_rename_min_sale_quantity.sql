@@ -5,7 +5,19 @@ begin;
 -- funciones que la usan (Postgres no actualiza el texto de las funciones).
 -- Todo en una transacción: si algo falla, no cambia nada.
 -- ===========================================================================
-alter table myappdb.products rename column cantidad_minima_venta to cantidadminventa;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'myappdb' and table_name = 'products' and column_name = 'cantidad_minima_venta'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'myappdb' and table_name = 'products' and column_name = 'cantidadminventa'
+  ) then
+    alter table myappdb.products rename column cantidad_minima_venta to cantidadminventa;
+  end if;
+end;
+$$;
 
 do $$
 declare

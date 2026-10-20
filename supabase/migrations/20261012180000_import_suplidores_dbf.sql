@@ -17,7 +17,8 @@ values
   (2, '15', 'MERCASID S A', 'RNC', '101807687', null, null, null, 'Local', 'Activo'),
   (2, '16', 'DISTRIBUIDORA CORRIPIO CXA', 'RNC', '101003693', null, null, null, 'Local', 'Activo'),
   (2, '17', 'UNITED BRANDS S A', 'RNC', '124019338', null, null, null, 'Local', 'Activo'),
-  (2, '18', 'AGUA PLANETA AZUL C POR A', 'RNC', '101503939', '8095657765', '8095405926', null, 'Local', 'Activo');
+  (2, '18', 'AGUA PLANETA AZUL C POR A', 'RNC', '101503939', '8095657765', '8095405926', null, 'Local', 'Activo')
+on conflict do nothing;
 
 alter table myappdb.suplidores enable trigger suplidores_bitacora;
 

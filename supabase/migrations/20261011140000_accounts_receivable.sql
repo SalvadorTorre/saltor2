@@ -68,6 +68,11 @@ grant all on myappdb.recibos_cobro, myappdb.recibo_cobro_aplicaciones to service
 -- ---------------------------------------------------------------------------
 -- Vista de facturas a crédito con su saldo (respeta la seguridad del usuario)
 -- ---------------------------------------------------------------------------
+-- La instalación puede contener una versión anterior con columnas adicionales.
+-- Reemplazarla dentro de esta transacción conserva los datos y deja el contrato
+-- de la vista alineado con esta migración.
+drop view if exists myappdb.cxc_facturas;
+
 create or replace view myappdb.cxc_facturas
 with (security_invoker = true) as
 select

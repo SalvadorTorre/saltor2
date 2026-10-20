@@ -1,9 +1,7 @@
 begin;
-
 alter table myappdb.cotizaciones drop constraint if exists cotizaciones_estado_check;
 alter table myappdb.cotizaciones add constraint cotizaciones_estado_check
   check (estado in ('Borrador', 'Facturada', 'Activa', 'Vencida', 'Cancelada'));
-
 create or replace function myappdb.crear_cotizacion(p_cotizacion jsonb, p_detalles jsonb)
 returns table(id bigint, numero_cotizacion text)
 language plpgsql
@@ -62,7 +60,5 @@ begin
   return query select v_id, v_numero;
 end;
 $$;
-
 grant execute on function myappdb.crear_cotizacion(jsonb, jsonb) to authenticated, service_role;
-
 commit;

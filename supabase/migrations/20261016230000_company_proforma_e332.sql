@@ -1,13 +1,13 @@
 begin;
 
 -- E332 es una numeración interna. Nunca se registra como rango autorizado DGII.
-create table myappdb.empresas_proforma (
+create table if not exists myappdb.empresas_proforma (
   empresa_id integer primary key references myappdb.empresas(id) on delete restrict,
   activa boolean not null default false,
   ultimo_numero bigint not null default 0 check (ultimo_numero between 0 and 99999999999),
   actualizado_en timestamptz not null default clock_timestamp()
 );
-create table myappdb.empresas_proforma_historial (
+create table if not exists myappdb.empresas_proforma_historial (
   id bigint generated always as identity primary key,
   empresa_id integer not null references myappdb.empresas(id) on delete restrict,
   accion text not null,
@@ -17,15 +17,17 @@ create table myappdb.empresas_proforma_historial (
   usuario_id uuid,
   registrado_en timestamptz not null default clock_timestamp()
 );
-create index empresas_proforma_historial_empresa_idx on myappdb.empresas_proforma_historial(empresa_id, id desc);
+create index if not exists empresas_proforma_historial_empresa_idx on myappdb.empresas_proforma_historial(empresa_id, id desc);
 alter table myappdb.empresas_proforma enable row level security;
 alter table myappdb.empresas_proforma_historial enable row level security;
 revoke all on myappdb.empresas_proforma, myappdb.empresas_proforma_historial from public, anon, authenticated;
 grant select on myappdb.empresas_proforma, myappdb.empresas_proforma_historial to authenticated;
 grant all on myappdb.empresas_proforma, myappdb.empresas_proforma_historial to service_role;
 grant usage, select on sequence myappdb.empresas_proforma_historial_id_seq to service_role;
+drop policy if exists empresas_proforma_read on myappdb.empresas_proforma;
 create policy empresas_proforma_read on myappdb.empresas_proforma for select to authenticated
   using (empresa_id = (select private.current_empresa_id()) or (select private.es_dueno_sistema()));
+drop policy if exists empresas_proforma_historial_read on myappdb.empresas_proforma_historial;
 create policy empresas_proforma_historial_read on myappdb.empresas_proforma_historial for select to authenticated
   using (empresa_id = (select private.current_empresa_id()) or (select private.es_dueno_sistema()));
 
@@ -35,11 +37,17 @@ select distinct on (s.empresa_id) s.empresa_id,
   least(99999999999, greatest(0, coalesce(private.ncf_numero_rango(s.rango_inicial, s.serie), 1) + s.usados - 1))
 from myappdb.ncf_secuencias s
 where upper(s.serie) = 'E332' or s.tipo_ncf = '332'
-order by s.empresa_id, s.id desc;
+order by s.empresa_id, s.id desc
+on conflict (empresa_id) do nothing;
 insert into myappdb.empresas_proforma_historial(empresa_id, accion, numero_anterior, numero_actual, activa)
-select empresa_id, 'Contador anterior importado', ultimo_numero, ultimo_numero, activa from myappdb.empresas_proforma;
+select p.empresa_id, 'Contador anterior importado', p.ultimo_numero, p.ultimo_numero, p.activa
+from myappdb.empresas_proforma p
+where not exists (
+  select 1 from myappdb.empresas_proforma_historial h
+  where h.empresa_id = p.empresa_id and h.accion = 'Contador anterior importado'
+);
 
-create function myappdb.plataforma_configurar_proforma(p_empresa_id integer, p_activa boolean)
+create or replace function myappdb.plataforma_configurar_proforma(p_empresa_id integer, p_activa boolean)
 returns jsonb language plpgsql security definer set search_path = ''
 as $$
 declare v_old myappdb.empresas_proforma; v_new myappdb.empresas_proforma;
@@ -64,7 +72,7 @@ $$;
 revoke all on function myappdb.plataforma_configurar_proforma(integer, boolean) from public, anon;
 grant execute on function myappdb.plataforma_configurar_proforma(integer, boolean) to authenticated;
 
-create function myappdb.ajustar_contador_proforma(p_ultimo_numero bigint, p_numero_esperado bigint, p_actualizado_en timestamptz, p_empresa_id integer default null)
+create or replace function myappdb.ajustar_contador_proforma(p_ultimo_numero bigint, p_numero_esperado bigint, p_actualizado_en timestamptz, p_empresa_id integer default null)
 returns jsonb language plpgsql security definer set search_path = ''
 as $$
 declare v_empresa integer := coalesce(p_empresa_id, private.current_empresa_id()); v_old myappdb.empresas_proforma; v_new myappdb.empresas_proforma;

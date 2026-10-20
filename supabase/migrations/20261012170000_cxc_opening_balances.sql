@@ -295,7 +295,8 @@ from (values
     ('22277', 74251.20),
     ('22278', 36044.80)
 ) as d(codigo, monto)
-join myappdb.clients c on c.empresa_id = 2 and c.codigo = d.codigo;
+join myappdb.clients c on c.empresa_id = 2 and c.codigo = d.codigo
+on conflict (empresa_id, numero) do nothing;
 
 insert into myappdb.bitacora (empresa_id, usuario_nombre, tabla, registro_id, accion, resumen, cambios)
 values (2, 'Migración DBF', 'cxc_saldos_iniciales', null, 'Crear',

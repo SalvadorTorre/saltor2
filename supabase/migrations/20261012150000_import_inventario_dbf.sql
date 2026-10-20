@@ -560,7 +560,8 @@ values
   (2, '8002270676819', 'AGUA SANPELLEGRINO NAT ARANCIA', 'UNID', 'General', null, 'SANPELLEGRINO', 'NAT ARANCIATA', '330ML', 12.00, 0.00, 120.00, 140.00, 138.00, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo'),
   (2, '3119783007483', 'CERVEZA DESPERADOS ORIGINAL', 'UNID', 'General', null, 'DESPERADOS', 'ORIGINAL', '330ML', 46.00, 0.00, 125.00, 150.00, 143.75, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo'),
   (2, '7460522300188', 'WHISKY KINGS FIRE', 'UNID', 'General', null, 'KINGS FIRE', null, '175ML', 18.00, 0.00, 149.00, 180.00, 171.35, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo'),
-  (2, '7501035011328', 'TEQUILA JOSE CUERVO REPOSADO', 'UNID', 'General', null, 'JOSE CUERVO', 'REPOSADO', '750ML', 5.00, 0.00, 1375.00, 1550.00, 1550.00, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo');
+  (2, '7501035011328', 'TEQUILA JOSE CUERVO REPOSADO', 'UNID', 'General', null, 'JOSE CUERVO', 'REPOSADO', '750ML', 5.00, 0.00, 1375.00, 1550.00, 1550.00, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo')
+on conflict (empresa_id, codigo) do nothing;
 
 alter table myappdb.products enable trigger products_bitacora;
 

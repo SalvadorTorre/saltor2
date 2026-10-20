@@ -36,7 +36,14 @@ lm as (
   left join myappdb.products p on p.id = l.producto_id
 ),
 prod as (
-  select p.* from myappdb.products p where coalesce(p.estado, '') <> 'Inactivo'
+  select p.*,
+         coalesce(
+           nullif(to_jsonb(p) ->> 'existenciamin', '')::numeric,
+           nullif(to_jsonb(p) ->> 'existencia_minima', '')::numeric,
+           0
+         ) as minimo_inventario
+  from myappdb.products p
+  where coalesce(p.estado, '') <> 'Inactivo'
 ),
 ultima_venta as (
   select coalesce(l.producto_inventario_id, l.producto_id) as producto_id, max(fa.fecha_factura) as ultima
@@ -81,14 +88,14 @@ select jsonb_build_object(
   'stock', jsonb_build_object(
     'activos', (select count(*) from prod),
     'negativos', (select count(*) from prod where coalesce(existencia, 0) < 0),
-    'bajo_minimo', (select count(*) from prod where coalesce(existencia, 0) >= 0 and coalesce(existencia_minima, 0) > 0 and existencia <= existencia_minima),
+    'bajo_minimo', (select count(*) from prod where coalesce(existencia, 0) >= 0 and minimo_inventario > 0 and existencia <= minimo_inventario),
     'lista', coalesce((
       select jsonb_agg(x order by x.orden) from (
-        select codigo, descripcion, existencia, existencia_minima,
-               coalesce(existencia, 0) - coalesce(existencia_minima, 0) as orden
+        select codigo, descripcion, existencia, minimo_inventario as existenciamin,
+               coalesce(existencia, 0) - minimo_inventario as orden
         from prod
-        where coalesce(existencia, 0) < 0 or (coalesce(existencia_minima, 0) > 0 and existencia <= existencia_minima)
-        order by coalesce(existencia, 0) - coalesce(existencia_minima, 0) limit 8
+        where coalesce(existencia, 0) < 0 or (minimo_inventario > 0 and existencia <= minimo_inventario)
+        order by coalesce(existencia, 0) - minimo_inventario limit 8
       ) x), '[]'::jsonb)
   ),
   'sin_movimiento', (

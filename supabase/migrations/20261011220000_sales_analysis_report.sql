@@ -34,7 +34,11 @@ l as (
          coalesce(p.ventaxmayor = 'S' and coalesce(p.precio_mayor, 0) > 0
                   and p.precio_mayor <> coalesce(p.precio_venta, 0)
                   and d.precio_unitario = p.precio_mayor
-                  and d.cantidad >= coalesce(p.cantidad_minima_mayor, 0), false) as es_mayor,
+                  and d.cantidad >= coalesce(
+                    nullif(to_jsonb(p) ->> 'cantidadxmayor', '')::numeric,
+                    nullif(to_jsonb(p) ->> 'cantidad_minima_mayor', '')::numeric,
+                    0
+                  ), false) as es_mayor,
          (d.producto_inventario_id is not null and d.producto_inventario_id <> d.producto_id) as es_reemplazo
   from myappdb.factura_detalles d
   join f on f.id = d.factura_id

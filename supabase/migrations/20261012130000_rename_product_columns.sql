@@ -8,8 +8,29 @@ begin;
 -- que se reescriben las funciones que las usan (en la misma transacción: si
 -- algo falla, no cambia nada).
 -- ===========================================================================
-alter table myappdb.products rename column cantidad_minima_mayor to cantidadxmayor;
-alter table myappdb.products rename column existencia_minima to existenciamin;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'myappdb' and table_name = 'products' and column_name = 'cantidad_minima_mayor'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'myappdb' and table_name = 'products' and column_name = 'cantidadxmayor'
+  ) then
+    alter table myappdb.products rename column cantidad_minima_mayor to cantidadxmayor;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'myappdb' and table_name = 'products' and column_name = 'existencia_minima'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'myappdb' and table_name = 'products' and column_name = 'existenciamin'
+  ) then
+    alter table myappdb.products rename column existencia_minima to existenciamin;
+  end if;
+end;
+$$;
 
 do $$
 declare

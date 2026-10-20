@@ -1,13 +1,3 @@
-begin;
-
--- ---------------------------------------------------------------------------
--- usuarios.sucursal_id
--- ---------------------------------------------------------------------------
--- La pantalla de usuarios guarda la sucursal por nombre y sucursal_id se quedaba
--- en su valor por defecto (1).  Facturas, cierres de caja, cotizaciones y e41
--- usan sucursal_id, así que con una segunda sucursal el usuario seguiría
--- trabajando en la 1.  Desde aquí la base de datos resuelve el id por nombre.
-
 create or replace function private.sincronizar_sucursal_usuario()
 returns trigger
 language plpgsql
@@ -47,13 +37,6 @@ create trigger usuarios_sincronizar_sucursal
   before insert or update of sucursal, empresa_id on myappdb.usuarios
   for each row execute function private.sincronizar_sucursal_usuario();
 
--- ---------------------------------------------------------------------------
--- Políticas de escritura solo administrador
--- ---------------------------------------------------------------------------
--- Las políticas "for all" de administrador también aplicaban a SELECT, junto a
--- la de lectura de la empresa: Postgres evaluaba dos políticas en cada lectura.
--- Se separan en insert/update/delete; la lectura queda igual.
-
 do $$
 declare
   v record;
@@ -85,6 +68,4 @@ begin
       v.tabla || '_admin_delete', v.tabla, v.columna);
   end loop;
 end;
-$$;
-
-commit;
+$$;;

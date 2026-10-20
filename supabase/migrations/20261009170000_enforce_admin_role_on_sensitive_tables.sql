@@ -1,10 +1,3 @@
-begin;
-
--- Los roles antes solo se aplicaban en la pantalla: cualquier usuario de la
--- empresa podía editar usuarios (incluido su propio rol), la empresa, las
--- sucursales y la configuración e-CF.  Desde aquí la base de datos exige el rol
--- 'Administrador' para esas escrituras.
-
 create or replace function private.current_user_is_admin()
 returns boolean
 language sql
@@ -24,9 +17,6 @@ $$;
 revoke all on function private.current_user_is_admin() from public;
 grant execute on function private.current_user_is_admin() to authenticated, service_role;
 
--- usuarios: todos ven a los de su empresa; solo el administrador crea, edita o
--- elimina.  Cada usuario puede actualizar su propia fila (p. ej. último acceso),
--- pero el disparador de abajo le impide tocar campos de permisos.
 drop policy if exists usuarios_tenant_access on myappdb.usuarios;
 drop policy if exists usuarios_tenant_select on myappdb.usuarios;
 drop policy if exists usuarios_admin_insert on myappdb.usuarios;
@@ -56,7 +46,6 @@ security definer
 set search_path = ''
 as $$
 begin
-  -- El rol de servicio (funciones del servidor) no pasa por esta regla.
   if (select auth.uid()) is null or private.current_user_is_admin() then
     return new;
   end if;
@@ -82,14 +71,11 @@ create trigger usuarios_proteger_campos
   before update on myappdb.usuarios
   for each row execute function private.proteger_campos_usuario();
 
--- empresas: lectura para todos los de la empresa, edición solo administrador.
 drop policy if exists empresas_tenant_update on myappdb.empresas;
 create policy empresas_tenant_update on myappdb.empresas for update to authenticated
   using (id = (select private.current_empresa_id()) and (select private.current_user_is_admin()))
   with check (id = (select private.current_empresa_id()));
 
--- sucursales, configuración e-CF y certificado digital: lectura para la
--- empresa, escritura solo administrador.
 drop policy if exists sucursales_tenant_access on myappdb.sucursales;
 create policy sucursales_tenant_select on myappdb.sucursales for select to authenticated
   using (idempresa = (select private.current_empresa_id()));
@@ -109,6 +95,4 @@ create policy certificados_firma_digital_tenant_select on myappdb.certificados_f
   using (empresa_id = (select private.current_empresa_id()));
 create policy certificados_firma_digital_admin_write on myappdb.certificados_firma_digital for all to authenticated
   using (empresa_id = (select private.current_empresa_id()) and (select private.current_user_is_admin()))
-  with check (empresa_id = (select private.current_empresa_id()) and (select private.current_user_is_admin()));
-
-commit;
+  with check (empresa_id = (select private.current_empresa_id()) and (select private.current_user_is_admin()));;

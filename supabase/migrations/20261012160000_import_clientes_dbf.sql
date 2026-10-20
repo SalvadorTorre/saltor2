@@ -74,7 +74,8 @@ values
   (2, '22276', 'PEDRO BRITO BIDO', 'RNC', '114814262', '809-520-1597', 'CALLE LOS MORENOS', 100000.00, 8, 'Activo', 'Minorista'),
   (2, '22277', 'MONARCA VIP', 'Cedula', 'SD-22277', '829-963-0711', 'MATA SAN JUAN', 100000.00, 8, 'Activo', 'Minorista'),
   (2, '22278', 'ALDRIN MORENO', 'Cedula', 'SD-22278', '849-257-5654', 'C-YAMASA SAN FELIPE', 50000.00, 8, 'Activo', 'Minorista'),
-  (2, '22279', 'D ANGELA N DRINK BAR', 'Cedula', 'SD-22279', '809-886-0098', 'CANAAN 1RO', 50000.00, 8, 'Activo', 'Minorista');
+  (2, '22279', 'D ANGELA N DRINK BAR', 'Cedula', 'SD-22279', '809-886-0098', 'CANAAN 1RO', 50000.00, 8, 'Activo', 'Minorista')
+on conflict do nothing;
 
 alter table myappdb.clients enable trigger clients_bitacora;
 

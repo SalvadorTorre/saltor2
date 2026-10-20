@@ -1,7 +1,7 @@
 begin;
 
 -- Una reserva y un intento de transmisión por documento, persistidos antes del HTTP.
-create table myappdb.ecf_operaciones (
+create table if not exists myappdb.ecf_operaciones (
   id uuid primary key default gen_random_uuid(),
   tipo text not null check(tipo in ('FACTURA','NOTA_CREDITO','GASTO_MENOR')),
   documento_id bigint not null,
@@ -21,20 +21,21 @@ create table myappdb.ecf_operaciones (
   actualizado_en timestamptz not null default clock_timestamp(),
   unique(empresa_id, ambiente, modo, encf)
 );
-create unique index ecf_operacion_documento_activa on myappdb.ecf_operaciones(tipo,documento_id) where activa;
-create index ecf_operacion_pendiente on myappdb.ecf_operaciones(empresa_id,sucursal_id,status) where activa;
+create unique index if not exists ecf_operacion_documento_activa on myappdb.ecf_operaciones(tipo,documento_id) where activa;
+create index if not exists ecf_operacion_pendiente on myappdb.ecf_operaciones(empresa_id,sucursal_id,status) where activa;
 alter table myappdb.ecf_operaciones enable row level security;
 revoke all on myappdb.ecf_operaciones from public,anon,authenticated;
 grant select on myappdb.ecf_operaciones to authenticated;
 grant all on myappdb.ecf_operaciones to service_role;
+drop policy if exists ecf_operacion_tenant on myappdb.ecf_operaciones;
 create policy ecf_operacion_tenant on myappdb.ecf_operaciones for select to authenticated using (
   exists(select 1 from myappdb.usuarios u where u.auth_usuario_id=auth.uid() and u.estado='Activo'
     and u.empresa_id=ecf_operaciones.empresa_id and u.sucursal_id=ecf_operaciones.sucursal_id)
 );
 
-alter table myappdb.facturas add column ecf_operation_id text, add column ecf_queue_status text, add column ecf_xml_firmado text;
-alter table myappdb.notas_credito add column ecf_operation_id text, add column ecf_queue_status text, add column ecf_xml_firmado text;
-alter table myappdb.gastos_menores add column ecf_operation_id text, add column ecf_queue_status text, add column ecf_xml_firmado text;
+alter table myappdb.facturas add column if not exists ecf_operation_id text, add column if not exists ecf_queue_status text, add column if not exists ecf_xml_firmado text;
+alter table myappdb.notas_credito add column if not exists ecf_operation_id text, add column if not exists ecf_queue_status text, add column if not exists ecf_xml_firmado text;
+alter table myappdb.gastos_menores add column if not exists ecf_operation_id text, add column if not exists ecf_queue_status text, add column if not exists ecf_xml_firmado text;
 alter table myappdb.facturas drop constraint if exists facturas_dgii_estado_check;
 alter table myappdb.facturas add constraint facturas_dgii_estado_check check(dgii_estado in
   ('No enviado','Pendiente de configuración','Enviado','Aceptado','Aceptado condicional','Rechazado','Error','Preparando envío','En cola','Enviando DGII','En proceso DGII','Envío por confirmar','Firmada'));
@@ -45,7 +46,7 @@ alter table myappdb.gastos_menores drop constraint if exists gastos_menores_esta
 alter table myappdb.gastos_menores add constraint gastos_menores_estado_check check(estado_dgii in
   ('Borrador','Enviado','Aceptado','Aceptado condicional','Rechazado','Error','Preparando envío','En cola','Enviando DGII','En proceso DGII','Envío por confirmar'));
 
-create function myappdb.reservar_operacion_ecf(p_tipo text,p_documento_id bigint,p_empresa_id integer,p_sucursal_id integer,p_tipo_ecf text,p_ambiente text,p_url_base text)
+create or replace function myappdb.reservar_operacion_ecf(p_tipo text,p_documento_id bigint,p_empresa_id integer,p_sucursal_id integer,p_tipo_ecf text,p_ambiente text,p_url_base text)
 returns jsonb language plpgsql security invoker set search_path='' as $$
 declare
   v_tabla text; v_columna text; v_doc jsonb; v_op myappdb.ecf_operaciones;
@@ -95,7 +96,7 @@ end;
 $$;
 
 -- Serializa las respuestas: una consulta tardía nunca revierte un resultado final.
-create function myappdb.guardar_resultado_ecf(p_id uuid,p_status text,p_resultado jsonb,p_solicitud jsonb default null)
+create or replace function myappdb.guardar_resultado_ecf(p_id uuid,p_status text,p_resultado jsonb,p_solicitud jsonb default null)
 returns jsonb language plpgsql security invoker set search_path='' as $$
 declare v_op myappdb.ecf_operaciones; v_tabla text; v_r jsonb; v_state text;
 begin

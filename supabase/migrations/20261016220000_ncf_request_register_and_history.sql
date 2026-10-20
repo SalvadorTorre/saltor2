@@ -7,7 +7,7 @@ alter table myappdb.ncf_secuencias
   add column if not exists aceptados integer;
 update myappdb.ncf_secuencias set aceptados = total where aceptados is null;
 
-create table myappdb.ncf_secuencias_historial (
+create table if not exists myappdb.ncf_secuencias_historial (
   id bigint generated always as identity primary key,
   secuencia_id integer not null references myappdb.ncf_secuencias(id) on delete restrict,
   empresa_id integer not null,
@@ -16,19 +16,25 @@ create table myappdb.ncf_secuencias_historial (
   usuario_id uuid,
   datos jsonb not null
 );
-create index ncf_secuencias_historial_secuencia_idx on myappdb.ncf_secuencias_historial(secuencia_id, id desc);
+create index if not exists ncf_secuencias_historial_secuencia_idx on myappdb.ncf_secuencias_historial(secuencia_id, id desc);
 alter table myappdb.ncf_secuencias_historial enable row level security;
 revoke all on myappdb.ncf_secuencias_historial from public, anon, authenticated;
 grant select on myappdb.ncf_secuencias_historial to authenticated;
 grant all on myappdb.ncf_secuencias_historial to service_role;
 grant usage, select on sequence myappdb.ncf_secuencias_historial_id_seq to service_role;
+drop policy if exists ncf_historial_tenant_select on myappdb.ncf_secuencias_historial;
 create policy ncf_historial_tenant_select on myappdb.ncf_secuencias_historial for select to authenticated
   using (empresa_id = (select private.current_empresa_id()));
 
 insert into myappdb.ncf_secuencias_historial(secuencia_id, empresa_id, accion, registrado_en, datos)
-select id, empresa_id, 'Registro inicial importado', now(), to_jsonb(s) from myappdb.ncf_secuencias s;
+select s.id, s.empresa_id, 'Registro inicial importado', now(), to_jsonb(s)
+from myappdb.ncf_secuencias s
+where not exists (
+  select 1 from myappdb.ncf_secuencias_historial h
+  where h.secuencia_id = s.id and h.accion = 'Registro inicial importado'
+);
 
-create function private.ncf_numero_rango(p_rango text, p_serie text)
+create or replace function private.ncf_numero_rango(p_rango text, p_serie text)
 returns bigint language sql immutable set search_path = ''
 as $$
   select case when n ~ '^[0-9]{1,10}$' then n::bigint else null end
@@ -37,7 +43,7 @@ as $$
 $$;
 revoke all on function private.ncf_numero_rango(text, text) from public;
 
-create function private.validar_solicitud_ncf()
+create or replace function private.validar_solicitud_ncf()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 declare v_desde bigint; v_hasta bigint;
@@ -94,10 +100,11 @@ begin
 end;
 $$;
 revoke all on function private.validar_solicitud_ncf() from public, anon, authenticated;
+drop trigger if exists ncf_validar_solicitud on myappdb.ncf_secuencias;
 create trigger ncf_validar_solicitud before insert or update or delete on myappdb.ncf_secuencias
   for each row execute function private.validar_solicitud_ncf();
 
-create function private.registrar_historial_ncf()
+create or replace function private.registrar_historial_ncf()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
@@ -111,6 +118,7 @@ begin
 end;
 $$;
 revoke all on function private.registrar_historial_ncf() from public, anon, authenticated;
+drop trigger if exists ncf_registrar_historial on myappdb.ncf_secuencias;
 create trigger ncf_registrar_historial after insert or update on myappdb.ncf_secuencias
   for each row execute function private.registrar_historial_ncf();
 
