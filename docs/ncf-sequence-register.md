@@ -3,7 +3,7 @@
 Ruta: `/contabilidad/e-ncf`.
 
 - Mostrar por defecto todos los rangos guardados de la empresa, incluidos agotados y vencidos, en una tabla con desplazamiento horizontal. Filtros locales por tipo y texto; empresa resuelta exclusivamente desde la sesión.
-- «Nueva solicitud» abre un formulario en la página, sin modal. Guardar siempre inserta una fila independiente; editar conserva la versión anterior en el historial.
+- «Nueva solicitud», «Editar» y «Agregar más» abren un diálogo sobre el grid, con foco contenido, Escape y retorno al botón de origen. Guardar siempre inserta una fila independiente; editar conserva la versión anterior en el historial.
 - Autorización es la referencia; se guarda separadamente su fecha. Solicitados y aceptados son cantidades de comprobantes. Este registro recibe solicitudes ya autorizadas (aceptados > 0), no tramita solicitudes ante DGII.
 - Guardar internamente la empresa de la sesión, tipo/serie, referencia, fecha de autorización, solicitados, aceptados, desde/hasta, utilizados y vencimiento. Aceptados debe coincidir con el tamaño del rango y no superar solicitados. Los rangos no pueden solaparse dentro de una empresa/serie.
 - Número actual = inicio + utilizados − 1; sin consumo mostrar «Sin utilizar». Próximo = inicio + utilizados si la secuencia sigue disponible. El contador cambia al emitir; en edición no se puede modificar. Una nueva solicitud permite registrar consumo anterior.
@@ -56,3 +56,12 @@ Verificación de la actualización visual: `http://localhost:4302/contabilidad/e
 - Verificación SQL: `node scripts/tests/proforma.test.mjs` (requiere PGlite instalado como en las pruebas anteriores), 18 comprobaciones: permisos de plataforma, aislamiento de empresa, ajuste hacia atrás, versión obsoleta, límites, historial y desactivar/reactivar sin perder numeración. Angular: 29 pruebas aprobadas.
 
 Validación visual E332: `http://localhost:4302/contabilidad/e-ncf?proforma` y `http://localhost:4302/plataforma/empresas?proforma` con componente real y servicios de prueba. Verificado: E332 primero, formulario de solo contador, ajuste 145 → 90, interruptor por empresa y conservación del número al desactivar/reactivar. En la variante desactivada `/contabilidad/e-ncf` no existe la fila/acción E332; consola sin errores y recarga instrumentada sin respuestas HTTP >= 400 ni fallos de red. Evidencias: `tmp/ncf-preview/proforma-grid.jpg` y `tmp/ncf-preview/proforma-plataforma.jpg`. Kid Wow Check: PASS; Mom Comprehension Check: PASS. Ninguna prueba visual escribió en Supabase real.
+
+## Edición y nuevas autorizaciones
+
+- **Editar** modifica el mismo registro y conserva la versión anterior en el historial. En un rango ya utilizado se mantienen bloqueados Desde/Hasta, Aceptados y Utilizados para no reescribir numeraciones emitidas. Se pueden editar referencia, solicitados, fechas, estado y alerta; la explicación se muestra dentro del modal.
+- **Agregar más** registra una nueva autorización de la misma empresa/serie, con referencia y fechas propias y utilizados en cero. Sugiere el inicio después del mayor rango registrado, sin copiar la autorización ni el contador anterior. El usuario confirma los límites reales autorizados. La nueva fila no reemplaza el registro anterior.
+- Los errores y conflictos se presentan dentro del diálogo sin borrar lo escrito. No se permite cerrar mientras se guarda. El grid permanece visible detrás; en proforma solo se ajusta el contador y no se agregan rangos DGII.
+- Aplicar `20261019140000_ncf_use_available_ranges_in_order.sql`: el emisor consume primero los números disponibles del rango activo de menor inicio y continúa con el siguiente cuando se agota. Excluye rangos vencidos y conserva bloqueo transaccional; agregar una autorización no salta el remanente de la anterior.
+
+Verificación UX: acciones visibles «Editar»/«Agregar más» con iconos distintos; formulario separado por intención, nota de campos protegidos y guardado explícito. Kid Wow Check y Mom Comprehension Check deben verificarse con el grid y ambos diálogos en vista clara, oscura y móvil.

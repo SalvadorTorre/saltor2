@@ -129,7 +129,9 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
     const change = this.change;
     try {
-      await this.invoicesService.collectInvoice(invoice.id, this.paymentCode);
+      const collected = await this.invoicesService.collectInvoice(invoice.id, this.paymentCode);
+      // El servidor convierte E32 a E332 solo si la empresa tiene proformas activas.
+      invoice.ncfType = collected.tipo_ncf;
     } catch (error) {
       this.isWorking = false;
       await Swal.fire({ icon: 'error', title: 'No se pudo cobrar', text: this.message(error) });
@@ -142,6 +144,9 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
     if (this.requiresDgii(invoice.ncfType)) {
       try {
         const sent = await this.ecfService.sendInvoice(invoice.id);
+        if (this.isProforma(invoice.ncfType) && (sent.dgii_estado !== 'Firmada' || !sent.ecf_xml_firmado)) {
+          throw new Error(sent.dgii_mensaje_respuesta || 'No se recibió el XML firmado de la proforma. Se conserva la factura cobrada para revisar su firma.');
+        }
         queued = ['En cola', 'Enviando DGII', 'En proceso DGII'].includes(sent.dgii_estado ?? '');
         if (queued) this.pendingPrints.set(invoice.id, invoice.seller);
         if (['Rechazado', 'Error', 'Envío por confirmar', 'Preparando envío'].includes(sent.dgii_estado ?? '')) dgiiProblem = sent.dgii_mensaje_respuesta || 'La DGII no aceptó la factura.';
@@ -153,7 +158,7 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
     if (dgiiProblem) {
       await Swal.fire({
         icon: 'warning', title: `Factura ${invoice.number} cobrada`,
-        html: `No se pudo enviar a la DGII: <b>${this.escape(dgiiProblem)}</b><br><br>Corrígela y reenvíala desde Facturación → Consulta; luego imprímela desde allí.`
+        html: `${this.isProforma(invoice.ncfType) ? 'No se pudo completar la firma de la proforma' : 'No se pudo enviar a la DGII'}: <b>${this.escape(dgiiProblem)}</b><br><br>Revisa el comprobante desde Facturación → Consulta antes de imprimirlo.`
       });
     } else if (queued) {
       await Swal.fire({ icon: 'info', title: `Factura ${invoice.number} cobrada y en cola`, text: 'Se imprimirá al ser aceptada mientras esta pantalla siga abierta. También puedes consultar e imprimir desde Facturación → Consulta.' });
@@ -192,7 +197,8 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
     } finally { this.isWorking = false; }
   }
 
-  private requiresDgii(ncfType: string): boolean { return /(?:^|\D)(332|31|44|45|46)(?:\D|$)/.test(ncfType || ''); }
+  private isProforma(ncfType: string): boolean { return /(?:^|\D)332(?:\D|$)/.test(ncfType || ''); }
+  private requiresDgii(ncfType: string): boolean { return /(?:^|\D)(332|31|32|44|45|46)(?:\D|$)/.test(ncfType || ''); }
   private escape(value: string): string { return value.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string)); }
   private message(error: unknown): string { return String((error as { message?: string })?.message ?? error ?? 'Error'); }
 }

@@ -27,6 +27,9 @@ export class NcfPageComponent implements OnInit {
   messageIsError = false;
   editorVisible = false;
   editing: NcfSequence | null = null;
+  addingTo: SequenceGridRow | null = null;
+  private dialogElement?: HTMLDialogElement;
+  private editorTrigger?: HTMLElement;
   form = this.emptyForm();
   historyFor: SequenceGridRow | null = null;
   history: NcfSequenceHistory[] = [];
@@ -42,8 +45,17 @@ export class NcfPageComponent implements OnInit {
   constructor(public data: AppDataService, private readonly ncf: NcfService,
     private readonly auth: AuthService, private readonly proformas: ProformaService) {}
 
-  @ViewChild('editorTitle') set editorTitle(element: ElementRef<HTMLElement> | undefined) {
-    this.focusSection(element);
+  @ViewChild('sequenceDialog') set sequenceDialog(element: ElementRef<HTMLDialogElement> | undefined) {
+    if (this.dialogElement === element?.nativeElement) return;
+    this.dialogElement = element?.nativeElement;
+    if (!element) return;
+    this.editorTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    queueMicrotask(() => {
+      const dialog = element.nativeElement;
+      if (!this.editorVisible || !dialog.isConnected || dialog.open) return;
+      dialog.showModal();
+      dialog.querySelector<HTMLElement>('#sequence-editor-title')?.focus();
+    });
   }
 
   @ViewChild('historyTitle') set historyTitle(element: ElementRef<HTMLElement> | undefined) {
@@ -115,6 +127,8 @@ export class NcfPageComponent implements OnInit {
     return [...proforma, ...this.tenantSequences, ...defaults];
   }
 
+  trackSequence(_: number, row: SequenceGridRow): string | number { return row.isProforma ? 'proforma' : row.isDefault ? row.series : row.id; }
+
   get filteredSequences(): SequenceGridRow[] {
     const term = this.search.trim().toLowerCase();
     return this.gridSequences.filter((s) => (this.typeFilter === 'all' || s.ncfType === this.typeFilter)
@@ -158,6 +172,7 @@ export class NcfPageComponent implements OnInit {
 
   newRequest(defaultRow?: SequenceGridRow): void {
     this.editingProforma = false;
+    this.addingTo = null;
     this.editing = null;
     this.form = { ...this.emptyForm(), companyId: this.companyId,
       ncfType: defaultRow?.ncfType ?? this.emptyForm().ncfType, series: defaultRow?.series ?? 'E31' };
@@ -165,8 +180,20 @@ export class NcfPageComponent implements OnInit {
     this.message = '';
   }
 
+  addMore(sequence: SequenceGridRow): void {
+    if (sequence.companyId !== this.companyId || sequence.isDefault || sequence.isProforma) return;
+    this.newRequest(sequence);
+    this.addingTo = sequence;
+    const ends = this.tenantSequences.filter(s => s.series === sequence.series)
+      .map(s => sequenceNumber(s.rangeEnd, s.series)).filter(Number.isFinite);
+    this.form.rangeStart = String(Math.max(0, ...ends) + 1);
+    this.form.rangeEnd = '';
+  }
+
   edit(sequence: SequenceGridRow): void {
     if (sequence.companyId !== this.companyId) return;
+    this.addingTo = null;
+    this.editing = null;
     if (sequence.isProforma) {
       if (!this.proforma?.enabled) return;
       this.proformaCurrent = this.proforma.current;
@@ -185,7 +212,14 @@ export class NcfPageComponent implements OnInit {
     this.message = '';
   }
 
-  cancel(): void { if (!this.isSaving) this.editorVisible = false; }
+  private closeEditor(): void {
+    this.dialogElement?.close();
+    this.editorVisible = false;
+    this.editorTrigger?.focus({ preventScroll: true });
+  }
+
+  cancel(): void { if (!this.isSaving) this.closeEditor(); }
+  cancelDialog(event: Event): void { event.preventDefault(); this.cancel(); }
 
   changeType(): void {
     const code = /^(\d+)/.exec(this.form.ncfType)?.[1];
@@ -253,7 +287,7 @@ export class NcfPageComponent implements OnInit {
         ? await this.ncf.updateSequence(this.editing.id, normalized, count, alert, this.editing.updatedAt)
         : await this.ncf.createSequence(normalized, count, alert);
       this.sequences = [saved, ...this.sequences.filter((s) => s.id !== saved.id)].sort((a, b) => b.id - a.id);
-      this.editorVisible = false;
+      this.closeEditor();
       this.messageIsError = false;
       this.message = this.editing ? 'Cambios guardados. La versión anterior se conserva en el historial.' : 'Solicitud registrada como una nueva secuencia.';
       if (this.historyFor?.id === saved.id) void this.showHistory(saved);
@@ -269,7 +303,7 @@ export class NcfPageComponent implements OnInit {
       const saved = await this.proformas.setCurrent(this.proforma, this.proformaCurrent);
       if (saved.companyId !== this.companyId) return;
       this.proforma = saved;
-      this.editorVisible = false;
+      this.closeEditor();
       this.messageIsError = false;
       this.message = 'Contador E332 actualizado. El cambio quedó registrado en el historial.';
       if (this.historyFor?.isProforma) void this.showHistory(this.gridSequences[0]);

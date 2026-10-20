@@ -111,3 +111,35 @@ input:read-only { background: var(--app-background); }
 .sequence-fields--proforma { grid-template-columns: minmax(180px, 260px) 1fr; align-items: center; }
 .sequence-proforma-note { padding: 14px; background: var(--seq-accent-soft); border-radius: 8px; font-size: 12px; }
 @media(max-width:600px) { .sequence-fields--proforma { grid-template-columns: minmax(0, 1fr); } }
+
+/* Formularios sobre el grid; el diálogo nativo gestiona foco, Escape e inercia. */
+dialog.sequence-editor {
+  position: fixed; inset: 0; margin: auto; width: min(900px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px); box-sizing: border-box; overflow: auto; padding: 0;
+  color: var(--app-text); background: var(--app-surface); overscroll-behavior: contain;
+  box-shadow: 0 20px 70px color-mix(in srgb, var(--app-text) 25%, transparent);
+}
+dialog.sequence-editor::backdrop { background: color-mix(in srgb, var(--app-text) 45%, transparent); }
+dialog.sequence-editor > header { position: sticky; top: 0; z-index: 2; padding: 22px 24px; background: var(--app-surface); align-items: flex-start; }
+dialog.sequence-editor > header .sequence-icon-button { flex-shrink: 0; }
+dialog.sequence-editor .sequence-fields { margin: 20px 24px; }
+dialog.sequence-editor .sequence-editor__footer { position: sticky; bottom: 0; padding: 16px 24px; background: var(--app-surface); z-index: 1; }
+dialog.sequence-editor .sequence-feedback { margin: 16px 24px 0; }
+.sequence-lock-note { margin: 16px 24px 0; padding: 12px; background: var(--seq-accent-soft); border-radius: 8px; font-size: 12px; }
+.sequence-lock-note strong { color: var(--app-text); }
+.sequence-actions .sequence-edit-action, .sequence-actions .sequence-add-more { min-height: 32px; padding: 6px 8px; font-size: 11px; gap: 5px; }
+.sequence-grid--register th:last-child, .sequence-grid--register td:last-child { min-width: 110px; }
+@media(max-width:600px) {
+  dialog.sequence-editor { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
+  dialog.sequence-editor > header { padding: 18px 16px; }
+  dialog.sequence-editor .sequence-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 18px 16px; gap: 12px; }
+  dialog.sequence-editor .sequence-fields__wide { grid-column: span 2; }
+  dialog.sequence-editor .sequence-editor__footer { padding: 14px 16px; }
+  dialog.sequence-editor .sequence-editor__footer > div { width: 100%; }
+  dialog.sequence-editor .sequence-editor__footer button { flex: 1; }
+  dialog.sequence-editor .sequence-feedback, .sequence-lock-note { margin-left: 16px; margin-right: 16px; }
+  dialog.sequence-editor .sequence-fields--proforma { grid-template-columns: minmax(0, 1fr); }
+}
+@media(max-width:360px) { dialog.sequence-editor .sequence-fields { grid-template-columns: minmax(0, 1fr); } dialog.sequence-editor .sequence-fields__wide { grid-column: auto; } }
+/* La capa superior de dialog no recibe el filtro oscuro del elemento html. */
+:host-context(html[data-theme='dark']) dialog.sequence-editor { filter: invert(.9) hue-rotate(180deg); }

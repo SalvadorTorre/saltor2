@@ -27,7 +27,7 @@ describe('Registro de solicitudes e-NCF', () => {
     ] });
   });
 
-  it('muestra todos los rangos de la sesión sin modal ni selector de empresa', async () => {
+  it('muestra el grid de la sesión y abre el modal solo al elegir una acción', async () => {
     const fixture = TestBed.createComponent(NcfPageComponent);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -202,6 +202,49 @@ describe('Registro de solicitudes e-NCF', () => {
     expect(ncf.createSequence).not.toHaveBeenCalled();
     expect(ncf.updateSequence).not.toHaveBeenCalled();
     expect(app.currentNumber(app.gridSequences[0])).toBe('90');
+  });
+
+  it('abre edición en un diálogo y conserva los números utilizados', async () => {
+    const fixture = TestBed.createComponent(NcfPageComponent);
+    fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    const edit = fixture.nativeElement.querySelector('[aria-label="Editar solicitud 1"]') as HTMLButtonElement;
+    edit.focus(); edit.click(); fixture.detectChanges(); await fixture.whenStable();
+    const dialog = fixture.nativeElement.querySelector('dialog') as HTMLDialogElement;
+    expect(dialog.open).toBeTrue();
+    expect(dialog.textContent).toContain('Editar secuencia');
+    expect(dialog.querySelector<HTMLInputElement>('[name="from"]')!.readOnly).toBeTrue();
+    expect(dialog.querySelector<HTMLInputElement>('[name="expiresAt"]')!.readOnly).toBeFalse();
+    const event = new Event('cancel', { cancelable: true }); dialog.dispatchEvent(event);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.editorVisible).toBeFalse();
+    expect(document.activeElement).toBe(edit);
+  });
+
+  it('agregar más crea una autorización aparte y conserva contador e historial anterior', async () => {
+    const app = TestBed.createComponent(NcfPageComponent).componentInstance;
+    await app.load();
+    const previous = { ...app.sequences[0] };
+    app.addMore(app.gridSequences.find(row => row.id === previous.id)!);
+    expect(app.editing).toBeNull(); expect(app.addingTo?.id).toBe(previous.id);
+    expect(app.form.rangeStart).toBe('1001'); expect(app.form.rangeEnd).toBe('');
+    expect(app.form.authorization).toBe(''); expect(app.form.used).toBe(0);
+    app.form = { ...app.form, authorization:'AUT-NUEVA', requested:100, accepted:100, rangeEnd:'1100', authorizedAt:'2026-10-19', expiresAt:'2099-12-31' };
+    ncf.createSequence.and.resolveTo({ ...sequence(3), rangeStart:'1001', rangeEnd:'1100', used:0, total:100, accepted:100 });
+    await app.save();
+    expect(ncf.createSequence).toHaveBeenCalled(); expect(ncf.updateSequence).not.toHaveBeenCalled();
+    expect(app.sequences.find(row => row.id === previous.id)).toEqual(previous);
+  });
+
+  it('editar fechas de un rango usado actualiza ese registro sin crear otra autorización', async () => {
+    const app = TestBed.createComponent(NcfPageComponent).componentInstance;
+    await app.load(); app.edit(app.gridSequences.find(row => row.id === 1)!);
+    app.form.expiresAt='2098-12-31';
+    ncf.updateSequence.and.resolveTo({ ...sequence(1), expiresAt:'2098-12-31' });
+    await app.save();
+    const args=ncf.updateSequence.calls.mostRecent().args;
+    expect(args[0]).toBe(1); expect(args[1].expiresAt).toBe('2098-12-31');
+    expect(args[1].used).toBe(24); expect(args[1].rangeStart).toBe('501');
+    expect(ncf.createSequence).not.toHaveBeenCalled();
   });
 
 });

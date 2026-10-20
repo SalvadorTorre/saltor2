@@ -21,3 +21,11 @@ El nombre legado `send-dgii-direct-cert` delega a las funciones persistidas. Aho
 Aplicar las migraciones locales previas de secuencias/proforma y luego `20261016235000_ecf_queue_operations.sql`. Desplegar juntas `enviar-ecf`, `enviar-nota-credito-ecf`, `enviar-gasto-menor-ecf`, `consultar-operacion-ecf` y el adaptador `send-dgii-direct-cert`, incluyendo `_shared`. Finalmente publicar el frontend actualizado. Se mantienen los secretos existentes para descifrar certificados.
 
 Validación local: build Angular, pruebas Angular de temporizadores/reanudación/cancelación de sesión, pruebas Deno del contrato HTTP con fetch simulado, y pruebas PostgreSQL mediante PGlite de reservas, aislamiento e historial. Esta validación no emite facturas ni sustituye una prueba de integración en TEST con el servicio real y un certificado autorizado.
+
+## Cobro de consumo en Caja
+
+`cobrar_factura_caja_proforma` consulta la activación de proformas de la empresa y devuelve el tipo realmente guardado. Si una E32 se cobra en una empresa con proforma activa, se convierte a E332 dentro de la misma transacción del cobro. No reserva ni consume un rango fiscal E32: `enviar-ecf` usa el contador independiente y la ruta de solo firma, devuelve el XML y guarda los datos de firma antes de imprimir. Si la empresa no tiene proformas activas, la factura conserva E32 y se firma/envía mediante la cola fiscal con su secuencia autorizada normal. Una E332 explícita requiere que la función esté activa.
+
+Caja usa el tipo devuelto por el servidor, espera la firma y no imprime una proforma si falta el XML firmado. Las E32 normales se imprimen al ser aceptadas, igual que las otras facturas enviadas a la cola. Los recibos usan `fec_firma`, sin sustituirla por la hora del envío, e incluyen QR, código de seguridad, detalle, importes, condición y notas. El XML firmado queda disponible para descargar desde la vista de consulta.
+
+Aplicar `20261019120000_cash_consumption_proforma.sql` después de las migraciones de proforma/cola y publicar el frontend junto con la nueva RPC. Su nombre distinto hace que un frontend actualizado falle antes de cobrar si aún no se ha instalado esta migración, en lugar de cobrar e imprimir sin firmar.

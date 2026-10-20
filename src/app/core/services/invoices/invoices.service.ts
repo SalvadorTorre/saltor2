@@ -53,6 +53,8 @@ export interface EditableInvoiceData extends InvoiceSaveData {
   dgiiCode: string;
   dgiiMessage: string;
   dgiiSentAt: string;
+  signatureDate?: string;
+  signedXml?: string;
   securityCode: string;
   qrLink: string;
   dgiiResponse: unknown;
@@ -160,9 +162,12 @@ export class InvoicesService {
   }
 
   /** La cajera cobra: la factura pasa a Emitida con la forma de pago elegida. */
-  async collectInvoice(invoiceId: number, paymentMethodCode: number): Promise<void> {
-    const { error } = await this.supabase.client.rpc('cobrar_factura', { p_factura_id: invoiceId, p_forma_pago_codigo: paymentMethodCode });
+  async collectInvoice(invoiceId: number, paymentMethodCode: number): Promise<{ id: number; numero_factura: string; tipo_ncf: string }> {
+    const { data, error } = await this.supabase.client.rpc('cobrar_factura_caja_proforma', { p_factura_id: invoiceId, p_forma_pago_codigo: paymentMethodCode });
     if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.id || !row.tipo_ncf) throw new Error('El cobro no devolvió el tipo de comprobante guardado. Consulta la factura antes de continuar.');
+    return row;
   }
 
   async getInvoiceForEditing(invoiceId: number): Promise<EditableInvoiceData> {
@@ -172,7 +177,7 @@ export class InvoicesService {
 
     const { data: invoice, error: invoiceError } = await this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, cliente_id, cliente_nombre, cliente_rnc, cliente_telefono, cliente_correo, cliente_direccion, cliente_ciudad, fecha_factura, tipo_ncf, ncf, condicion_pago, forma_pago_codigo, notas, subtotal, itbis, total, dgii_track_id, dgii_codigo_respuesta, dgii_mensaje_respuesta, dgii_enviado_en, dgii_respuesta, codSeguridad, qr_link')
+      .select('id, numero_factura, cliente_id, cliente_nombre, cliente_rnc, cliente_telefono, cliente_correo, cliente_direccion, cliente_ciudad, fecha_factura, tipo_ncf, ncf, condicion_pago, forma_pago_codigo, notas, subtotal, itbis, total, dgii_track_id, dgii_codigo_respuesta, dgii_mensaje_respuesta, dgii_enviado_en, dgii_respuesta, codSeguridad, qr_link, fec_firma, ecf_xml_firmado')
       .eq('id', invoiceId)
       .single();
     if (invoiceError) throw invoiceError;
@@ -191,6 +196,8 @@ export class InvoicesService {
       dgiiCode: invoice.dgii_codigo_respuesta ?? '',
       dgiiMessage: invoice.dgii_mensaje_respuesta ?? '',
       dgiiSentAt: invoice.dgii_enviado_en ?? '',
+      signatureDate: invoice.fec_firma ?? '',
+      signedXml: invoice.ecf_xml_firmado ?? '',
       securityCode: invoice.codSeguridad ?? '',
       qrLink: invoice.qr_link ?? '',
       dgiiResponse: invoice.dgii_respuesta ?? null,

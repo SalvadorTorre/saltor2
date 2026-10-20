@@ -27,31 +27,34 @@
     <span><i class="sequence-dot" aria-hidden="true"></i><strong>{{ summary.pending }}</strong> por configurar</span>
   </div>
 
-  <div *ngIf="message" class="sequence-feedback" [class.sequence-feedback--error]="messageIsError" [attr.role]="messageIsError ? 'alert' : 'status'">{{ message }}</div>
+  <div *ngIf="message && !editorVisible" class="sequence-feedback" [class.sequence-feedback--error]="messageIsError" [attr.role]="messageIsError ? 'alert' : 'status'">{{ message }}</div>
 
-  <section *ngIf="editorVisible" class="sequence-editor" aria-labelledby="sequence-editor-title">
-    <header><div><h3 #editorTitle tabindex="-1" id="sequence-editor-title">{{ editingProforma ? 'Ajustar contador E332 · Proforma' : editing ? 'Editar autorización #' + editing.id : 'Registrar nueva solicitud' }}</h3>
-      <p>{{ editingProforma ? 'Solo indica el último número utilizado. Puedes adelantar o corregir el contador; cada ajuste conserva su historial.' : editing ? 'Los cambios conservan la versión anterior. Para otro rango, registra una nueva solicitud.' : 'Sustituye el rango predeterminado por el rango autorizado y completa la referencia, cantidades y fechas.' }}</p></div>
+  <dialog *ngIf="editorVisible" #sequenceDialog class="sequence-editor" aria-modal="true" aria-labelledby="sequence-editor-title" aria-describedby="sequence-editor-description" (cancel)="cancelDialog($event)">
+    <header><div><h3 #editorTitle tabindex="-1" id="sequence-editor-title">{{ editingProforma ? 'Ajustar contador E332 · Proforma' : editing ? 'Editar secuencia · ' + editing.series : addingTo ? 'Agregar autorización · ' + addingTo.series : 'Registrar nueva solicitud' }}</h3>
+      <p id="sequence-editor-description">{{ editingProforma ? 'Solo indica el último número utilizado. Puedes adelantar o corregir el contador; cada ajuste conserva su historial.' : editing ? 'Actualiza este registro. La versión anterior se conserva en el historial.' : addingTo ? 'Registra el nuevo rango autorizado para este tipo. El rango anterior conserva su número actual y su historial.' : 'Sustituye el rango predeterminado por el rango autorizado y completa la referencia, cantidades y fechas.' }}</p></div>
       <button class="sequence-icon-button" type="button" (click)="cancel()" [disabled]="isSaving" aria-label="Cerrar formulario"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'close' }" /></button>
     </header>
+    <div *ngIf="message" class="sequence-feedback" [class.sequence-feedback--error]="messageIsError" [attr.role]="messageIsError ? 'alert' : 'status'">{{ message }}</div>
+    <p *ngIf="editing && editing.used > 0" class="sequence-lock-note"><strong>{{ editing.used | number }} comprobantes utilizados.</strong> Puedes editar autorización, fechas, solicitados, estado y alerta. El rango y los utilizados se conservan; para otro rango usa «Agregar más».</p>
+    <p *ngIf="addingTo" class="sequence-lock-note">Autorización anterior: <strong>{{ addingTo.authorization || 'Sin referencia' }}</strong> · Rango {{ addingTo.rangeStart }} → {{ addingTo.rangeEnd }}. Completa los datos de la nueva autorización.</p>
     <form *ngIf="!editingProforma" (ngSubmit)="save()" #requestForm="ngForm">
       <fieldset [disabled]="isSaving" class="sequence-fields">
-        <label class="sequence-fields__wide">Tipo de comprobante<select name="type" [(ngModel)]="form.ncfType" (ngModelChange)="changeType()" [disabled]="!!editing" required><option *ngFor="let type of fiscalTypes" [value]="type">{{ type }}</option></select></label>
+        <label class="sequence-fields__wide">Tipo de comprobante<select name="type" [(ngModel)]="form.ncfType" (ngModelChange)="changeType()" [disabled]="!!editing || !!addingTo" required><option *ngFor="let type of fiscalTypes" [value]="type">{{ type }}</option></select></label>
         <label>Serie<input name="series" [(ngModel)]="form.series" readonly /></label>
         <label>Autorización<input name="authorization" [(ngModel)]="form.authorization" placeholder="Número / referencia" required maxlength="120" /></label>
         <label>Fecha de autorización<input type="date" name="authorizedAt" [(ngModel)]="form.authorizedAt" required /></label>
         <label>Solicitados<input type="number" name="requested" [(ngModel)]="form.requested" min="1" max="2147483647" step="1" required /></label>
         <label>Aceptados<input type="number" name="accepted" [(ngModel)]="form.accepted" min="1" [max]="form.requested || 2147483647" step="1" required [readonly]="!!editing?.used" /></label>
         <label>Desde<input name="from" [(ngModel)]="form.rangeStart" placeholder="1" required [readonly]="!!editing?.used" /></label>
-        <label>Hasta<input name="to" [(ngModel)]="form.rangeEnd" placeholder="500" required [readonly]="!!editing?.used" /></label>
+        <label>Hasta<input name="to" [(ngModel)]="form.rangeEnd" placeholder="Último autorizado" required [readonly]="!!editing?.used" /></label>
         <label>Fecha de vencimiento<input type="date" name="expiresAt" [(ngModel)]="form.expiresAt" required [min]="form.authorizedAt" /></label>
-        <label>Utilizados<input type="number" name="used" [(ngModel)]="form.used" min="0" [max]="form.accepted || 0" step="1" required [readonly]="!!editing" /></label>
+        <label>Utilizados<input type="number" name="used" [(ngModel)]="form.used" min="0" [max]="form.accepted || 0" step="1" required [readonly]="!!editing || !!addingTo" /></label>
         <label>Estado<select name="status" [(ngModel)]="form.status"><option>Activa</option><option>Agotada</option><option>Vencida</option></select></label>
         <label>Alerta de consumo (%)<input type="number" name="alert" [(ngModel)]="form.alertPercent" min="0" max="100" step="1" required /></label>
       </fieldset>
       <div class="sequence-editor__footer"><p>Rango: <strong>{{ rangeCount | number }}</strong> comprobantes. «Utilizados» indica cuántos números del rango ya se consumieron.</p>
         <div><button class="sequence-secondary" type="button" (click)="cancel()" [disabled]="isSaving">Cancelar</button>
-        <button class="sequence-primary" type="submit" [disabled]="isSaving || requestForm.invalid">{{ isSaving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar solicitud' }}</button></div>
+        <button class="sequence-primary" type="submit" [disabled]="isSaving || requestForm.invalid">{{ isSaving ? 'Guardando…' : editing ? 'Guardar cambios' : addingTo ? 'Agregar autorización' : 'Guardar solicitud' }}</button></div>
       </div>
     </form>
     <form *ngIf="editingProforma" (ngSubmit)="saveProforma()" #counterForm="ngForm">
@@ -61,7 +64,7 @@
       </fieldset>
       <div class="sequence-editor__footer"><p>El cambio se aplica únicamente a la numeración E332 de esta empresa.</p><div><button class="sequence-secondary" type="button" (click)="cancel()" [disabled]="isSaving">Cancelar</button><button class="sequence-primary" type="submit" [disabled]="isSaving || counterForm.invalid">{{ isSaving ? 'Guardando…' : 'Guardar contador' }}</button></div></div>
     </form>
-  </section>
+  </dialog>
 
   <section class="sequence-register" aria-label="Gestión de rangos">
     <div class="sequence-toolbar">
@@ -78,7 +81,7 @@
         <tbody>
           <tr *ngIf="isLoading"><td colspan="11" class="sequence-empty" role="status"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'refresh' }" /> Cargando tus secuencias…</td></tr>
           <ng-container *ngIf="!isLoading && !loadError">
-            <tr *ngFor="let sequence of filteredSequences" [class.sequence-row--default]="sequence.isDefault" [class.sequence-row--proforma]="sequence.isProforma">
+            <tr *ngFor="let sequence of filteredSequences; trackBy: trackSequence" [class.sequence-row--default]="sequence.isDefault" [class.sequence-row--proforma]="sequence.isProforma">
               <td class="sequence-type"><div class="sequence-type__title"><span class="sequence-series">{{ sequence.series }}</span><span class="sequence-record" *ngIf="!sequence.isDefault && !sequence.isProforma">#{{ sequence.id }}</span></div><span class="sequence-type__name">{{ typeName(sequence.ncfType) }}</span></td>
               <td><span [class.sequence-muted]="!sequence.authorization">{{ sequence.isProforma ? 'No requiere' : sequence.authorization || 'Por configurar' }}</span><small *ngIf="sequence.authorizedAt">{{ displayDate(sequence.authorizedAt) }}</small></td>
               <td class="sequence-numeric">{{ sequence.isProforma || sequence.requested == null ? '—' : (sequence.requested | number) }}</td>
@@ -88,7 +91,8 @@
               <td class="sequence-numeric"><strong>{{ sequence.isProforma ? '—' : (sequence.used | number) }}</strong><small *ngIf="!sequence.isDefault && !sequence.isProforma">de {{ sequence.total | number }}</small></td>
               <td><span [class.sequence-muted]="!sequence.expiresAt">{{ sequence.isProforma ? 'No aplica' : displayDate(sequence.expiresAt) }}</span></td>
               <td><span class="sequence-status" [class.sequence-status--internal]="sequence.isProforma" [class.sequence-status--pending]="sequence.isDefault" [class.sequence-status--inactive]="!sequence.isDefault && status(sequence) !== 'Activa'"><i aria-hidden="true"></i>{{ sequence.isProforma ? 'Interna' : sequence.isDefault ? 'Por configurar' : status(sequence) }}</span></td>
-              <td><div class="sequence-actions"><button type="button" class="sequence-icon-button" (click)="edit(sequence)" [disabled]="isSaving" [attr.aria-label]="sequence.isProforma ? 'Ajustar contador E332' : sequence.isDefault ? 'Configurar ' + sequence.series : 'Editar solicitud ' + sequence.id" [title]="sequence.isProforma ? 'Ajustar contador proforma' : sequence.isDefault ? 'Configurar rango autorizado' : 'Editar autorización'"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'edit' }" /></button>
+              <td><div class="sequence-actions"><button type="button" class="sequence-secondary sequence-edit-action" (click)="edit(sequence)" [disabled]="isSaving" [attr.aria-label]="sequence.isProforma ? 'Ajustar contador E332' : sequence.isDefault ? 'Configurar ' + sequence.series : 'Editar solicitud ' + sequence.id" [title]="sequence.isProforma ? 'Ajustar contador proforma' : sequence.isDefault ? 'Configurar rango autorizado' : 'Editar este registro'"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'edit' }" /><span>{{ sequence.isProforma ? 'Contador' : sequence.isDefault ? 'Configurar' : 'Editar' }}</span></button>
+                <button *ngIf="!sequence.isDefault && !sequence.isProforma" type="button" class="sequence-secondary sequence-add-more" (click)="addMore(sequence)" [disabled]="isSaving" [attr.aria-label]="'Agregar autorización ' + sequence.series" title="Registrar otra autorización sin cambiar este rango"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'plus' }" />Agregar más</button>
                 <button *ngIf="!sequence.isDefault" type="button" class="sequence-icon-button" (click)="showHistory(sequence)" [attr.aria-label]="sequence.isProforma ? 'Ver historial E332' : 'Ver historial de solicitud ' + sequence.id" title="Ver historial"><ng-container *ngTemplateOutlet="icon; context: { $implicit: 'history' }" /></button></div></td>
             </tr>
             <tr *ngIf="!filteredSequences.length"><td colspan="11" class="sequence-empty">No hay secuencias que coincidan con los filtros.</td></tr>
