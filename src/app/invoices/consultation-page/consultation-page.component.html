@@ -99,14 +99,17 @@
       </section>
 
       <section class="invoice-view-modal__section invoice-view-modal__dgii">
-        <h4>Resultado de DGII</h4>
+        <h4>Firma y respuesta electrónica</h4>
         <div class="invoice-view-modal__customer">
           <p><strong>Estado:</strong> {{ viewingInvoice.dgiiStatus }}</p>
-          <p><strong>Código:</strong> {{ viewingInvoice.dgiiCode || 'No disponible' }}</p>
+          <p><strong>Código de seguridad:</strong> {{ viewingInvoice.securityCode || 'No disponible' }}</p>
+          <p><strong>Fecha de firma:</strong> {{ viewingInvoice.signatureDate ? (viewingInvoice.signatureDate | date:'dd/MM/yyyy, hh:mm:ss a') : 'Pendiente' }}</p>
+          <p><strong>Código de respuesta:</strong> {{ viewingInvoice.dgiiCode || 'No disponible' }}</p>
           <p><strong>Seguimiento:</strong> {{ viewingInvoice.dgiiTrackId || 'No disponible' }}</p>
           <p><strong>Fecha de envío:</strong> {{ viewingInvoice.dgiiSentAt ? (viewingInvoice.dgiiSentAt | date:'dd/MM/yyyy, hh:mm a') : 'No enviada' }}</p>
           <p><strong>Mensaje:</strong> {{ viewingInvoice.dgiiMessage || 'No hay respuesta registrada de DGII.' }}</p>
         </div>
+        <button *ngIf="viewingInvoice.signedXml" class="secondary-action" type="button" (click)="downloadSignedXml()">Descargar XML firmado</button>
         <pre>{{ dgiiResponseText }}</pre>
       </section>
     </section>
