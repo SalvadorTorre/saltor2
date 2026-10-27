@@ -51,12 +51,12 @@
 }
 
 .invoice-consultation-table {
-  min-width: 1600px;
+  min-width: 1660px;
 }
 
 .invoice-consultation-table__row {
   gap: 22px;
-  grid-template-columns: 130px 180px minmax(270px, 1.4fr) 190px 220px 160px 210px 270px;
+  grid-template-columns: 130px 180px minmax(190px, 1fr) 185px 300px 145px 210px 270px;
   min-height: 66px;
   padding: 14px 20px;
 }
@@ -72,9 +72,9 @@
 }
 
 .invoice-consultation-table__row--data > :nth-child(3) {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .invoice-dgii-status {
@@ -96,6 +96,25 @@
   width: 18px;
 }
 
+.invoice-consultation-view--edit {
+  background: #fff8da;
+  border-color: #f0d35c;
+}
+
+.invoice-consultation-view--edit img {
+  filter: invert(75%) sepia(88%) saturate(594%) hue-rotate(357deg) brightness(100%) contrast(96%);
+}
+
+.invoice-consultation-view--cancel {
+  background: #fff0f0;
+  border-color: #f2a6a6;
+}
+
+.invoice-consultation-view--cancel img {
+  height: 20px;
+  width: 20px;
+}
+
 .invoice-consultation-empty,
 .invoice-consultation-error {
   font-size: 1rem;
@@ -112,3 +131,23 @@
 }
 
 .invoice-consultation-seller { display: block; margin-top: 2px; color: #6b819d; font-size: 0.8em; font-weight: 600; }
+
+.invoice-ncf-type {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 5px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.9em;
+  font-weight: 750;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.invoice-ncf-type--consumption { background: #e6f8f5; border-color: #91dfd3; color: #087c70; }
+.invoice-ncf-type--fiscal { background: #eaf2ff; border-color: #a9c8ff; color: #1d5ebf; }
+.invoice-ncf-type--special { background: #fff5dc; border-color: #f5d484; color: #986000; }
+.invoice-ncf-type--adjustment { background: #f6ecff; border-color: #d8b5f0; color: #7541a4; }
+.invoice-ncf-type--default { background: #eef2f7; border-color: #ccd6e1; color: #4c6178; }

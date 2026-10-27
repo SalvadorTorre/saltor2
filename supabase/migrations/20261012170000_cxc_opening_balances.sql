@@ -7,7 +7,6 @@
 -- Todo en una transacción: si algo falla, no cambia nada.
 -- ===========================================================================
 begin;
-
 -- 1) Tabla de saldos anteriores ------------------------------------------------
 create table if not exists myappdb.cxc_saldos_iniciales (
   id bigint generated always as identity primary key,
@@ -23,7 +22,6 @@ create table if not exists myappdb.cxc_saldos_iniciales (
   unique (empresa_id, numero)
 );
 create index if not exists cxc_saldos_iniciales_cliente_idx on myappdb.cxc_saldos_iniciales (cliente_id);
-
 alter table myappdb.cxc_saldos_iniciales enable row level security;
 drop policy if exists cxc_saldos_iniciales_select on myappdb.cxc_saldos_iniciales;
 create policy cxc_saldos_iniciales_select on myappdb.cxc_saldos_iniciales for select to authenticated
@@ -38,7 +36,6 @@ create policy cxc_saldos_iniciales_admin_update on myappdb.cxc_saldos_iniciales 
 revoke all on myappdb.cxc_saldos_iniciales from anon, authenticated;
 grant select, insert, update on myappdb.cxc_saldos_iniciales to authenticated;
 grant all on myappdb.cxc_saldos_iniciales to service_role;
-
 -- 2) Los abonos pueden aplicarse a una factura o a un saldo anterior ------------
 alter table myappdb.recibo_cobro_aplicaciones alter column factura_id drop not null;
 alter table myappdb.recibo_cobro_aplicaciones
@@ -49,7 +46,6 @@ alter table myappdb.recibo_cobro_aplicaciones add constraint recibo_cobro_aplica
 create unique index if not exists recibo_cobro_aplicaciones_recibo_saldo_key
   on myappdb.recibo_cobro_aplicaciones (recibo_id, saldo_inicial_id) where saldo_inicial_id is not null;
 create index if not exists recibo_cobro_aplicaciones_saldo_idx on myappdb.recibo_cobro_aplicaciones (saldo_inicial_id);
-
 -- 3) Vista de cuentas por cobrar: facturas a crédito + saldos anteriores.
 --    Los saldos anteriores usan id negativo (-id) para no chocar con facturas.
 create or replace view myappdb.cxc_facturas with (security_invoker = true) as
@@ -109,7 +105,6 @@ left join lateral (
   where a.saldo_inicial_id = s.id
 ) ab on true
 where s.estado = 'Activo';
-
 -- 4) El balance del cliente se recalcula al crear o cambiar un saldo anterior --
 create or replace function private.tg_saldos_iniciales_balance()
 returns trigger
@@ -128,12 +123,10 @@ drop trigger if exists cxc_saldos_iniciales_balance on myappdb.cxc_saldos_inicia
 create trigger cxc_saldos_iniciales_balance
   after insert or update or delete on myappdb.cxc_saldos_iniciales
   for each row execute function private.tg_saldos_iniciales_balance();
-
 drop trigger if exists cxc_saldos_iniciales_bitacora on myappdb.cxc_saldos_iniciales;
 create trigger cxc_saldos_iniciales_bitacora
   after update or delete on myappdb.cxc_saldos_iniciales
   for each row execute function private.tg_bitacora();
-
 -- 5) Recibos: aceptan abonos a facturas (id > 0) o a saldos anteriores (id < 0) --
 create or replace function myappdb.crear_recibo_cobro(p_recibo jsonb, p_aplicaciones jsonb)
 returns table(id bigint, numero_recibo text)
@@ -252,7 +245,6 @@ begin
   return query select v_recibo_id, v_numero;
 end;
 $fn$;
-
 -- 6) Carga de los saldos del sistema anterior (GABANA) ---------------------------
 insert into myappdb.cxc_saldos_iniciales (empresa_id, cliente_id, numero, fecha, monto, nota, creado_por)
 select 2, c.id, 'SA-' || d.codigo, (now() at time zone 'America/Santo_Domingo')::date, d.monto,
@@ -297,12 +289,10 @@ from (values
 ) as d(codigo, monto)
 join myappdb.clients c on c.empresa_id = 2 and c.codigo = d.codigo
 on conflict (empresa_id, numero) do nothing;
-
 insert into myappdb.bitacora (empresa_id, usuario_nombre, tabla, registro_id, accion, resumen, cambios)
 values (2, 'Migración DBF', 'cxc_saldos_iniciales', null, 'Crear',
         'Saldos anteriores de 36 clientes desde cliente.dbf por RD$2,941,001.01',
         jsonb_build_object('saldos', jsonb_build_object('despues', 36), 'monto_total', jsonb_build_object('despues', 2941001.01)));
-
 -- 7) Verificación: los 36 saldos y el total deben cuadrar.
 do $$
 declare v_n int; v_total numeric;
@@ -313,5 +303,4 @@ begin
   end if;
   raise notice 'Saldos anteriores cargados: % por RD$%', v_n, v_total;
 end $$;
-
 commit;

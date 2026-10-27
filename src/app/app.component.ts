@@ -12,6 +12,7 @@ import { CompanyBillingModeService } from './core/services/printing/company-bill
 import { SESSION_EXPIRED_EVENT } from './core/services/supabase/supabase.service';
 import Swal from 'sweetalert2';
 import { PlatformNotice, PlatformService, SubscriptionNotice } from './core/services/platform/platform.service';
+import { CompanyModule, CompanyModulesService } from './core/services/company-modules/company-modules.service';
 
 const HIDDEN_NOTICES_KEY = 'saltor-avisos-ocultos';
 
@@ -22,6 +23,8 @@ export interface MenuLink {
   adminOnly?: boolean;
   /** Solo en empresas con modo de facturación "Cobro en caja". */
   cashierModeOnly?: boolean;
+  /** Módulo que la empresa debe tener contratado. */
+  module?: CompanyModule;
 }
 
 export interface MenuGroup {
@@ -43,6 +46,8 @@ export interface MenuSection {
   groups?: MenuGroup[];
   /** Solo la ven los dueños del sistema. */
   ownerOnly?: boolean;
+  /** Módulo que habilita la sección superior. */
+  module?: CompanyModule;
 }
 
 // Primer segmento de la URL -> sección, cuando no coinciden.
@@ -50,7 +55,8 @@ const SECTION_BY_SEGMENT: Record<string, string> = {
   inicio: 'dashboard',
   mantenimiento: 'maintenance',
   configuracion: 'settings',
-  plataforma: 'plataforma'
+  plataforma: 'plataforma',
+  transacciones: 'transacciones'
 };
 
 @Component({
@@ -74,7 +80,7 @@ export class AppComponent implements OnInit {
   readonly sections: MenuSection[] = [
     { key: 'dashboard', label: 'Inicio', icon: 'home', path: '/inicio' },
     {
-      key: 'maintenance', label: 'Mantenimiento', icon: 'wrench', groups: [
+      key: 'maintenance', label: 'Mantenimiento', icon: 'wrench', module: 'mantenimiento', groups: [
         {
           title: 'Contactos', icon: 'users', color: '#0ea5e9', links: [
             { label: 'Clientes', path: '/mantenimiento/clientes' },
@@ -91,19 +97,12 @@ export class AppComponent implements OnInit {
       ]
     },
     {
-      key: 'settings', label: 'Configuración', icon: 'settings', groups: [
+      key: 'settings', label: 'Configuración', icon: 'settings', module: 'configuracion', groups: [
         {
           title: 'Empresa y seguridad', icon: 'shield', color: '#8b5cf6', links: [
             { label: 'Empresa', path: '/configuracion/empresa', adminOnly: true },
             { label: 'Usuarios', path: '/configuracion/usuarios', adminOnly: true },
             { label: 'Bitácora', path: '/configuracion/bitacora', adminOnly: true }
-          ]
-        },
-        {
-          title: 'Comprobantes', icon: 'receipt', color: '#10b981', links: [
-            { label: 'Tipo de NCF', path: '/configuracion/tipos-ncf' },
-            { label: 'RNC', path: '/configuracion/rnc' },
-            { label: 'Firma Digital DGII', path: '/configuracion/firma-digital' }
           ]
         },
         {
@@ -114,10 +113,22 @@ export class AppComponent implements OnInit {
         }
       ]
     },
-    { key: 'facturacion', label: 'Facturación', icon: 'file-text', path: '/facturacion' },
-    { key: 'cotizaciones', label: 'Cotización', icon: 'clipboard', path: '/cotizaciones' },
+    { key: 'facturacion', label: 'Facturación', icon: 'file-text', path: '/facturacion', module: 'facturacion' },
+    { key: 'cotizaciones', label: 'Cotización', icon: 'clipboard', path: '/cotizaciones', module: 'cotizacion' },
     {
-      key: 'caja', label: 'Caja', icon: 'wallet', groups: [
+      key: 'transacciones', label: 'Transacciones', icon: 'briefcase', module: 'transacciones', groups: [
+        {
+          title: 'Documentos comerciales', icon: 'clipboard', color: '#f97316', links: [
+            { label: 'Orden de venta', path: '/transacciones/orden-venta' },
+            { label: 'Facturación', path: '/transacciones/facturacion' },
+            { label: 'Cotización', path: '/transacciones/cotizacion' },
+            { label: 'Conduce', path: '/transacciones/conduce' }
+          ]
+        }
+      ]
+    },
+    {
+      key: 'caja', label: 'Caja', icon: 'wallet', module: 'caja', groups: [
         {
           title: 'Operación de caja', icon: 'cash', color: '#10b981', links: [
             { label: 'Cobro de facturas', path: '/caja/cobro', cashierModeOnly: true },
@@ -129,7 +140,7 @@ export class AppComponent implements OnInit {
       ]
     },
     {
-      key: 'contabilidad', label: 'Contabilidad', icon: 'calculator', groups: [
+      key: 'contabilidad', label: 'Contabilidad', icon: 'calculator', module: 'contabilidad', groups: [
         {
           title: 'Reportes fiscales', icon: 'landmark', color: '#ef4444', links: [
             { label: 'Panel fiscal', path: '/contabilidad/panel-fiscal' },
@@ -151,7 +162,7 @@ export class AppComponent implements OnInit {
       ]
     },
     {
-      key: 'reportes', label: 'Reportes', icon: 'chart', groups: [
+      key: 'reportes', label: 'Reportes', icon: 'chart', module: 'reportes', groups: [
         {
           title: 'Ventas', icon: 'trending', color: '#22c55e', links: [
             { label: 'Venta por productos', path: '/reportes/productos' },
@@ -200,7 +211,8 @@ export class AppComponent implements OnInit {
     private readonly branding: CompanyBrandingService,
     private readonly companies: CompaniesService,
     private readonly platform: PlatformService,
-    private readonly billingMode: CompanyBillingModeService
+    private readonly billingMode: CompanyBillingModeService,
+    private readonly companyModules: CompanyModulesService
   ) {}
 
   /** La empresa cobra en caja: se muestra Caja → Cobro de facturas. */
@@ -208,6 +220,7 @@ export class AppComponent implements OnInit {
 
   /** Dueño del sistema: ve la sección Plataforma. */
   isPlatformOwner = false;
+  activeModules: CompanyModule[] = [];
   /** Aviso de suscripción de la empresa (solo informa, nunca bloquea). */
   subscriptionNotice: SubscriptionNotice | null = null;
   isNoticeDismissed = false;
@@ -230,7 +243,10 @@ export class AppComponent implements OnInit {
   }
 
   get visibleSections(): MenuSection[] {
-    return this.sections.filter((section) => !section.ownerOnly || this.isPlatformOwner);
+    return this.sections.filter((section) =>
+      (!section.ownerOnly || this.isPlatformOwner)
+      && (!section.module || this.activeModules.includes(section.module))
+    );
   }
 
   get noticeLevel(): string {
@@ -241,10 +257,11 @@ export class AppComponent implements OnInit {
   }
 
   private async loadSessionExtras(): Promise<void> {
-    if (!this.activeUser) { this.isPlatformOwner = false; this.subscriptionNotice = null; this.platformNotices = []; return; }
-    const [owner, notice, notices, mode] = await Promise.all([this.companies.isPlatformOwner(), this.platform.getNotice(), this.platform.getActiveNotices(), this.billingMode.getMode()]);
+    if (!this.activeUser) { this.isPlatformOwner = false; this.activeModules = []; this.subscriptionNotice = null; this.platformNotices = []; return; }
+    const [owner, notice, notices, mode, modules] = await Promise.all([this.companies.isPlatformOwner(), this.platform.getNotice(), this.platform.getActiveNotices(), this.billingMode.getMode(), this.companyModules.getActiveModules(this.activeUser.companyId)]);
     this.isCashierMode = mode === 'Caja';
     this.isPlatformOwner = owner;
+    this.activeModules = modules;
     const hidden = this.hiddenNotices();
     this.platformNotices = notices.filter((n) => !hidden.includes(this.noticeKey(n)));
     this.subscriptionNotice = notice?.mensaje ? notice : null;
@@ -302,7 +319,11 @@ export class AppComponent implements OnInit {
   visibleLinks(links: MenuLink[]): MenuLink[] {
     // La base de datos y la guarda de ruta ya bloquean estas pantallas a quien
     // no es administrador; aquí solo se ocultan del menú.
-    return links.filter((link) => (this.isAdmin || !link.adminOnly) && (!link.cashierModeOnly || this.isCashierMode));
+    return links.filter((link) =>
+      (this.isAdmin || !link.adminOnly)
+      && (!link.cashierModeOnly || this.isCashierMode)
+      && (!link.module || this.activeModules.includes(link.module))
+    );
   }
 
   onLoggedIn(user: ActiveUserSession): void {

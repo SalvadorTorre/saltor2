@@ -19,11 +19,37 @@ export function endpoint(base: string, environment: string, signOnly = false, op
     ? `operaciones-encoladas/${encodeURIComponent(operationId)}`
     : signOnly ? 'generate-xml-no-send-direct-cert' : 'firmar-y-encolar-direct-cert'}`;
 }
+export function directSignatureEndpoint(base: string, environment: string): string {
+  const env = environment.toLowerCase();
+  if (!['test', 'prod'].includes(env)) throw new Error('Ambiente e-CF inválido.');
+  // El intermediario e-CF instalado publica esta ruta bajo /api. Firma el
+  // XML con el certificado recibido, pero no lo transmite a la DGII.
+  return `${serviceBase(base)}/api/${env}/generate-xml-no-send-direct-cert`;
+}
 export const record = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
 export function payload(value: unknown): Record<string, any> {
   const root = record(value); const data = record(root.data); const nested = record(data.data);
   const results = nested.results ?? data.results ?? root.results;
   return { ...root, ...data, ...nested, ...record(Array.isArray(results) ? results[0] : undefined) };
+}
+function firstText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+function messageFromHtmlError(raw: string): string | null {
+  const match = raw.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+  if (!match?.[1]) return null;
+  const text = match[1]
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+  return text || null;
 }
 function signatureDate(value: unknown): string | null {
   if (!value) return null;
@@ -32,19 +58,38 @@ function signatureDate(value: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 export function parseResult(value: unknown, status: string, raw: string): Record<string, unknown> {
-  const p = payload(value); const dgii = record(p.dgiiResponse ?? p.dgii);
-  const info = record(p.responseXML ?? p.ecfInfo);
+  const p = payload(value);
+  const responseXml = record(p.responseXML ?? p.ecfInfo);
+  const responseRfce = record(p.responseRFCE ?? p.rfceInfo);
+  const xmls = record(p.xmls);
+  const dgii = record(responseRfce.dgiiResponse ?? p.dgiiResponse ?? p.dgii);
   const messages = p.mensajes ?? p.messages ?? dgii.mensajes ?? null;
+  const htmlError = messageFromHtmlError(raw);
+  const signedXml = firstText(p.xmlFirmado, p.signedXml, responseXml.xmlFirmado, responseRfce.xmlFirmado, xmls.ecf);
+  const securityCode = firstText(
+    p.codigoSeguridad, p.codigoSeguridadeCF, p.codSeguridad, p.cod_seguridad, p.securityCode,
+    responseRfce.codigoSeguridad, responseRfce.codigoSeguridadeCF,
+    responseXml.codigoSeguridad, responseXml.codigoSeguridadeCF,
+  );
+  const qrLink = firstText(
+    p.qrUrl, p.qr_link, p.qrLink, p.enlace_qr, p.enlaceQR,
+    responseRfce.qrUrl, responseRfce.qrLink,
+    responseXml.qrUrl, responseXml.qrLink,
+  );
+  const signedAt = signatureDate(firstText(
+    p.fechaHoraFirma, p.fec_firma, p.fecFirma, p.fecha_firma, p.fechaFirma, p.signatureDateTime,
+    responseRfce.fechaHoraFirma, responseXml.fechaHoraFirma,
+  ));
   return {
     ecf_queue_status: status, ecf_operation_id: p.operationId ? String(p.operationId) : null,
     dgii_estado: STATES[status], estado_dgii: STATES[status],
     dgii_track_id: (p.trackId ?? dgii.trackId) ? String(p.trackId ?? dgii.trackId) : null,
     dgii_codigo_respuesta: (p.codigo ?? p.code ?? dgii.codigo) != null ? String(p.codigo ?? p.code ?? dgii.codigo) : null,
-    dgii_mensaje_respuesta: String(p.mensaje ?? p.message ?? dgii.mensaje ?? p.detail ?? (typeof p.error === 'string' ? p.error : null) ?? (messages ? JSON.stringify(messages) : STATES[status])),
-    codSeguridad: p.codigoSeguridad ?? info.codigoSeguridad ?? null,
-    qr_link: p.qrUrl ?? info.qrUrl ?? null, fec_firma: signatureDate(p.fechaHoraFirma ?? info.fechaHoraFirma),
-    ecf_xml_firmado: p.xmlFirmado ?? info.xmlFirmado ?? null,
+    dgii_mensaje_respuesta: String(p.mensaje ?? p.message ?? dgii.mensaje ?? p.detail ?? (typeof p.error === 'string' ? p.error : null) ?? htmlError ?? (messages ? JSON.stringify(messages) : STATES[status])),
+    codSeguridad: securityCode,
+    qr_link: qrLink, fec_firma: signedAt,
+    ecf_xml_firmado: signedXml,
     dgii_mensajes: messages, dgii_response_json: value, dgii_response_raw: raw,
-    dgii_error_message: status === 'ERROR' || status === 'ENVIO_INCIERTO' ? String(p.mensaje ?? p.message ?? p.detail ?? (typeof p.error === 'string' ? p.error : null) ?? STATES[status]) : null
+    dgii_error_message: status === 'ERROR' || status === 'ENVIO_INCIERTO' ? String(p.mensaje ?? p.message ?? p.detail ?? (typeof p.error === 'string' ? p.error : null) ?? htmlError ?? STATES[status]) : null
   };
 }

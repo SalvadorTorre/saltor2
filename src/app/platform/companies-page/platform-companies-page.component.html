@@ -51,7 +51,7 @@
         </thead>
         <tbody>
           <tr *ngFor="let c of companies" (click)="open(c)" [class.is-selected]="selected?.id === c.id" tabindex="0" (keydown.enter)="open(c)">
-            <td><b>{{ c.nombre_comercial }}</b><small>{{ c.rnc ? 'RNC ' + c.rnc : 'Sin RNC' }}<ng-container *ngIf="overLimit(c) as o"> · <em class="pf__over">{{ o }}</em></ng-container></small></td>
+            <td><b>{{ c.nombre_comercial }}</b><span *ngIf="isCurrentCompany(c)" class="pf-company-current">Actual</span><small>{{ c.rnc ? 'RNC ' + c.rnc : 'Sin RNC' }}<ng-container *ngIf="overLimit(c) as o"> · <em class="pf__over">{{ o }}</em></ng-container></small></td>
             <td>{{ c.plan || '—' }}</td>
             <td><span class="pf__state" [ngClass]="stateClass(c.estado_calculado)">{{ c.estado_calculado }}</span></td>
             <td>{{ date(c.vence) }}<small>{{ daysLabel(c) }}</small></td>
@@ -86,6 +86,21 @@
       <button type="button" class="pf__btn pf__btn--ghost" [class.pf__btn--danger]="c.estado !== 'Suspendida'" (click)="toggleSuspend()">{{ c.estado === 'Suspendida' ? 'Reactivar' : 'Suspender' }}</button>
     </div>
 
+    <section class="pf-company-access">
+      <div>
+        <strong>Trabajar en esta empresa</strong>
+        <span *ngIf="isCurrentCompany(c)" class="pf-company-current">Actual</span>
+        <p>Elige una sucursal para cambiar el contexto del sistema.</p>
+      </div>
+      <label>Sucursal
+        <select name="companyAccessBranch" [(ngModel)]="selectedBranchId" [disabled]="isChangingCompany || !branches.length">
+          <option [ngValue]="null">Selecciona una sucursal</option>
+          <option *ngFor="let branch of branches" [ngValue]="branch.idsucursal">{{ branch.nombresucursal || ('Sucursal ' + branch.idsucursal) }}{{ branch.ciudad ? ' · ' + branch.ciudad : '' }}</option>
+        </select>
+      </label>
+      <button type="button" class="pf__btn pf-company-access__button" (click)="enterSelectedCompany()" [disabled]="!selectedBranchId || isChangingCompany || isCurrentContext">{{ isChangingCompany ? 'Cambiando…' : accessButtonLabel }}</button>
+    </section>
+
     <nav class="pf-drawer__tabs">
       <button type="button" [class.is-active]="tab === 'suscripcion'" (click)="tab = 'suscripcion'">Suscripción</button>
       <button type="button" [class.is-active]="tab === 'pagos'" (click)="tab = 'pagos'">Pagos ({{ payments.length }})</button>
@@ -113,6 +128,23 @@
           <option value="Caja">Cobro en caja: el vendedor guarda y la cajera cobra e imprime</option>
         </select>
       </label>
+      <section class="pf-form__wide pf-modules" aria-label="Módulos habilitados para la empresa">
+        <div class="pf-modules__heading">
+          <div>
+            <strong>Módulos habilitados</strong>
+            <p>La empresa solo verá en su menú los módulos seleccionados.</p>
+          </div>
+          <button class="pf__btn pf__btn--ghost" type="button" (click)="saveModules()" [disabled]="isSavingModules">
+            {{ isSavingModules ? 'Guardando…' : 'Guardar módulos' }}
+          </button>
+        </div>
+        <div class="pf-modules__grid">
+          <label class="pf-module" *ngFor="let module of moduleDefinitions" [class.pf-module--active]="isModuleSelected(module.code)">
+            <input type="checkbox" [name]="'module-' + module.code" [ngModel]="isModuleSelected(module.code)" (ngModelChange)="toggleModule(module.code, $event)" />
+            <span><strong>{{ module.label }}</strong><small>{{ module.description }}</small></span>
+          </label>
+        </div>
+      </section>
       <section class="pf-form__wide pf-proforma" aria-label="Factura proforma E332">
         <div class="pf-proforma__heading"><div><strong>Factura proforma <span>E332</span></strong><p>Numeración interna, sin autorización DGII. Al activarla, aparece primero en el grid de secuencias.</p></div>
           <label class="pf-proforma__switch"><input type="checkbox" name="proformaEnabled" role="switch" aria-label="Activar factura proforma" [ngModel]="proformaEnabled" (ngModelChange)="changeProforma($event)" [disabled]="!proforma || isSavingProforma" /><span>{{ proformaEnabled ? 'Activa' : 'Inactiva' }}</span></label>

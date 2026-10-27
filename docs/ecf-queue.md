@@ -8,7 +8,13 @@ Base predeterminada: `https://ecf-propio.tail2c2b0a.ts.net/`. Se aceptan tambié
 
 `ecf_operaciones` reserva el ENCF y bloquea envíos concurrentes bajo un bloqueo del documento. Guarda el origen y ambiente utilizados, `operationId`, solicitud sin secretos, respuestas, XML firmado, QR, código de seguridad y fecha de firma. `operationId` y `trackId` son identificadores diferentes. La actualización de operación y documento ocurre en una misma transacción. La lectura exige empresa **y sucursal** del perfil activo; la escritura y las RPC quedan limitadas a `service_role`.
 
-Un 202 significa **En cola**, nunca aceptación DGII. Se consulta cada cuatro segundos, sin solapar peticiones, hasta `ACEPTADO`, `RECHAZADO` o `ERROR`. Se retoma el seguimiento al iniciar sesión o recargar la aplicación. El servicio remoto continúa trabajando aunque el navegador esté cerrado; el estado local se actualiza en la próxima consulta. Las respuestas finales son inmutables frente a consultas tardías. No se borran los metadatos de firma cuando una consulta no los trae.
+Un 202 significa **En cola**, nunca aceptación DGII. Se consulta cada cuatro segundos, sin solapar peticiones, hasta `ACEPTADO`, `RECHAZADO` o `ERROR`. Se retoma el seguimiento al iniciar sesión o recargar la aplicación. Las respuestas finales son inmutables frente a consultas tardías. No se borran los metadatos de firma cuando una consulta no los trae.
+
+## Reconciliación en segundo plano
+
+La función `reconciliar-ecf-pendientes` revisa hasta 20 operaciones activas por ejecución y actualiza la base aunque ningún usuario tenga la aplicación abierta. La migración `20261020114525_ecf_background_reconciliation.sql` habilita el control de concurrencia y deja preparada una tarea de Supabase Cron cada minuto. La llamada se protege con una clave exclusiva de cron: se guarda en Vault como `ecf_reconciliador_secret` y como secreto de Edge Function bajo `ECF_RECONCILER_SECRET`.
+
+La tarea no se programa hasta que existan en Vault `ecf_reconciliador_url`, `ecf_reconciliador_publishable_key` y `ecf_reconciliador_secret`. Luego se activa ejecutando `select myappdb.configurar_reconciliacion_ecf_programada();`. La interfaz de Consulta de Facturas muestra el identificador de operación, estado de cola, intentos, ambiente y última actualización, además de permitir filtrar todos los estados pendientes.
 
 Si el POST pierde la conexión, devuelve 5xx o no proporciona `operationId`, el documento queda **Envío por confirmar**. No se repite el POST automáticamente: primero hay que verificar el servicio remoto. Un intento interrumpido antes de guardar confirmación pasa al mismo estado después de tres minutos. Los rechazos/errores solo generan una nueva reserva después del restablecimiento explícito del e-NCF del documento; las operaciones anteriores se conservan inactivas como historial.
 

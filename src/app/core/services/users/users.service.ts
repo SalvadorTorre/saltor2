@@ -25,11 +25,17 @@ export class UsersService {
 
   constructor(private readonly supabase: SupabaseService) {}
 
-  async getUsers(): Promise<UserRecord[]> {
-    const { data, error } = await this.supabase.client
+  async getUsers(companyId?: number): Promise<UserRecord[]> {
+    let request = this.supabase.client
       .from(this.table)
       .select('*')
       .order('codusuario', { ascending: false });
+
+    if (companyId !== undefined) {
+      request = request.eq('empresa_id', companyId);
+    }
+
+    const { data, error } = await request;
 
     if (error) {
       throw error;

@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Modo de facturación por empresa.
 --   Directo: quien factura cobra e imprime (como hasta ahora).
@@ -12,13 +11,11 @@ begin;
 alter table myappdb.empresas add column if not exists modo_facturacion text not null default 'Directo';
 alter table myappdb.empresas drop constraint if exists empresas_modo_facturacion_check;
 alter table myappdb.empresas add constraint empresas_modo_facturacion_check check (modo_facturacion in ('Directo', 'Caja'));
-
 alter table myappdb.facturas drop constraint if exists facturas_estado_check;
 alter table myappdb.facturas add constraint facturas_estado_check check (estado in ('Emitida', 'Anulada', 'Pendiente de cobro'));
 alter table myappdb.facturas add column if not exists cobrada_en timestamptz;
 alter table myappdb.facturas add column if not exists cobrada_por text;
 create index if not exists facturas_pendientes_cobro_idx on myappdb.facturas (idempres, idsucursal) where estado = 'Pendiente de cobro';
-
 -- Toda factura nueva de una empresa en modo Caja nace pendiente de cobro y sin NCF.
 create or replace function private.tg_facturas_modo_caja()
 returns trigger language plpgsql security definer set search_path = ''
@@ -36,7 +33,6 @@ revoke all on function private.tg_facturas_modo_caja() from public, anon, authen
 drop trigger if exists facturas_modo_caja on myappdb.facturas;
 create trigger facturas_modo_caja before insert on myappdb.facturas
   for each row execute function private.tg_facturas_modo_caja();
-
 -- Mientras está pendiente, el pago lo decide la cajera: el vendedor no la marca cobrada.
 create or replace function private.tg_facturas_pendiente_sin_pago()
 returns trigger language plpgsql set search_path = ''
@@ -53,7 +49,6 @@ revoke all on function private.tg_facturas_pendiente_sin_pago() from public, ano
 drop trigger if exists facturas_pendiente_sin_pago on myappdb.facturas;
 create trigger facturas_pendiente_sin_pago before update on myappdb.facturas
   for each row execute function private.tg_facturas_pendiente_sin_pago();
-
 -- Cobrar: la factura pasa a Emitida con la forma de pago elegida en caja.
 create or replace function myappdb.cobrar_factura(p_factura_id bigint, p_forma_pago_codigo smallint)
 returns table (id bigint, numero_factura text, tipo_ncf text)
@@ -99,7 +94,6 @@ end;
 $$;
 revoke all on function myappdb.cobrar_factura(bigint, smallint) from public, anon;
 grant execute on function myappdb.cobrar_factura(bigint, smallint) to authenticated;
-
 -- Cuentas por cobrar: una factura pendiente de cobro todavía no es deuda del cliente.
 create or replace view myappdb.cxc_facturas as
  SELECT f.id,
@@ -152,7 +146,6 @@ UNION ALL
              JOIN myappdb.recibos_cobro r ON (((r.id = a.recibo_id) AND (r.estado = 'Activo'::text))))
           WHERE (a.saldo_inicial_id = s.id)) ab ON (true))
   WHERE (s.estado = 'Activo'::text);
-
 -- Cierre de caja: solo cuenta las facturas cobradas, nunca las pendientes.
 do $$
 declare
@@ -167,5 +160,4 @@ begin
   d := replace(d, 'f.cierre_caja_id is null and coalesce(f.forma_pago_codigo', 'f.cierre_caja_id is null and f.estado <> ''Pendiente de cobro'' and coalesce(f.forma_pago_codigo');
   execute d;
 end $$;
-
 commit;

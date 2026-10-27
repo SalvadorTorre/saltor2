@@ -1,5 +1,4 @@
 begin;
-
 -- Secuencia interna alterna para documentos tipo 332.
 -- No es un TipoeCF oficial y no debe enviarse a la DGII.
 
@@ -38,5 +37,4 @@ where empresa.estado = 'Activa'
     where secuencia.empresa_id = empresa.id
       and secuencia.tipo_ncf = '332'
   );
-
 commit;

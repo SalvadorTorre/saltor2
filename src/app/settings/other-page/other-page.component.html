@@ -210,7 +210,27 @@
             <option value="media_carta">1/2 carta</option>
           </select>
         </label>
-        <p class="field-help">Todos los reportes usarán este formato. QZ Tray imprime en la impresora predeterminada de Windows.</p>
+        <p class="field-help">Define el formato de las facturas, cotizaciones y tickets de esta empresa.</p>
+
+        <label class="field checkbox-field field--full">
+          <input type="checkbox" name="useWindowsDefaultPrinter" [(ngModel)]="preferences.useWindowsDefaultPrinter" />
+          <span>Usar la impresora predeterminada de Windows en este equipo</span>
+        </label>
+
+        <label class="field field--full" *ngIf="!preferences.useWindowsDefaultPrinter">
+          <span>Impresora seleccionada para este equipo</span>
+          <div class="printer-selection">
+            <select name="printerName" [(ngModel)]="preferences.printerName" [disabled]="loadingPrinters">
+              <option value="">Selecciona una impresora</option>
+              <option *ngFor="let printer of availablePrinters" [value]="printer">{{ printer }}</option>
+            </select>
+            <button class="secondary-action" type="button" [disabled]="loadingPrinters || qzStatus !== 'active'" (click)="loadAvailablePrinters()">
+              {{ loadingPrinters ? 'Buscando…' : 'Actualizar lista' }}
+            </button>
+          </div>
+          <small *ngIf="qzStatus !== 'active'">Inicia QZ Tray y pulsa “Comprobar de nuevo” para cargar las impresoras.</small>
+        </label>
+        <p class="field-help field--full">La impresora elegida se guarda únicamente en esta computadora. Si marcas la opción anterior, el sistema utiliza siempre la predeterminada de Windows.</p>
 
         <label class="field">
           <span>Modo de facturación de la empresa</span>

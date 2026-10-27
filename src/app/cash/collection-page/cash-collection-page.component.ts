@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, DestroyRef, inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import Swal from 'sweetalert2';
 import { AuthService } from '../../core/services/auth/auth.service';
@@ -26,8 +25,6 @@ const REFRESH_MS = 20000;
   styleUrls: ['./cash-collection-page.component.scss']
 })
 export class CashCollectionPageComponent implements OnInit, OnDestroy {
-  private readonly destroyRef = inject(DestroyRef);
-  private readonly pendingPrints = new Map<number, string>();
   invoices: PendingCollectionInvoice[] = [];
   paymentMethods: PaymentMethod[] = [];
   selected: PendingCollectionInvoice | null = null;
@@ -52,17 +49,6 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
   ) {}
 
   async ngOnInit(): Promise<void> {
-    this.ecfService.updates$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
-      if (event.kind !== 'FACTURA' || !this.pendingPrints.has(event.documentId)) return;
-      const seller = this.pendingPrints.get(event.documentId)!;
-      if (['Aceptado', 'Aceptado condicional', 'Firmada'].includes(event.result.dgii_estado ?? '')) {
-        this.pendingPrints.delete(event.documentId);
-        void this.printService.print(event.documentId, seller).catch(error => Swal.fire({ icon: 'warning', title: 'No se pudo imprimir', text: this.message(error) }));
-      } else if (['Error', 'Rechazado'].includes(event.result.dgii_estado ?? '')) {
-        this.pendingPrints.delete(event.documentId);
-        void Swal.fire({ icon: 'warning', title: 'Revisar comprobante cobrado', text: event.result.dgii_mensaje_respuesta ?? 'DGII no aceptó el comprobante.' });
-      }
-    });
     this.isCashierMode = (await this.billingMode.getMode()) === 'Caja';
     try { this.paymentMethods = await this.paymentMethodsService.getPaymentMethods(); } catch { /* se usan los códigos */ }
     await this.load();
@@ -139,6 +125,7 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const isConsumerInvoice = this.isConsumerInvoice(invoice.ncfType);
     let dgiiProblem = '';
     let queued = false;
     if (this.requiresDgii(invoice.ncfType)) {
@@ -148,7 +135,6 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
           throw new Error(sent.dgii_mensaje_respuesta || 'No se recibió el XML firmado de la proforma. Se conserva la factura cobrada para revisar su firma.');
         }
         queued = ['En cola', 'Enviando DGII', 'En proceso DGII'].includes(sent.dgii_estado ?? '');
-        if (queued) this.pendingPrints.set(invoice.id, invoice.seller);
         if (['Rechazado', 'Error', 'Envío por confirmar', 'Preparando envío'].includes(sent.dgii_estado ?? '')) dgiiProblem = sent.dgii_mensaje_respuesta || 'La DGII no aceptó la factura.';
       } catch (error) {
         dgiiProblem = this.message(error);
@@ -156,18 +142,27 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
     }
 
     if (dgiiProblem) {
-      await Swal.fire({
-        icon: 'warning', title: `Factura ${invoice.number} cobrada`,
-        html: `${this.isProforma(invoice.ncfType) ? 'No se pudo completar la firma de la proforma' : 'No se pudo enviar a la DGII'}: <b>${this.escape(dgiiProblem)}</b><br><br>Revisa el comprobante desde Facturación → Consulta antes de imprimirlo.`
-      });
-    } else if (queued) {
-      await Swal.fire({ icon: 'info', title: `Factura ${invoice.number} cobrada y en cola`, text: 'Se imprimirá al ser aceptada mientras esta pantalla siga abierta. También puedes consultar e imprimir desde Facturación → Consulta.' });
+      if (isConsumerInvoice) {
+        try { await this.printService.print(invoice.id, invoice.seller); }
+        catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }
+        await Swal.fire({
+          icon: 'warning', title: `Factura ${invoice.number} cobrada e impresa`,
+          html: `La factura tipo 32 fue impresa. La DGII sigue pendiente: <b>${this.escape(dgiiProblem)}</b>`
+        });
+      } else {
+        await Swal.fire({
+          icon: 'warning', title: `Factura ${invoice.number} cobrada`,
+          html: `${this.isProforma(invoice.ncfType) ? 'No se pudo completar la firma de la proforma' : 'No se pudo enviar a la DGII'}: <b>${this.escape(dgiiProblem)}</b><br><br>Revisa el comprobante desde Facturación → Consulta antes de imprimirlo.`
+        });
+      }
     } else {
       try { await this.printService.print(invoice.id, invoice.seller); }
       catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }
       void Swal.fire({
-        icon: 'success', title: `Factura ${invoice.number} cobrada`,
-        text: change > 0 ? `Devuelta: RD$ ${change.toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : '',
+        icon: 'success', title: queued ? `Factura ${invoice.number} cobrada y en cola` : `Factura ${invoice.number} cobrada`,
+        text: queued
+          ? 'La factura fue impresa y continúa en proceso de confirmación por la DGII.'
+          : change > 0 ? `Devuelta: RD$ ${change.toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : '',
         timer: change > 0 ? 6000 : 1800, showConfirmButton: change > 0
       });
     }
@@ -198,6 +193,7 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
   }
 
   private isProforma(ncfType: string): boolean { return /(?:^|\D)332(?:\D|$)/.test(ncfType || ''); }
+  private isConsumerInvoice(ncfType: string): boolean { return /(?:^|\D)32(?:\D|$)/.test(ncfType || '') && !this.isProforma(ncfType); }
   private requiresDgii(ncfType: string): boolean { return /(?:^|\D)(332|31|32|44|45|46)(?:\D|$)/.test(ncfType || ''); }
   private escape(value: string): string { return value.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string)); }
   private message(error: unknown): string { return String((error as { message?: string })?.message ?? error ?? 'Error'); }

@@ -9,6 +9,8 @@ import {
 } from '../../core/services/platform/platform.service';
 
 import { ProformaService, ProformaSettings, PROFORMA_MAX } from '../../core/services/proforma/proforma.service';
+import { AuthService } from '../../core/services/auth/auth.service';
+import { CompanyModule, COMPANY_MODULES, COMPANY_MODULE_DEFINITIONS, CompanyModulesService } from '../../core/services/company-modules/company-modules.service';
 
 type DrawerTab = 'suscripcion' | 'pagos' | 'usuarios' | 'sucursales';
 
@@ -50,8 +52,18 @@ export class PlatformCompaniesPageComponent implements OnInit {
   proformaCurrent = 0;
   readonly proformaMax = PROFORMA_MAX;
   isSavingProforma = false;
+  selectedBranchId: number | null = null;
+  isChangingCompany = false;
+  readonly moduleDefinitions = COMPANY_MODULE_DEFINITIONS;
+  selectedModules: CompanyModule[] = [];
+  isSavingModules = false;
 
-  constructor(private readonly platform: PlatformService, private readonly proformas: ProformaService) {}
+  constructor(
+    private readonly platform: PlatformService,
+    private readonly proformas: ProformaService,
+    private readonly auth: AuthService,
+    private readonly companyModules: CompanyModulesService
+  ) {}
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -119,6 +131,8 @@ export class PlatformCompaniesPageComponent implements OnInit {
     this.proformaEnabled = false;
     this.proformaCurrent = 0;
     this.isSavingProforma = false;
+    this.selectedBranchId = null;
+    this.selectedModules = [];
     this.form = {
       plan_id: company.plan_id, estado: company.estado ?? 'Prueba', prueba_hasta: company.prueba_hasta, pagado_hasta: company.pagado_hasta,
       dias_gracia: company.dias_gracia ?? 5, precio_mensual: Number(company.precio_mensual ?? 0),
@@ -126,6 +140,11 @@ export class PlatformCompaniesPageComponent implements OnInit {
     };
     this.payment = this.emptyPayment();
     await this.loadDrawerData();
+    if (this.selected?.id === company.id) {
+      this.selectedBranchId = this.branches.find((branch) => branch.idsucursal === this.auth.currentUser?.branchId)?.idsucursal
+        ?? this.branches[0]?.idsucursal
+        ?? null;
+    }
   }
 
   close(): void {
@@ -133,15 +152,49 @@ export class PlatformCompaniesPageComponent implements OnInit {
     this.form = null;
   }
 
+  isCurrentCompany(company: PlatformCompany): boolean {
+    return this.auth.currentUser?.companyId === company.id;
+  }
+
+  get isCurrentContext(): boolean {
+    return !!this.selected && this.isCurrentCompany(this.selected)
+      && this.selectedBranchId === this.auth.currentUser?.branchId;
+  }
+
+  get accessButtonLabel(): string {
+    if (this.isCurrentContext) return 'Empresa actual';
+    return this.isCurrentCompany(this.selected as PlatformCompany) ? 'Cambiar sucursal' : 'Entrar a empresa';
+  }
+
+  async enterSelectedCompany(): Promise<void> {
+    if (!this.selected || !this.selectedBranchId || this.isChangingCompany || this.isCurrentContext) return;
+    const branch = this.branches.find((item) => item.idsucursal === this.selectedBranchId);
+    if (!branch) {
+      this.drawerError = 'Selecciona una sucursal válida.';
+      return;
+    }
+
+    this.isChangingCompany = true;
+    this.drawerError = '';
+    try {
+      await this.auth.switchCompanyContext(this.selected.id, branch.idsucursal);
+      window.location.assign('/inicio');
+    } catch (error) {
+      this.drawerError = this.message(error);
+    } finally {
+      this.isChangingCompany = false;
+    }
+  }
+
   private async loadDrawerData(): Promise<void> {
     if (!this.selected) return;
     const id = this.selected.id;
     try {
-      const [payments, users, branches, mode, proforma] = await Promise.all([
+      const [payments, users, branches, mode, proforma, modules] = await Promise.all([
         this.platform.getPayments({ companyId: id, limit: 200 }), this.platform.getCompanyUsers(id), this.platform.getCompanyBranches(id), this.platform.getBillingMode(id), this.proformas.getSettings(id).catch(error => {
           if (this.selected?.id === id) this.drawerError = this.message(error);
           return null;
-        })
+        }), this.companyModules.getActiveModules(id)
       ]);
       if (this.selected?.id !== id) return;
       this.payments = payments; this.users = users; this.branches = branches;
@@ -149,6 +202,7 @@ export class PlatformCompaniesPageComponent implements OnInit {
       this.proforma = proforma;
       this.proformaEnabled = proforma?.enabled ?? false;
       this.proformaCurrent = proforma?.current ?? 0;
+      this.selectedModules = modules;
     } catch (error) {
       this.drawerError = this.message(error);
     }
@@ -202,6 +256,53 @@ export class PlatformCompaniesPageComponent implements OnInit {
     } catch (error) {
       if (this.selected?.id === id) this.drawerError = this.message(error);
     } finally { if (this.selected?.id === id) this.isSavingProforma = false; }
+  }
+
+  isModuleSelected(module: CompanyModule): boolean {
+    return this.selectedModules.includes(module);
+  }
+
+  toggleModule(module: CompanyModule, active: boolean): void {
+    this.selectedModules = active
+      ? [...new Set([...this.selectedModules, module])]
+      : this.selectedModules.filter((item) => item !== module);
+  }
+
+  async saveModules(): Promise<void> {
+    if (!this.selected || this.isSavingModules) return;
+    this.isSavingModules = true;
+    this.drawerError = '';
+    try {
+      // Toma el estado actual de los checks para que el valor guardado coincida
+      // exactamente con lo que la persona dejó marcado en pantalla.
+      const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('.pf-modules input[name^="module-"]'));
+      const modulesToSave = inputs.length
+        ? inputs.filter((input) => input.checked)
+          .map((input) => input.name.replace('module-', '') as CompanyModule)
+          .filter((module) => COMPANY_MODULES.includes(module))
+        : this.selectedModules;
+
+      await this.companyModules.saveCompanyModules(this.selected.id, modulesToSave);
+      // Se vuelve a leer desde la base para confirmar lo que realmente quedó activo.
+      this.selectedModules = await this.companyModules.getActiveModules(this.selected.id);
+      const labels = this.moduleDefinitions
+        .filter((module) => this.selectedModules.includes(module.code))
+        .map((module) => module.label);
+      await Swal.fire({
+        icon: 'success',
+        title: 'Módulos guardados',
+        text: labels.length ? `Activos: ${labels.join(', ')}.` : 'La empresa quedó sin módulos habilitados.'
+      });
+    } catch (error) {
+      this.drawerError = this.message(error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudieron guardar los módulos',
+        text: this.drawerError
+      });
+    } finally {
+      this.isSavingModules = false;
+    }
   }
 
   onPlanChange(): void {

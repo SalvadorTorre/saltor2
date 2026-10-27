@@ -83,6 +83,22 @@
   line-height: 1.45;
 }
 
+.printer-selection {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  select {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .secondary-action {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
 .qz-status {
   flex-shrink: 0;
   padding: 6px 10px;
@@ -171,5 +187,10 @@
   .certificate-upload-grid,
   .certificate-details {
     grid-template-columns: 1fr;
+  }
+
+  .printer-selection {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

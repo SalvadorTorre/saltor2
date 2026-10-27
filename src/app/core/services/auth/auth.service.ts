@@ -99,6 +99,20 @@ export class AuthService {
     this.clearStoredUser();
   }
 
+  /** Cambia el contexto del dueño de Plataforma a una empresa y sucursal elegidas. */
+  async switchCompanyContext(companyId: number, branchId: number): Promise<ActiveUserSession> {
+    const authUserId = this.currentUser?.authUserId;
+    if (!authUserId) throw new Error('No hay una sesión activa para cambiar de empresa.');
+
+    const { error } = await this.supabase.client.rpc('cambiar_contexto_empresa', {
+      p_empresa_id: companyId,
+      p_sucursal_id: branchId
+    });
+    if (error) throw error;
+
+    return this.loadActiveUser(authUserId);
+  }
+
   private async loadActiveUser(authUserId: string): Promise<ActiveUserSession> {
     const { data, error } = await this.supabase.client
       .from('usuarios')

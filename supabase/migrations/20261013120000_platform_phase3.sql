@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Plataforma (fase 3): soporte (tickets), avisos a los usuarios, salud de cada
 -- empresa y exportación completa de los datos de una empresa.
@@ -7,7 +6,6 @@ begin;
 
 -- Soporte: tickets ----------------------------------------------------------------
 create sequence if not exists myappdb.plataforma_tickets_numero_seq;
-
 create table if not exists myappdb.plataforma_tickets (
   id bigint generated always as identity primary key,
   numero text not null unique,
@@ -25,7 +23,6 @@ create table if not exists myappdb.plataforma_tickets (
 );
 create index if not exists plataforma_tickets_empresa_idx on myappdb.plataforma_tickets (empresa_id, ultima_actividad desc);
 create index if not exists plataforma_tickets_estado_idx on myappdb.plataforma_tickets (estado, ultima_actividad desc);
-
 create table if not exists myappdb.plataforma_ticket_mensajes (
   id bigint generated always as identity primary key,
   ticket_id bigint not null references myappdb.plataforma_tickets(id) on delete cascade,
@@ -36,7 +33,6 @@ create table if not exists myappdb.plataforma_ticket_mensajes (
   creado_en timestamptz not null default now()
 );
 create index if not exists plataforma_ticket_mensajes_ticket_idx on myappdb.plataforma_ticket_mensajes (ticket_id, creado_en);
-
 -- Quien crea el ticket, su empresa y el número los pone la base de datos, no la pantalla.
 create or replace function private.tg_plataforma_ticket_antes()
 returns trigger language plpgsql security definer set search_path = ''
@@ -74,7 +70,6 @@ revoke all on function private.tg_plataforma_ticket_antes() from public, anon, a
 drop trigger if exists plataforma_tickets_antes on myappdb.plataforma_tickets;
 create trigger plataforma_tickets_antes before insert or update on myappdb.plataforma_tickets
   for each row execute function private.tg_plataforma_ticket_antes();
-
 create or replace function private.tg_plataforma_mensaje_antes()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -92,7 +87,6 @@ revoke all on function private.tg_plataforma_mensaje_antes() from public, anon, 
 drop trigger if exists plataforma_ticket_mensajes_antes on myappdb.plataforma_ticket_mensajes;
 create trigger plataforma_ticket_mensajes_antes before insert on myappdb.plataforma_ticket_mensajes
   for each row execute function private.tg_plataforma_mensaje_antes();
-
 -- Cada mensaje mueve el ticket: si responde soporte queda "Esperando cliente"; si responde el cliente se reabre.
 create or replace function private.tg_plataforma_mensaje_despues()
 returns trigger language plpgsql security definer set search_path = ''
@@ -114,14 +108,12 @@ revoke all on function private.tg_plataforma_mensaje_despues() from public, anon
 drop trigger if exists plataforma_ticket_mensajes_despues on myappdb.plataforma_ticket_mensajes;
 create trigger plataforma_ticket_mensajes_despues after insert on myappdb.plataforma_ticket_mensajes
   for each row execute function private.tg_plataforma_mensaje_despues();
-
 alter table myappdb.plataforma_tickets enable row level security;
 alter table myappdb.plataforma_ticket_mensajes enable row level security;
 revoke all on myappdb.plataforma_tickets, myappdb.plataforma_ticket_mensajes from anon, authenticated;
 grant select, insert, update on myappdb.plataforma_tickets to authenticated;
 grant select, insert on myappdb.plataforma_ticket_mensajes to authenticated;
 grant all on myappdb.plataforma_tickets, myappdb.plataforma_ticket_mensajes to service_role;
-
 drop policy if exists plataforma_tickets_select on myappdb.plataforma_tickets;
 create policy plataforma_tickets_select on myappdb.plataforma_tickets for select to authenticated
   using ((select private.es_dueno_sistema()) or empresa_id = (select private.current_empresa_id()));
@@ -132,7 +124,6 @@ drop policy if exists plataforma_tickets_update on myappdb.plataforma_tickets;
 create policy plataforma_tickets_update on myappdb.plataforma_tickets for update to authenticated
   using ((select private.es_dueno_sistema()) or empresa_id = (select private.current_empresa_id()))
   with check ((select private.es_dueno_sistema()) or empresa_id = (select private.current_empresa_id()));
-
 drop policy if exists plataforma_ticket_mensajes_select on myappdb.plataforma_ticket_mensajes;
 create policy plataforma_ticket_mensajes_select on myappdb.plataforma_ticket_mensajes for select to authenticated
   using ((select private.es_dueno_sistema()) or exists (
@@ -141,7 +132,6 @@ drop policy if exists plataforma_ticket_mensajes_insert on myappdb.plataforma_ti
 create policy plataforma_ticket_mensajes_insert on myappdb.plataforma_ticket_mensajes for insert to authenticated
   with check ((select private.es_dueno_sistema()) or exists (
     select 1 from myappdb.plataforma_tickets t where t.id = ticket_id and t.empresa_id = (select private.current_empresa_id())));
-
 -- Avisos a los usuarios ----------------------------------------------------------
 create table if not exists myappdb.plataforma_avisos (
   id bigint generated always as identity primary key,
@@ -155,12 +145,10 @@ create table if not exists myappdb.plataforma_avisos (
   creado_en timestamptz not null default now(),
   check (hasta is null or hasta >= desde)
 );
-
 alter table myappdb.plataforma_avisos enable row level security;
 revoke all on myappdb.plataforma_avisos from anon, authenticated;
 grant select, insert, update, delete on myappdb.plataforma_avisos to authenticated;
 grant all on myappdb.plataforma_avisos to service_role;
-
 drop policy if exists plataforma_avisos_dueno on myappdb.plataforma_avisos;
 create policy plataforma_avisos_dueno on myappdb.plataforma_avisos for all to authenticated
   using ((select private.es_dueno_sistema())) with check ((select private.es_dueno_sistema()));
@@ -169,11 +157,9 @@ drop policy if exists plataforma_avisos_usuarios on myappdb.plataforma_avisos;
 create policy plataforma_avisos_usuarios on myappdb.plataforma_avisos for select to authenticated
   using (activo and desde <= private.hoy_rd() and (hasta is null or hasta >= private.hoy_rd())
          and (empresa_id is null or empresa_id = (select private.current_empresa_id())));
-
 drop trigger if exists plataforma_avisos_bitacora on myappdb.plataforma_avisos;
 create trigger plataforma_avisos_bitacora after insert or update or delete on myappdb.plataforma_avisos
   for each row execute function private.tg_bitacora();
-
 -- Salud de cada empresa -------------------------------------------------------------
 create or replace function private.fecha_flexible(p text)
 returns date language sql immutable set search_path = ''
@@ -183,7 +169,6 @@ as $$
     when p ~ '^\d{4}-\d{2}-\d{2}' then left(p, 10)::date
   end;
 $$;
-
 create or replace function myappdb.plataforma_salud()
 returns jsonb
 language plpgsql stable security definer set search_path = ''
@@ -295,7 +280,6 @@ end;
 $$;
 revoke all on function myappdb.plataforma_salud() from public, anon;
 grant execute on function myappdb.plataforma_salud() to authenticated;
-
 -- Exportación completa de una empresa (respaldo / entrega de datos al cliente) -------
 -- No incluye claves ni el certificado digital.
 create or replace function myappdb.plataforma_exportar_empresa(p_empresa_id integer)
@@ -351,5 +335,4 @@ end;
 $$;
 revoke all on function myappdb.plataforma_exportar_empresa(integer) from public, anon;
 grant execute on function myappdb.plataforma_exportar_empresa(integer) to authenticated;
-
 commit;

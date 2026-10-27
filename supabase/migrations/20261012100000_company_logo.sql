@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Logo propio de cada empresa (imagen pequeña guardada como data URL).
 -- Se muestra en la barra superior y en la impresión de facturas.
@@ -8,7 +7,6 @@ alter table myappdb.empresas add column if not exists logo text;
 alter table myappdb.empresas drop constraint if exists empresas_logo_formato;
 alter table myappdb.empresas add constraint empresas_logo_formato
   check (logo is null or (logo ~ '^data:image/(png|jpeg|webp);base64,' and length(logo) <= 700000));
-
 -- La bitácora no copia valores largos (como el logo): anota que cambió.
 create or replace function private.bitacora_valor(p jsonb)
 returns jsonb
@@ -23,7 +21,6 @@ as $$
   end;
 $$;
 revoke all on function private.bitacora_valor(jsonb) from public, anon;
-
 create or replace function private.tg_bitacora()
 returns trigger
 language plpgsql

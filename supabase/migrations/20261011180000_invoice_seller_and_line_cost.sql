@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Vendedor y costo en cada factura.
 --   * facturas.usuario_id / usuario_nombre: quién creó la factura (lo fija
@@ -14,15 +13,12 @@ begin;
 alter table myappdb.facturas add column if not exists usuario_id integer references myappdb.usuarios(codusuario) on delete set null;
 alter table myappdb.facturas add column if not exists usuario_nombre text;
 create index if not exists facturas_usuario_idx on myappdb.facturas (usuario_id);
-
 alter table myappdb.factura_detalles add column if not exists costo_unitario numeric(14,2);
 alter table myappdb.factura_detalles add column if not exists costo_estimado boolean not null default false;
-
 update myappdb.factura_detalles d
 set costo_unitario = coalesce(p.costo, 0), costo_estimado = true
 from myappdb.products p
 where p.id = coalesce(d.producto_inventario_id, d.producto_id) and d.costo_unitario is null;
-
 create or replace function myappdb.crear_factura(p_factura jsonb, p_detalles jsonb)
 returns table(id bigint, numero_factura text)
 language plpgsql
@@ -159,7 +155,6 @@ begin
   return query select nueva_factura_id, nuevo_numero_factura;
 end;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- actualizar_factura
 -- ---------------------------------------------------------------------------
@@ -292,5 +287,4 @@ begin
   return query select p_factura_id, numero_existente;
 end;
 $$;
-
 commit;

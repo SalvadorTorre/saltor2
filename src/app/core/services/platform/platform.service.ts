@@ -426,7 +426,7 @@ export class PlatformService {
   /** Abre el contrato listo para imprimir y firmar. */
   printContract(c: PlatformContract, company: PlatformCompany | { nombre_comercial: string; razon_social?: string | null; rnc?: string | null; ciudad?: string | null }, planName?: string | null): void {
     const esc = (v: unknown) => String(v ?? '').replace(/[<>&"]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch] as string));
-    const money = (n: number) => 'RD$ ' + Number(n).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const money = (n: number) => Number(n).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const date = (d: string | null) => { if (!d) return '—'; const [y, m, dd] = d.slice(0, 10).split('-'); return `${dd}/${m}/${y}`; };
     const client = esc(company.razon_social || company.nombre_comercial);
     const terms = esc(c.condiciones || DEFAULT_CONTRACT_TERMS).split(/\r?\n/).filter((l) => l.trim()).map((l) => `<p>${l}</p>`).join('');
@@ -573,7 +573,7 @@ export class PlatformService {
   /** Abre el recibo del pago listo para imprimir. */
   printReceipt(payment: PlatformPayment, company: { nombre_comercial: string; rnc?: string | null; razon_social?: string | null }): void {
     const esc = (v: unknown) => String(v ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
-    const money = (n: number) => 'RD$ ' + Number(n).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const money = (n: number) => Number(n).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const date = (d: string) => { const [y, m, dd] = d.slice(0, 10).split('-'); return `${dd}/${m}/${y}`; };
     const voided = payment.estado === 'Anulado';
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Recibo ${esc(payment.numero)}</title>

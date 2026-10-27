@@ -13,7 +13,7 @@
 
   <section *ngIf="activeTab === 'new'" class="panel product-entries-panel">
     <form class="entry-reference-form" (ngSubmit)="save()">
-      <fieldset class="entry-editor-fieldset" [disabled]="isEntryReadOnly">
+      <fieldset class="entry-editor-fieldset" [disabled]="isEntryReadOnly || !catalogLoaded">
       <div class="entry-header-grid">
         <label class="field"><span>RNC Suplidor</span><input type="text" name="supplierDocument" [(ngModel)]="supplierDocumentSearch" (ngModelChange)="onSupplierDocumentChange()" (keydown.enter)="onSupplierDocumentEnter($event)" list="entrySupplierDocumentDatalist" autocomplete="off" placeholder="RNC o cédula del suplidor" /><datalist id="entrySupplierDocumentDatalist"><option *ngFor="let supplier of filteredSupplierDocuments" [value]="supplier.documentNumber">{{ supplier.companyName }}</option></datalist></label>
         <label class="field entry-header-grid__supplier"><span>Nombre Suplidor</span><input type="text" name="supplierName" [(ngModel)]="supplierNameSearch" (ngModelChange)="onSupplierNameChange()" (keydown.enter)="onSupplierNameEnter($event)" list="entrySupplierNameDatalist" autocomplete="off" placeholder="Escribe el nombre del suplidor" /><datalist id="entrySupplierNameDatalist"><option *ngFor="let supplier of supplierNameSuggestions" [value]="supplier.companyName">{{ supplier.documentNumber }}</option></datalist></label>
@@ -43,7 +43,7 @@
         </div>
       </section>
       </fieldset>
-      <div class="entry-footer"><strong>Total: RD$ {{ entryTotal | number:'1.2-2' }}</strong><button class="secondary-action" type="button">Imprimir 80mm</button><button class="secondary-action" type="button" *ngIf="!isEntryReadOnly" (click)="clearEntryForm()">Limpiar</button><button class="secondary-action" type="button" *ngIf="isEntryReadOnly" (click)="returnToConsultation()">Volver a consulta</button><button class="primary-action" type="submit" *ngIf="!isEntryReadOnly" [disabled]="isSaving || isLoading">{{ saveEntryLabel }}</button></div>
+      <div class="entry-footer"><strong>Total: RD$ {{ entryTotal | number:'1.2-2' }}</strong><button class="secondary-action" type="button">Imprimir 80mm</button><button class="secondary-action" type="button" *ngIf="!isEntryReadOnly" (click)="clearEntryForm()">Limpiar</button><button class="secondary-action" type="button" *ngIf="isEntryReadOnly" (click)="returnToConsultation()">Volver a consulta</button><button class="primary-action" type="submit" *ngIf="!isEntryReadOnly" [disabled]="isSaving || isLoading || !catalogLoaded">{{ saveEntryLabel }}</button></div>
     </form>
   </section>
 

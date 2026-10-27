@@ -1,12 +1,10 @@
 begin;
-
 -- Una fila por solicitud/rango. No se infiere cuántos se solicitaron históricamente.
 alter table myappdb.ncf_secuencias
   add column if not exists autorizacion text,
   add column if not exists solicitados integer,
   add column if not exists aceptados integer;
 update myappdb.ncf_secuencias set aceptados = total where aceptados is null;
-
 create table if not exists myappdb.ncf_secuencias_historial (
   id bigint generated always as identity primary key,
   secuencia_id integer not null references myappdb.ncf_secuencias(id) on delete restrict,
@@ -25,7 +23,6 @@ grant usage, select on sequence myappdb.ncf_secuencias_historial_id_seq to servi
 drop policy if exists ncf_historial_tenant_select on myappdb.ncf_secuencias_historial;
 create policy ncf_historial_tenant_select on myappdb.ncf_secuencias_historial for select to authenticated
   using (empresa_id = (select private.current_empresa_id()));
-
 insert into myappdb.ncf_secuencias_historial(secuencia_id, empresa_id, accion, registrado_en, datos)
 select s.id, s.empresa_id, 'Registro inicial importado', now(), to_jsonb(s)
 from myappdb.ncf_secuencias s
@@ -33,7 +30,6 @@ where not exists (
   select 1 from myappdb.ncf_secuencias_historial h
   where h.secuencia_id = s.id and h.accion = 'Registro inicial importado'
 );
-
 create or replace function private.ncf_numero_rango(p_rango text, p_serie text)
 returns bigint language sql immutable set search_path = ''
 as $$
@@ -42,7 +38,6 @@ as $$
     then substring(trim(p_rango) from length(p_serie) + 1) else trim(p_rango) end as n) r;
 $$;
 revoke all on function private.ncf_numero_rango(text, text) from public;
-
 create or replace function private.validar_solicitud_ncf()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -103,7 +98,6 @@ revoke all on function private.validar_solicitud_ncf() from public, anon, authen
 drop trigger if exists ncf_validar_solicitud on myappdb.ncf_secuencias;
 create trigger ncf_validar_solicitud before insert or update or delete on myappdb.ncf_secuencias
   for each row execute function private.validar_solicitud_ncf();
-
 create or replace function private.registrar_historial_ncf()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -121,7 +115,6 @@ revoke all on function private.registrar_historial_ncf() from public, anon, auth
 drop trigger if exists ncf_registrar_historial on myappdb.ncf_secuencias;
 create trigger ncf_registrar_historial after insert or update on myappdb.ncf_secuencias
   for each row execute function private.registrar_historial_ncf();
-
 comment on column myappdb.ncf_secuencias.autorizacion is 'Referencia de autorización de la solicitud; no es la fecha.';
 comment on column myappdb.ncf_secuencias.solicitados is 'Cantidad solicitada. NULL significa que no se dispone del dato histórico.';
 comment on column myappdb.ncf_secuencias.aceptados is 'Cantidad aprobada para este rango, equivalente a total.';

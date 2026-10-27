@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Kardex (movimientos de inventario) y ajustes.
 --
@@ -28,11 +27,9 @@ create table if not exists myappdb.movimientos_inventario (
   usuario_nombre text,
   transaccion bigint not null default txid_current()
 );
-
 create index if not exists movimientos_inventario_producto_fecha_idx on myappdb.movimientos_inventario (producto_id, fecha);
 create index if not exists movimientos_inventario_empresa_fecha_idx on myappdb.movimientos_inventario (empresa_id, fecha desc);
 create index if not exists movimientos_inventario_sin_ref_idx on myappdb.movimientos_inventario (transaccion) where referencia_id is null;
-
 alter table myappdb.movimientos_inventario enable row level security;
 drop policy if exists movimientos_inventario_tenant_select on myappdb.movimientos_inventario;
 create policy movimientos_inventario_tenant_select on myappdb.movimientos_inventario for select to authenticated
@@ -40,7 +37,6 @@ create policy movimientos_inventario_tenant_select on myappdb.movimientos_invent
 revoke all on myappdb.movimientos_inventario from anon, authenticated;
 grant select on myappdb.movimientos_inventario to authenticated;
 grant all on myappdb.movimientos_inventario to service_role;
-
 -- ---------------------------------------------------------------------------
 -- Disparador que registra los movimientos
 -- ---------------------------------------------------------------------------
@@ -88,12 +84,10 @@ begin
 end;
 $$;
 revoke all on function private.tg_products_kardex() from public, anon, authenticated;
-
 drop trigger if exists products_kardex on myappdb.products;
 create trigger products_kardex
   after insert or update of existencia on myappdb.products
   for each row execute function private.tg_products_kardex();
-
 -- crear_factura conoce el número al final: etiqueta los movimientos de su transacción.
 create or replace function private.etiquetar_movimientos_factura(p_factura_id bigint, p_numero text)
 returns void
@@ -107,7 +101,6 @@ as $$
 $$;
 revoke all on function private.etiquetar_movimientos_factura(bigint, text) from public, anon;
 grant execute on function private.etiquetar_movimientos_factura(bigint, text) to authenticated, service_role;
-
 -- ---------------------------------------------------------------------------
 -- Las funciones que mueven inventario indican el tipo y la referencia del
 -- movimiento (set_config local a la transacción, al inicio del cuerpo).
@@ -160,7 +153,6 @@ begin
   end if;
 end;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- Ajustes de inventario (solo administrador)
 --   p_modo: 'entrada' (suma), 'salida' (resta) o 'conteo' (fija la existencia)
@@ -222,10 +214,8 @@ begin
   return v_nueva;
 end;
 $$;
-
 revoke all on function myappdb.ajustar_inventario(integer, text, numeric, text) from public, anon;
 grant execute on function myappdb.ajustar_inventario(integer, text, numeric, text) to authenticated, service_role;
-
 -- ---------------------------------------------------------------------------
 -- Saldo inicial: el kardex arranca con la existencia actual de cada producto.
 -- ---------------------------------------------------------------------------
@@ -233,5 +223,4 @@ insert into myappdb.movimientos_inventario (empresa_id, producto_id, tipo, canti
 select p.empresa_id, p.id, 'Saldo inicial', coalesce(p.existencia, 0), 0, coalesce(p.existencia, 0), p.costo, 'Existencia al iniciar el kardex'
 from myappdb.products p
 where not exists (select 1 from myappdb.movimientos_inventario m where m.producto_id = p.id);
-
 commit;

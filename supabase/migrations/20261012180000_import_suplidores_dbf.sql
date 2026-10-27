@@ -5,9 +5,7 @@
 -- Todo en una transacción: si algo falla, no se carga nada.
 -- ===========================================================================
 begin;
-
 alter table myappdb.suplidores disable trigger suplidores_bitacora;
-
 insert into myappdb.suplidores
   (empresa_id, codigo, nombre_comercial, tipo_documento, numero_documento, telefono, contacto, direccion, categoria, estado)
 values
@@ -19,13 +17,10 @@ values
   (2, '17', 'UNITED BRANDS S A', 'RNC', '124019338', null, null, null, 'Local', 'Activo'),
   (2, '18', 'AGUA PLANETA AZUL C POR A', 'RNC', '101503939', '8095657765', '8095405926', null, 'Local', 'Activo')
 on conflict do nothing;
-
 alter table myappdb.suplidores enable trigger suplidores_bitacora;
-
 insert into myappdb.bitacora (empresa_id, usuario_nombre, tabla, registro_id, accion, resumen, cambios)
 values (2, 'Migración DBF', 'suplidores', null, 'Crear', 'Migración de 7 suplidores desde suplidor.dbf',
         jsonb_build_object('suplidores_cargados', jsonb_build_object('despues', 7)));
-
 do $$
 declare v_n int;
 begin
@@ -34,5 +29,4 @@ begin
   if v_n <> 7 then raise exception 'Se esperaban 7 suplidores y hay %', v_n; end if;
   raise notice 'Suplidores migrados en GABANA: %', v_n;
 end $$;
-
 commit;

@@ -1,6 +1,5 @@
 -- Agregar una autorización no debe saltarse los números disponibles del rango anterior.
 begin;
-
 create or replace function myappdb.siguiente_encf_desde_secuencia_ncf_con_vencimiento(
   p_empresa_id integer,
   p_tipo_ncf text
@@ -87,10 +86,8 @@ begin
   return next;
 end;
 $$;
-
 revoke all on function myappdb.siguiente_encf_desde_secuencia_ncf_con_vencimiento(integer, text) from public, anon, authenticated;
 grant execute on function myappdb.siguiente_encf_desde_secuencia_ncf_con_vencimiento(integer, text) to service_role;
-
 grant execute on function private.ncf_numero_rango(text,text) to service_role;
 notify pgrst,'reload schema';
 commit;

@@ -1,0 +1,26 @@
+<section class="orders-consultation">
+  <div class="orders-consultation__filters">
+    <label>Buscar<input type="search" [(ngModel)]="search" placeholder="Número, cliente o RNC"></label>
+    <label>Estado<select [(ngModel)]="status"><option value="">Todos</option><option value="Abierta">Abiertas</option><option value="Cerrada">Cerradas</option><option value="Anulada">Anuladas</option></select></label>
+    <button type="button" (click)="load()" [disabled]="isLoading">{{ isLoading ? 'Consultando...' : 'Actualizar' }}</button>
+  </div>
+  <p class="orders-consultation__error" *ngIf="error">{{ error }}</p>
+  <div class="orders-consultation__table-wrap">
+    <table>
+      <thead><tr><th>No. orden</th><th>Cotización</th><th>Fecha</th><th>Cliente</th><th>Condición</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let order of filteredOrders">
+          <td><strong>{{ order.numero_orden }}</strong></td><td>{{ order.numero_cotizacion || '-' }}</td><td>{{ date(order.fecha_orden) }}</td><td>{{ order.cliente_nombre }}</td><td>{{ order.condicion_pago }}</td><td>{{ money(order.total) }}</td><td><span class="orders-consultation__status">{{ order.estado }}</span></td>
+          <td class="orders-consultation__actions">
+            <button type="button" class="orders-consultation__icon is-view" title="Ver orden" aria-label="Ver orden" (click)="view(order)"><img src="assets/icons/invoice-view.svg" alt=""></button>
+            <button type="button" class="orders-consultation__icon is-edit" title="Editar orden" aria-label="Editar orden" (click)="edit(order)"><img src="assets/icons/invoice-edit.svg" alt=""></button>
+            <button type="button" class="orders-consultation__icon is-print" title="Imprimir orden" aria-label="Imprimir orden" (click)="print(order)"><img src="assets/icons/invoice-print.svg" alt=""></button>
+            <button type="button" class="orders-consultation__icon is-invoice" title="Crear factura" aria-label="Crear factura" (click)="createInvoice(order)"><img src="assets/icons/invoice-send.svg" alt=""></button>
+            <button type="button" class="orders-consultation__icon is-delete" title="Borrar orden" aria-label="Borrar orden" (click)="remove(order)"><img src="assets/icons/line-trash-red.svg" alt=""></button>
+          </td>
+        </tr>
+        <tr *ngIf="!isLoading && !filteredOrders.length"><td colspan="7" class="orders-consultation__empty">No hay órdenes de venta para mostrar.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>

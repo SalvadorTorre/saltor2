@@ -1,0 +1,4 @@
+.delivery-note__empty { max-width: 760px; margin: 42px auto; padding: 48px 36px; text-align: center; }
+.delivery-note__icon { display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 16px; border-radius: 18px; background: #fff1e6; color: #c2410c; font-size: 34px; font-weight: 800; }
+.delivery-note__empty h3 { margin: 0; color: var(--app-text); font-size: 24px; }
+.delivery-note__empty p { max-width: 570px; margin: 12px auto 0; color: var(--app-muted); font-size: 17px; line-height: 1.55; }

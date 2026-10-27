@@ -23,6 +23,21 @@
 .rep607-table-row { padding: 13px 12px; font-size: 14px !important; }
 .rep607-table-row button { width: 38px !important; height: 36px !important; }
 .rep607-table-row button svg { width: 21px !important; height: 21px !important; }
+.rep607-report { overflow-x: auto; }
+.rep607-table-head,
+.rep607-table-row {
+  grid-template-columns: 122px 150px 80px 150px 260px 120px 160px 260px 160px 118px;
+  min-width: 1652px;
+}
+.rep607-table-head > span,
+.rep607-table-row > span { min-width: 0; overflow-wrap: anywhere; }
+.rep607-table-row > span:nth-child(1),
+.rep607-table-row > span:nth-child(2),
+.rep607-table-row > span:nth-child(3),
+.rep607-table-row > span:nth-child(4),
+.rep607-table-row > span:nth-child(6),
+.rep607-table-row > span:nth-child(7),
+.rep607-table-row > span:nth-child(9) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .credit-page-header { align-items: center; background: #fff; border: 1px solid #d8e3ef; border-radius: 0 0 17px 17px; display: flex; justify-content: space-between; margin: 0 -14px 16px; padding: 13px 18px; }
 .credit-sticky { background: #f4f7fb; box-shadow: 0 3px 10px rgba(15, 23, 42, .09); padding-bottom: 14px; position: sticky; top: 78px; z-index: 40; }

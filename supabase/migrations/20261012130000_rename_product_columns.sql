@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Renombra dos columnas de products:
 --   cantidad_minima_mayor -> cantidadxmayor
@@ -31,7 +30,6 @@ begin
   end if;
 end;
 $$;
-
 do $$
 declare
   r record;
@@ -51,7 +49,6 @@ begin
   end loop;
 end;
 $$;
-
 -- Verificación: ninguna función debe seguir usando los nombres viejos.
 do $$
 begin
@@ -64,5 +61,4 @@ begin
   end if;
 end;
 $$;
-
 commit;

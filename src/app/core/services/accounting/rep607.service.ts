@@ -50,7 +50,8 @@ interface Rep607DatabaseRow {
   id: number;
   numero_factura: string;
   fecha_factura: string;
-  fechanf: string | null;
+  fec_firma: string | null;
+  dgii_enviado_en: string | null;
   tipo_ncf: string | null;
   ncf: string | null;
   cliente_nombre: string | null;
@@ -78,7 +79,7 @@ export class Rep607Service {
   async getInvoices(companyId: number, filters: Rep607Filters): Promise<Rep607Invoice[]> {
     let query = this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, fechanf, tipo_ncf, ncf, cliente_nombre, total, estado_dgii, dgii_estado, dgii_mensaje_respuesta, dgii_track_id, dgii_codigo, dgii_codigo_respuesta, dgii_response_json, dgii_respuesta, dgii_response_raw, dgii_mensajes, dgii_error_message, codSeguridad, qr_link, idsucursal')
+      .select('id, numero_factura, fecha_factura, fec_firma, dgii_enviado_en, tipo_ncf, ncf, cliente_nombre, total, estado_dgii, dgii_estado, dgii_mensaje_respuesta, dgii_track_id, dgii_codigo, dgii_codigo_respuesta, dgii_response_json, dgii_respuesta, dgii_response_raw, dgii_mensajes, dgii_error_message, codSeguridad, qr_link, idsucursal')
       .eq('idempres', companyId)
       .order('fecha_factura', { ascending: false })
       .order('id', { ascending: false });
@@ -91,8 +92,8 @@ export class Rep607Service {
     if (filters.status !== 'Todos') query = query.eq('estado_dgii', filters.status);
     if (filters.invoice.trim()) query = query.ilike('numero_factura', `%${filters.invoice.trim()}%`);
     if (filters.encf.trim()) query = query.ilike('ncf', `%${filters.encf.trim()}%`);
-    if (filters.from) query = query.gte('fechanf', filters.from);
-    if (filters.to) query = query.lte('fechanf', `${filters.to}T23:59:59.999`);
+    if (filters.from) query = query.gte('fec_firma', filters.from);
+    if (filters.to) query = query.lte('fec_firma', `${filters.to}T23:59:59.999`);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -101,8 +102,8 @@ export class Rep607Service {
       .map((row) => ({
         id: row.id,
         number: row.numero_factura,
-        date: row.fechanf ?? row.fecha_factura,
-        sentAt: row.fechanf ?? '',
+        date: row.fec_firma ?? row.fecha_factura,
+        sentAt: row.dgii_enviado_en ?? row.fec_firma ?? '',
         type: row.tipo_ncf ?? '',
         encf: row.ncf ?? '',
         customer: row.cliente_nombre ?? 'CLIENTE CONTADO',
@@ -119,7 +120,7 @@ export class Rep607Service {
         errorMessage: row.dgii_error_message ?? '',
         branchId: row.idsucursal
       }))
-      .filter((invoice) => !['No enviado', 'Pendiente de configuración'].includes(invoice.status));
+      .filter((invoice) => ['Aceptado', 'Rechazado', 'Aceptado condicional', 'Error'].includes(invoice.status));
   }
 
   async getPendingInvoices(companyId: number, filters: Pick<Rep607Filters, 'branchId' | 'invoice' | 'from' | 'to'>): Promise<PendingInvoice[]> {

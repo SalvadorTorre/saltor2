@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Plataforma (fase 1): planes, suscripciones, pagos de las empresas y resumen.
 -- Solo los dueños del sistema ven y modifican estas tablas.
@@ -11,7 +10,6 @@ create or replace function private.hoy_rd()
 returns date language sql stable set search_path = ''
 as $$ select (now() at time zone 'America/Santo_Domingo')::date; $$;
 grant execute on function private.hoy_rd() to authenticated, service_role;
-
 -- Planes ---------------------------------------------------------------------
 create table if not exists myappdb.plataforma_planes (
   id integer generated always as identity primary key,
@@ -24,14 +22,12 @@ create table if not exists myappdb.plataforma_planes (
   orden integer not null default 0,
   creado_en timestamptz not null default now()
 );
-
 insert into myappdb.plataforma_planes (nombre, descripcion, precio_mensual, max_usuarios, max_sucursales, orden)
 values
   ('BÁSICO', 'Facturación, inventario y caja para un negocio pequeño.', 1500, 2, 1, 1),
   ('PROFESIONAL', 'Todo el sistema con más usuarios.', 2500, 5, 2, 2),
   ('MULTI-SUCURSAL', 'Para empresas con varias sucursales.', 4500, 15, 5, 3)
 on conflict (nombre) do nothing;
-
 -- Suscripciones (una por empresa) -------------------------------------------
 create table if not exists myappdb.plataforma_suscripciones (
   empresa_id integer primary key references myappdb.empresas(id) on delete cascade,
@@ -47,11 +43,9 @@ create table if not exists myappdb.plataforma_suscripciones (
   notas text,
   actualizado_en timestamptz not null default now()
 );
-
 -- Pagos ----------------------------------------------------------------------
 create sequence if not exists myappdb.plataforma_pagos_numero_seq;
 grant usage on sequence myappdb.plataforma_pagos_numero_seq to service_role;
-
 create table if not exists myappdb.plataforma_pagos (
   id bigint generated always as identity primary key,
   numero text not null unique,
@@ -73,35 +67,28 @@ create table if not exists myappdb.plataforma_pagos (
   creado_en timestamptz not null default now()
 );
 create index if not exists plataforma_pagos_empresa_idx on myappdb.plataforma_pagos (empresa_id, fecha desc);
-
 -- Seguridad: solo los dueños -------------------------------------------------
 alter table myappdb.plataforma_planes enable row level security;
 alter table myappdb.plataforma_suscripciones enable row level security;
 alter table myappdb.plataforma_pagos enable row level security;
-
 revoke all on myappdb.plataforma_planes, myappdb.plataforma_suscripciones, myappdb.plataforma_pagos from anon, authenticated;
 grant select, insert, update, delete on myappdb.plataforma_planes to authenticated;
 grant select, insert, update on myappdb.plataforma_suscripciones to authenticated;
 grant select on myappdb.plataforma_pagos to authenticated;
 grant all on myappdb.plataforma_planes, myappdb.plataforma_suscripciones, myappdb.plataforma_pagos to service_role;
-
 drop policy if exists plataforma_planes_dueno on myappdb.plataforma_planes;
 create policy plataforma_planes_dueno on myappdb.plataforma_planes for all to authenticated
   using ((select private.es_dueno_sistema())) with check ((select private.es_dueno_sistema()));
-
 drop policy if exists plataforma_suscripciones_dueno on myappdb.plataforma_suscripciones;
 create policy plataforma_suscripciones_dueno on myappdb.plataforma_suscripciones for all to authenticated
   using ((select private.es_dueno_sistema())) with check ((select private.es_dueno_sistema()));
-
 drop policy if exists plataforma_pagos_dueno on myappdb.plataforma_pagos;
 create policy plataforma_pagos_dueno on myappdb.plataforma_pagos for select to authenticated
   using ((select private.es_dueno_sistema()));
-
 -- Los dueños ven la bitácora de todas las empresas.
 drop policy if exists bitacora_dueno_select on myappdb.bitacora;
 create policy bitacora_dueno_select on myappdb.bitacora for select to authenticated
   using ((select private.es_dueno_sistema()));
-
 -- La bitácora registra los cambios de la plataforma.
 drop trigger if exists plataforma_planes_bitacora on myappdb.plataforma_planes;
 create trigger plataforma_planes_bitacora after insert or update or delete on myappdb.plataforma_planes
@@ -112,7 +99,6 @@ create trigger plataforma_suscripciones_bitacora after insert or update on myapp
 drop trigger if exists plataforma_pagos_bitacora on myappdb.plataforma_pagos;
 create trigger plataforma_pagos_bitacora after insert or update on myappdb.plataforma_pagos
   for each row execute function private.tg_bitacora();
-
 -- Toda empresa nueva arranca en prueba por 15 días con el plan básico.
 create or replace function private.tg_empresa_suscripcion_prueba()
 returns trigger language plpgsql security definer set search_path = ''
@@ -127,18 +113,15 @@ begin
 end;
 $$;
 revoke all on function private.tg_empresa_suscripcion_prueba() from public, anon, authenticated;
-
 drop trigger if exists empresas_suscripcion_prueba on myappdb.empresas;
 create trigger empresas_suscripcion_prueba after insert on myappdb.empresas
   for each row execute function private.tg_empresa_suscripcion_prueba();
-
 -- Empresas existentes: arrancan en prueba; el dueño las ajusta después.
 insert into myappdb.plataforma_suscripciones (empresa_id, plan_id, estado, fecha_inicio, prueba_hasta, precio_mensual)
 select e.id, p.id, 'Prueba', private.hoy_rd(), private.hoy_rd() + 15, p.precio_mensual
 from myappdb.empresas e
 cross join lateral (select id, precio_mensual from myappdb.plataforma_planes where activo order by orden, id limit 1) p
 on conflict (empresa_id) do nothing;
-
 -- Estado calculado de una suscripción ----------------------------------------
 -- Devuelve: Prueba, Activa, Por vencer (≤ 7 días), En gracia, Vencida, Suspendida, Cancelada.
 create or replace function private.suscripcion_estado(s myappdb.plataforma_suscripciones)
@@ -162,7 +145,6 @@ end;
 $$;
 revoke all on function private.suscripcion_estado(myappdb.plataforma_suscripciones) from public, anon;
 grant execute on function private.suscripcion_estado(myappdb.plataforma_suscripciones) to authenticated;
-
 -- Registrar un pago: extiende la suscripción por los meses pagados -------------
 create or replace function myappdb.registrar_pago_plataforma(p_pago jsonb)
 returns myappdb.plataforma_pagos
@@ -217,7 +199,6 @@ end;
 $$;
 revoke all on function myappdb.registrar_pago_plataforma(jsonb) from public, anon;
 grant execute on function myappdb.registrar_pago_plataforma(jsonb) to authenticated;
-
 -- Anular un pago: solo el último pago activo de la empresa; devuelve la suscripción a como estaba.
 create or replace function myappdb.anular_pago_plataforma(p_pago_id bigint, p_motivo text)
 returns void
@@ -248,7 +229,6 @@ end;
 $$;
 revoke all on function myappdb.anular_pago_plataforma(bigint, text) from public, anon;
 grant execute on function myappdb.anular_pago_plataforma(bigint, text) to authenticated;
-
 -- Extender o dar días de prueba -------------------------------------------------
 create or replace function myappdb.extender_prueba_plataforma(p_empresa_id integer, p_dias integer)
 returns void
@@ -267,7 +247,6 @@ end;
 $$;
 revoke all on function myappdb.extender_prueba_plataforma(integer, integer) from public, anon;
 grant execute on function myappdb.extender_prueba_plataforma(integer, integer) to authenticated;
-
 -- Resumen para el panel de la plataforma ----------------------------------------
 create or replace function myappdb.plataforma_resumen()
 returns jsonb
@@ -325,7 +304,6 @@ end;
 $$;
 revoke all on function myappdb.plataforma_resumen() from public, anon;
 grant execute on function myappdb.plataforma_resumen() to authenticated;
-
 -- Aviso para los usuarios de cada empresa (nunca bloquea) ------------------------
 create or replace function myappdb.estado_suscripcion()
 returns jsonb
@@ -358,5 +336,4 @@ end;
 $$;
 revoke all on function myappdb.estado_suscripcion() from public, anon;
 grant execute on function myappdb.estado_suscripcion() to authenticated;
-
 commit;

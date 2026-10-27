@@ -17,6 +17,7 @@ import { RncService } from '../../core/services/rnc/rnc.service';
 export class ProductEntriesPageComponent implements OnInit {
   activeTab: 'new' | 'consultation' = 'new';
   isLoading = false;
+  catalogLoaded = false;
   isSaving = false;
   message = '';
   entries: ProductEntryRecord[] = [];
@@ -347,6 +348,10 @@ export class ProductEntriesPageComponent implements OnInit {
   removeLine(index: number): void { this.lines.splice(index, 1); }
 
   async save(): Promise<void> {
+    if (!this.catalogLoaded) {
+      this.message = 'Aún no se pudo cargar el catálogo de productos de la empresa. Actualiza la página e inténtalo de nuevo.';
+      return;
+    }
     if (!this.form.supplierId || !this.selectedSupplier) {
       this.message = 'Selecciona el nombre del suplidor antes de guardar la entrada.';
       return;
@@ -356,6 +361,7 @@ export class ProductEntriesPageComponent implements OnInit {
     this.isSaving = true;
     this.message = '';
     try {
+      if (!await this.confirmEntryProducts()) return;
       const payload = this.getEntryPayload();
       if (this.entryEditorMode === 'edit' && this.editingEntryId) await this.productsService.updateEntry(this.editingEntryId, payload);
       else await this.productsService.createEntry(payload);
@@ -363,7 +369,7 @@ export class ProductEntriesPageComponent implements OnInit {
       this.message = this.entryEditorMode === 'edit' ? 'Entrada actualizada correctamente.' : 'Entrada registrada correctamente.';
       this.resetEntryEditor();
     } catch (error) {
-      this.message = error instanceof Error ? error.message : 'No se pudo registrar la entrada de producto.';
+      this.message = this.entrySaveErrorMessage(error);
     } finally { this.isSaving = false; }
   }
 
@@ -401,12 +407,21 @@ export class ProductEntriesPageComponent implements OnInit {
 
   private async load(): Promise<void> {
     this.isLoading = true;
+    this.catalogLoaded = false;
     try {
       const [products, suppliers] = await Promise.all([this.productsService.getProducts(), this.suppliersService.getSuppliers()]);
       this.data.products = products;
       this.data.suppliers = suppliers;
+      this.catalogLoaded = true;
       await this.loadEntries();
-    } catch { this.message = 'No se pudieron actualizar los datos. Se muestran los datos disponibles.'; }
+    } catch {
+      // No se conservan datos de demostración: sus identificadores no son
+      // necesariamente válidos para la empresa del usuario conectado.
+      this.data.products = [];
+      this.data.suppliers = [];
+      this.lines = [];
+      this.message = 'No se pudo cargar el catálogo de productos y suplidores de la empresa. Actualiza la página e inténtalo de nuevo.';
+    }
     finally { this.isLoading = false; }
   }
 
@@ -487,6 +502,37 @@ export class ProductEntriesPageComponent implements OnInit {
       notes: this.form.notes,
       lines: this.lines.map((line) => ({ productId: line.product.id, quantity: line.quantity, unitCost: line.cost }))
     };
+  }
+
+  private async confirmEntryProducts(): Promise<boolean> {
+    const currentProducts = await this.productsService.getProductsByIds(this.lines.map((line) => line.product.id));
+    const productsById = new Map(currentProducts.map((product) => [product.id, product]));
+    const unavailable = this.lines.filter((line) => {
+      const current = productsById.get(line.product.id);
+      return !current || current.code.trim().toLocaleLowerCase() !== line.product.code.trim().toLocaleLowerCase();
+    });
+
+    if (unavailable.length) {
+      const descriptions = unavailable.map((line) => line.product.description).join(', ');
+      this.message = `El producto seleccionado ya no existe o no pertenece a la empresa activa: ${descriptions}. Selecciónalo nuevamente.`;
+      return false;
+    }
+
+    // Usa las filas recién verificadas, incluido el costo y la descripción
+    // actualizados, antes de construir el envío a Supabase.
+    this.lines = this.lines.map((line) => ({
+      ...line,
+      product: productsById.get(line.product.id)!
+    }));
+    return true;
+  }
+
+  private entrySaveErrorMessage(error: unknown): string {
+    const message = error instanceof Error ? error.message : 'No se pudo registrar la entrada de producto.';
+    if (/producto .*no pertenece a la empresa activa/i.test(message)) {
+      return 'El producto seleccionado no pertenece a la empresa activa. Actualiza la página y vuelve a seleccionarlo desde la lista.';
+    }
+    return message;
   }
 
   private resetEntryEditor(): void {

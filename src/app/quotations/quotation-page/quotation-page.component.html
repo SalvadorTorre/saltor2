@@ -1,4 +1,4 @@
-<section class="quotation-page">
+<section class="quotation-page" [class.quotation-page--transaction]="transactionQuotation">
   <header class="page-header">
     <div class="page-title">
       <span class="page-title__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
@@ -23,20 +23,20 @@
     </div>
     <div class="table-shell">
       <table>
-        <thead><tr><th>Numero</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="amount">Total</th><th class="actions-column"></th></tr></thead>
+        <thead><tr><th>Numero</th><th>Orden de venta</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="amount">Total</th><th class="actions-column"></th></tr></thead>
         <tbody>
           <tr *ngFor="let item of filtered">
-            <td class="folio">{{ item.number }}</td><td class="customer">{{ item.customer }}</td><td>{{ item.date | date: 'dd MMM y' }}</td>
+            <td class="folio">{{ item.number }}</td><td class="folio">{{ item.orderNumber || '-' }}</td><td class="customer">{{ item.customer }}</td><td>{{ item.date | date: 'dd MMM y' }}</td>
             <td><span class="status" [ngClass]="statusClass(item.status)">{{ displayStatus(item.status) }}</span></td><td class="amount">RD${{ item.total | number: '1.2-2' }}</td>
             <td class="row-actions">
-              <button type="button" title="Consultar cotización" aria-label="Consultar cotización" (click)="view(item)"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></button>
-              <button type="button" title="Editar cotización" aria-label="Editar cotización" (click)="edit(item)"><svg viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m13.8 7.2 3 3"/></svg></button>
-              <button type="button" title="Convertir en factura" aria-label="Convertir en factura" [disabled]="displayStatus(item.status) === 'Facturada'" (click)="convert(item)">F</button>
-              <button type="button" title="Imprimir cotización" aria-label="Imprimir cotización" (click)="print(item)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/></svg></button>
-              <button type="button" title="Descargar PDF" aria-label="Descargar PDF" (click)="pdf(item)">PDF</button>
+              <button type="button" class="action-button action-button--view" title="Consultar cotización" aria-label="Consultar cotización" (click)="view(item)"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></button>
+              <button type="button" class="action-button action-button--edit" title="Editar cotización" aria-label="Editar cotización" (click)="edit(item)"><svg viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m13.8 7.2 3 3"/></svg></button>
+              <button type="button" class="action-button action-button--convert" [title]="transactionQuotation ? 'Crear orden de venta' : 'Convertir en factura'" [attr.aria-label]="transactionQuotation ? 'Crear orden de venta' : 'Convertir en factura'" [disabled]="transactionQuotation ? !!item.orderNumber : displayStatus(item.status) === 'Facturada'" (click)="convert(item)"><svg viewBox="0 0 24 24"><path d="M4 7h10a4 4 0 0 1 0 8H8"/><path d="m8 11-4 4 4 4"/><path d="M16 5h4v4"/></svg></button>
+              <button type="button" class="action-button action-button--print" title="Imprimir cotización" aria-label="Imprimir cotización" (click)="print(item)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/></svg></button>
+              <button type="button" class="action-button action-button--pdf" title="Descargar PDF" aria-label="Descargar PDF" (click)="pdf(item)">PDF</button>
             </td>
           </tr>
-          <tr *ngIf="!filtered.length"><td colspan="6" class="empty-state">No hay cotizaciones que coincidan con la búsqueda.</td></tr>
+          <tr *ngIf="!filtered.length"><td colspan="7" class="empty-state">No hay cotizaciones que coincidan con la búsqueda.</td></tr>
         </tbody>
       </table>
     </div>
@@ -51,14 +51,14 @@
         <div class="general-row general-row--identity">
           <label>RNC/Cédula<input id="quotationRnc" [(ngModel)]="quote.rnc" name="rnc" list="quotationRncDatalist" autocomplete="off" (ngModelChange)="onQuoteRncChange()" (keydown.enter)="onQuoteRncEnter($event)" /><datalist id="quotationRncDatalist"><option *ngFor="let client of filteredRncClients" [value]="client.documentNumber">{{ client.fullName }}</option><option *ngFor="let record of filteredRncRecords" [value]="record.rnc">{{ record.legalName }} [DGII]</option></datalist></label>
           <label>Cliente<input id="quotationCustomer" [(ngModel)]="quote.customer" name="customer" placeholder="Nombre o razón social" list="quotationCustomerDatalist" autocomplete="off" (ngModelChange)="onQuoteCustomerChange()" (keydown.enter)="onQuoteCustomerEnter($event)" /><datalist id="quotationCustomerDatalist"><option *ngFor="let client of filteredCustomerClients" [value]="client.fullName">{{ client.documentNumber }}</option></datalist></label>
-          <label>No. Cotización<input [value]="quote.number || 'Se genera al guardar'" readonly tabindex="-1" /></label>
+          <label>No.<input [value]="quote.number || 'Se genera al guardar'" readonly tabindex="-1" /></label>
           <label>Fecha<input type="date" [(ngModel)]="quote.date" name="date" readonly tabindex="-1" /></label>
         </div>
         <div class="general-row general-row--address">
           <label>Dirección<input id="quotationAddress" [(ngModel)]="quote.address" name="address" (keydown.enter)="focusEditorField($event, 'quotationPhone')" /></label>
-          <label>Teléfono<input id="quotationPhone" [(ngModel)]="quote.phone" name="phone" (keydown.enter)="focusEditorField($event, 'quotationUserCode')" /></label>
-          <label>Usuario<input id="quotationUserCode" type="password" [(ngModel)]="quotationUserCode" name="quotationUserCode" inputmode="numeric" autocomplete="off" (input)="quotationUserName = ''" (keydown.enter)="onQuotationUserCodeEnter($event)" /></label>
-          <label>Nombre<input [value]="quotationUserName" readonly tabindex="-1" /></label>
+          <label>Tel.<input id="quotationPhone" [(ngModel)]="quote.phone" name="phone" (keydown.enter)="focusEditorField($event, 'quotationUserCode')" /></label>
+          <label>Usuario <span *ngIf="transactionQuotation"></span><input id="quotationUserCode" type="password" [(ngModel)]="quotationUserCode" name="quotationUserCode" inputmode="numeric" autocomplete="off" [required]="transactionQuotation" placeholder="Código de usuario" (input)="onQuotationUserCodeChange()" (keydown.enter)="onQuotationUserCodeEnter($event)" /></label>
+          <label><input [value]="quotationUserName" readonly tabindex="-1" /></label>
         </div>
       </div>
     </section>

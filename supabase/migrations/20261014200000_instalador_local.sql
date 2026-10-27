@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Instalador local (Plataforma › Instalador local)
 --
@@ -238,10 +237,8 @@ begin
   return v_out;
 end;
 $fn$;
-
 revoke all on function private.generar_esquema_instalador() from public, anon, authenticated;
 grant execute on function private.generar_esquema_instalador() to service_role;
-
 -- Para la pantalla Plataforma › Instalador local: solo los dueños del sistema.
 create or replace function myappdb.plataforma_esquema_instalador()
 returns text
@@ -257,8 +254,6 @@ begin
   return private.generar_esquema_instalador();
 end;
 $$;
-
 revoke all on function myappdb.plataforma_esquema_instalador() from public, anon;
 grant execute on function myappdb.plataforma_esquema_instalador() to authenticated;
-
 commit;

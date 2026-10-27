@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Bitácora de auditoría: quién creó, editó, anuló o eliminó qué y cuándo,
 -- con el valor anterior y el nuevo de cada campo cambiado.
@@ -19,7 +18,6 @@ create table if not exists myappdb.bitacora (
 );
 create index if not exists bitacora_empresa_fecha_idx on myappdb.bitacora (empresa_id, fecha desc);
 create index if not exists bitacora_registro_idx on myappdb.bitacora (tabla, registro_id);
-
 alter table myappdb.bitacora enable row level security;
 drop policy if exists bitacora_admin_select on myappdb.bitacora;
 create policy bitacora_admin_select on myappdb.bitacora
@@ -28,7 +26,6 @@ create policy bitacora_admin_select on myappdb.bitacora
 revoke all on myappdb.bitacora from anon, authenticated;
 grant select on myappdb.bitacora to authenticated;
 grant all on myappdb.bitacora to service_role;
-
 create or replace function private.tg_bitacora()
 returns trigger
 language plpgsql
@@ -97,7 +94,6 @@ begin
 end;
 $$;
 revoke all on function private.tg_bitacora() from public, anon, authenticated;
-
 do $$
 declare
   t record;
@@ -123,5 +119,4 @@ begin
   end loop;
 end;
 $$;
-
 commit;

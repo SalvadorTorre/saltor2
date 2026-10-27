@@ -3,6 +3,7 @@ import { Title } from '@angular/platform-browser';
 import { CanMatchFn, Router, RouterModule, RouterStateSnapshot, Routes, TitleStrategy } from '@angular/router';
 import { AuthService } from './core/services/auth/auth.service';
 import { CompaniesService } from './core/services/companies/companies.service';
+import { CompanyModule, CompanyModulesService } from './core/services/company-modules/company-modules.service';
 
 /**
  * Pantallas que solo ve el administrador.  La base de datos ya rechaza sus
@@ -26,17 +27,44 @@ export const platformOwnerOnly: CanMatchFn = async () => {
   return (await companies.isPlatformOwner()) || router.createUrlTree(['/inicio']);
 };
 
+/** Restringe las pantallas contratadas por la empresa activa, incluso si se escribe la URL. */
+export const companyModuleOnly = (module: CompanyModule): CanMatchFn => async () => {
+  const auth = inject(AuthService);
+  const modules = inject(CompanyModulesService);
+  const router = inject(Router);
+  const session = await auth.restoreSession();
+  if (!session) return router.createUrlTree(['/inicio']);
+  try {
+    return (await modules.getActiveModules(session.companyId)).includes(module) || router.createUrlTree(['/inicio']);
+  } catch {
+    return router.createUrlTree(['/inicio']);
+  }
+};
+
 // Cada pantalla se descarga solo cuando se abre (loadComponent), en lugar de
 // venir toda en el paquete inicial.  `data` llega a los @Input del componente.
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'inicio' },
   { path: 'inicio', title: 'Inicio', loadComponent: () => import('./dashboard/dashboard-page/dashboard-page.component').then((m) => m.DashboardPageComponent) },
 
-  { path: 'facturacion', title: 'Facturación', loadComponent: () => import('./invoices/new-page/new-page.component').then((m) => m.InvoiceNewPageComponent) },
-  { path: 'cotizaciones', title: 'Cotizaciones', loadComponent: () => import('./quotations/quotation-page/quotation-page.component').then((m) => m.QuotationPageComponent) },
+  { path: 'facturacion', title: 'Facturación', canMatch: [companyModuleOnly('facturacion')], loadComponent: () => import('./invoices/new-page/new-page.component').then((m) => m.InvoiceNewPageComponent) },
+  { path: 'cotizaciones', title: 'Cotizaciones', canMatch: [companyModuleOnly('cotizacion')], loadComponent: () => import('./quotations/quotation-page/quotation-page.component').then((m) => m.QuotationPageComponent) },
+
+  {
+    path: 'transacciones',
+    canMatch: [companyModuleOnly('transacciones')],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'orden-venta' },
+      { path: 'orden-venta', title: 'Orden de venta', data: { saleOrder: true }, loadComponent: () => import('./invoices/new-page/new-page.component').then((m) => m.InvoiceNewPageComponent) },
+      { path: 'facturacion', title: 'Facturación', loadComponent: () => import('./invoices/new-page/new-page.component').then((m) => m.InvoiceNewPageComponent) },
+      { path: 'cotizacion', title: 'Cotización', data: { transactionQuotation: true }, loadComponent: () => import('./quotations/quotation-page/quotation-page.component').then((m) => m.QuotationPageComponent) },
+      { path: 'conduce', title: 'Conduce', loadComponent: () => import('./transactions/delivery-note-page/delivery-note-page.component').then((m) => m.DeliveryNotePageComponent) }
+    ]
+  },
 
   {
     path: 'caja',
+    canMatch: [companyModuleOnly('caja')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'apertura' },
       { path: 'cobro', title: 'Cobro de facturas', loadComponent: () => import('./cash/collection-page/cash-collection-page.component').then((m) => m.CashCollectionPageComponent) },
@@ -48,6 +76,7 @@ export const routes: Routes = [
 
   {
     path: 'contabilidad',
+    canMatch: [companyModuleOnly('contabilidad')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'rep-607' },
       { path: 'panel-fiscal', title: 'Panel fiscal', loadComponent: () => import('./accounting/fiscal-panel-page/fiscal-panel-page.component').then((m) => m.FiscalPanelPageComponent) },
@@ -72,6 +101,7 @@ export const routes: Routes = [
 
   {
     path: 'reportes',
+    canMatch: [companyModuleOnly('reportes')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'productos' },
       { path: 'productos', title: 'Venta por productos', data: { mode: 'products' }, loadComponent: () => import('./reports/report-page/report-page.component').then((m) => m.ReportPageComponent) },
@@ -82,6 +112,7 @@ export const routes: Routes = [
 
   {
     path: 'mantenimiento',
+    canMatch: [companyModuleOnly('mantenimiento')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'clientes' },
       { path: 'clientes', title: 'Clientes', loadComponent: () => import('./clients/clients-page/clients-page.component').then((m) => m.ClientsPageComponent) },
@@ -94,6 +125,7 @@ export const routes: Routes = [
 
   {
     path: 'configuracion',
+    canMatch: [companyModuleOnly('configuracion')],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'tipos-ncf' },
       { path: 'empresa', title: 'Empresa', canMatch: [adminOnly], loadComponent: () => import('./company/company-page/company-page.component').then((m) => m.CompanyPageComponent) },

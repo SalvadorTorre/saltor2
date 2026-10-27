@@ -99,6 +99,23 @@ export class ProductsService {
     return (data ?? []).map((row: ProductRow) => this.fromRow(row));
   }
 
+  /**
+   * Confirma que los productos siguen visibles para la empresa de la sesión.
+   * La validación se hace justo antes de registrar movimientos de inventario.
+   */
+  async getProductsByIds(ids: number[]): Promise<ProductRecord[]> {
+    const productIds = [...new Set(ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+    if (!productIds.length) return [];
+
+    const { data, error } = await this.supabase.client
+      .from(this.table)
+      .select('*')
+      .in('id', productIds);
+
+    if (error) throw error;
+    return (data ?? []).map((row: ProductRow) => this.fromRow(row));
+  }
+
   async createProduct(form: ProductFormModel): Promise<ProductRecord> {
     const { data, error } = await this.supabase.client
       .from(this.table)

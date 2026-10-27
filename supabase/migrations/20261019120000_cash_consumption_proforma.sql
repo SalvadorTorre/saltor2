@@ -1,5 +1,4 @@
 begin;
-
 -- Convertir y cobrar es una sola transacción. La firma conserva su reserva propia
 -- en reservar_operacion_ecf y se solicita solo después de confirmar el cobro.
 create function myappdb.cobrar_factura_caja_proforma(p_factura_id bigint, p_forma_pago_codigo smallint)

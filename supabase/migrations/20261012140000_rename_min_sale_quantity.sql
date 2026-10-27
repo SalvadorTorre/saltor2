@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Renombra products.cantidad_minima_venta -> cantidadminventa y reescribe las
 -- funciones que la usan (Postgres no actualiza el texto de las funciones).
@@ -18,7 +17,6 @@ begin
   end if;
 end;
 $$;
-
 do $$
 declare
   r record;
@@ -44,5 +42,4 @@ begin
   end if;
 end;
 $$;
-
 commit;

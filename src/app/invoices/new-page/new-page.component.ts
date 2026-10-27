@@ -1,8 +1,9 @@
 import { ProformaService } from '../../core/services/proforma/proforma.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, DestroyRef, inject, ElementRef, OnInit } from '@angular/core';
+import { Component, DestroyRef, inject, ElementRef, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { InvoiceFormModel, InvoiceLine, ClientRecord, ProductRecord, NcfSequence, NcfType, RncRecord } from '../../app.models';
 import { AppDataService } from '../../app-data.service';
 import { DgiiInvoiceStatus, EditableInvoiceData, InvoiceRow, InvoicesService } from '../../core/services/invoices/invoices.service';
@@ -18,6 +19,8 @@ import { BillingMode, CompanyBillingModeService } from '../../core/services/prin
 import { AuthService } from '../../core/services/auth/auth.service';
 import { CompaniesService } from '../../core/services/companies/companies.service';
 import { ReceivablesService } from '../../core/services/receivables/receivables.service';
+import { SalesOrdersService } from '../../core/services/sales-orders/sales-orders.service';
+import { OrdersConsultationPageComponent } from '../../transactions/orders-consultation-page/orders-consultation-page.component';
 import Swal from 'sweetalert2';
 import * as QRCode from 'qrcode';
 import * as JsBarcodeModule from 'jsbarcode';
@@ -32,14 +35,16 @@ interface InvoiceFormModelExtended extends InvoiceFormModel {
 @Component({
   selector: 'app-invoice-new-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, InvoiceConsultationPageComponent],
+  imports: [CommonModule, FormsModule, InvoiceConsultationPageComponent, OrdersConsultationPageComponent],
   templateUrl: './new-page.component.html',
   styleUrls: ['./new-page.component.scss']
 })
 export class InvoiceNewPageComponent implements OnInit {
+  /** La ruta Transacciones → Orden de venta reutiliza el formulario sin tocar Facturación. */
+  @Input() saleOrder = false;
+  quotationNumber = '';
   private readonly proforma = inject(ProformaService);
   proformaEnabled = false;
-  private printAfterOperation: number | null = null;
   private readonly destroyRef = inject(DestroyRef);
   billingTab: 'create' | 'consultation' = 'create';
   ncfTypes: string[] = [];
@@ -209,6 +214,7 @@ export class InvoiceNewPageComponent implements OnInit {
   dgiiDialogMessage = '';
   savedInvoice: InvoiceRow | null = null;
   private editingExistingInvoiceId: number | null = null;
+  isViewingOrder = false;
   private nextInvoiceLineId = 1;
 
   editingLineId: number | null = null;
@@ -241,7 +247,9 @@ export class InvoiceNewPageComponent implements OnInit {
     private readonly auth: AuthService,
     private readonly companiesService: CompaniesService,
     private readonly receivablesService: ReceivablesService,
-    private readonly billingModeService: CompanyBillingModeService
+    private readonly billingModeService: CompanyBillingModeService,
+    private readonly salesOrdersService: SalesOrdersService,
+    private readonly route: ActivatedRoute
   ) {
     this.ncfTypes = this.toNcfOptions(this.data.ncfTypeList);
     this.startNewInvoice();
@@ -249,15 +257,13 @@ export class InvoiceNewPageComponent implements OnInit {
 
   ngOnInit(): void {
     void this.auth.restoreSession().then(async session => {
-      if (session) this.proformaEnabled = (await this.proforma.getSettings(session.companyId)).enabled;
+      if (!session) return;
+      this.proformaEnabled = (await this.proforma.getSettings(session.companyId)).enabled;
+      if (this.proformaEnabled && !this.editingExistingInvoiceId) this.invoiceForm.ncfType = this.defaultInvoiceNcfType;
     }).catch(() => this.proformaEnabled = false);
     this.ecfService.updates$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
       if (event.kind !== 'FACTURA' || this.savedInvoice?.id !== event.documentId) return;
       this.applyOperationResult(event.result);
-      if (this.printAfterOperation === event.documentId && ['Aceptado', 'Aceptado condicional', 'Firmada'].includes(event.result.dgii_estado ?? '')) {
-        this.printAfterOperation = null;
-        void this.printInvoice();
-      }
     });
     void this.loadProducts();
     void this.loadNcfTypes();
@@ -268,6 +274,10 @@ export class InvoiceNewPageComponent implements OnInit {
     this.startNewInvoice();
     this.restoreQuotationDraft();
     this.focusRncField();
+    const orderToInvoice = Number(this.route.snapshot.queryParamMap.get('orden'));
+    if (!this.saleOrder && Number.isInteger(orderToInvoice) && orderToInvoice > 0) {
+      void this.prepareInvoiceFromOrder(orderToInvoice);
+    }
   }
 
   private focusRncField(): void {
@@ -334,12 +344,16 @@ export class InvoiceNewPageComponent implements OnInit {
     return this.savedInvoice !== null;
   }
 
+  get isDocumentReadOnly(): boolean { return this.saleOrder && this.isViewingOrder; }
+
   get availableNcfTypes(): string[] {
     const activeTypes = this.data.ncfTypeList.filter((type) => type.status === 'Activa');
+    if (this.proformaEnabled && !this.isCashPaymentMethod) return [this.consumerNcfType];
+    if (this.proformaEnabled && !this.hasValidInvoiceRnc) return [this.proformaNcfType];
     const allowedTypes = this.hasValidInvoiceRnc
       ? activeTypes.filter((type) => type.type === 1 && type.code !== '32')
       : activeTypes.filter((type) => type.code === '32');
-    return [...(this.proformaEnabled ? ['332 - Factura proforma'] : []), ...this.toNcfOptions(allowedTypes.filter(type => type.code !== '332'))];
+    return this.toNcfOptions(allowedTypes.filter(type => type.code !== '332'));
   }
 
   get isEditingExistingInvoice(): boolean {
@@ -356,18 +370,28 @@ export class InvoiceNewPageComponent implements OnInit {
 
   /** Modo de la empresa: en "Caja" la factura se guarda pendiente y se cobra en Caja → Cobro de facturas. */
   billingMode: BillingMode = 'Directo';
-  get isCashierMode(): boolean { return this.billingMode === 'Caja'; }
+  get isCashierMode(): boolean { return !this.saleOrder && this.billingMode === 'Caja'; }
 
-  get isProforma(): boolean { return /(?:^|\D)332(?:\D|$)/.test(this.invoiceForm.ncfType); }
+  get isProforma(): boolean { return !this.saleOrder && /(?:^|\D)332(?:\D|$)/.test(this.invoiceForm.ncfType); }
+
+  get documentName(): string { return this.saleOrder ? 'Orden de venta' : 'Factura'; }
+
+  get documentNumberLabel(): string { return this.saleOrder ? 'No. orden' : 'No. factura'; }
+
+  private isConsumerInvoiceType(value: string): boolean {
+    return /(?:^|\D)32(?:\D|$)/.test(value || '') && !/(?:^|\D)332(?:\D|$)/.test(value || '');
+  }
 
   get requiresDgiiOnSave(): boolean {
+    if (this.saleOrder) return false;
     if (this.isProforma) return true;
     const typeCode = this.invoiceForm.ncfType.match(/(?:^|\D)(31|44|45|46)(?:\D|$)/)?.[1];
     return !!typeCode;
   }
 
   get saveInvoiceLabel(): string {
-    if (this.isProforma) return this.isSavingInvoice ? 'Guardando y firmando...' : 'Guardar y firmar proforma';
+    if (this.saleOrder) return this.isSavingInvoice ? 'Guardando...' : 'Guardar';
+    if (this.isProforma) return this.isSavingInvoice ? 'Guardando...' : 'Guardar';
     if (this.isCashierMode) return this.isSavingInvoice ? 'Enviando a caja...' : 'Guardar y enviar a caja';
     if (this.isSavingInvoice) return this.requiresDgiiOnSave ? 'Guardando y enviando...' : 'Guardando...';
     return this.requiresDgiiOnSave ? 'Guardar y enviar a DGII' : 'Guardar';
@@ -515,20 +539,24 @@ export class InvoiceNewPageComponent implements OnInit {
       this.focusLineEditorProductName();
       return;
     }
-    if (this.selectActiveProductSuggestion()) {
+    const selected = this.selectActiveProductSuggestion();
+    if (selected === 'selected') {
       this.focusLineEditorQuantity();
       return;
     }
+    if (selected === 'inactive') return;
     this.lineEditorMessage = `El codigo "${this.lineEditorForm.code.trim()}" no existe. Verifica el codigo e intenta de nuevo.`;
     this.focusLineEditorCode();
   }
 
   onLineEditorProductEnter(event: Event): void {
     event.preventDefault();
-    if (this.selectActiveProductSuggestion()) {
+    const selected = this.selectActiveProductSuggestion();
+    if (selected === 'selected') {
       this.focusLineEditorQuantity();
       return;
     }
+    if (selected === 'inactive') return;
     if (!this.lineEditorForm.productName.trim()) {
       this.lineEditorMessage = 'El campo Producto es obligatorio.';
     } else {
@@ -573,16 +601,26 @@ export class InvoiceNewPageComponent implements OnInit {
     this.applyProductSelection(product);
   }
 
-  private selectActiveProductSuggestion(): boolean {
+  private selectActiveProductSuggestion(): 'selected' | 'inactive' | null {
     const product = this.productSuggestions[this.activeProductSuggestionIndex];
     if (product) {
-      this.applyProductSelection(product);
-      return true;
+      return this.applyProductSelection(product) ? 'selected' : 'inactive';
     }
-    return false;
+    return null;
   }
 
-  private applyProductSelection(product: ProductRecord, closeSuggestions = true): void {
+  private applyProductSelection(product: ProductRecord, closeSuggestions = true): boolean {
+    if (product.status === 'Inactivo') {
+      this.lineEditorForm.productId = null;
+      this.lineEditorForm.productName = this.getProductFullDescription(product);
+      this.lineEditorForm.code = product.code;
+      this.lineEditorForm.unitPrice = 0;
+      this.recalcLineEditorTotal();
+      this.lineEditorMessage = `El producto "${product.description}" está inactivo y no se puede facturar.`;
+      if (closeSuggestions) this.closeProductSuggestions();
+      return false;
+    }
+
     this.lineEditorForm.productId = product.id;
     this.lineEditorForm.productName = this.getProductFullDescription(product);
     this.lineEditorForm.code = product.code;
@@ -592,6 +630,7 @@ export class InvoiceNewPageComponent implements OnInit {
     if (closeSuggestions) {
       this.closeProductSuggestions();
     }
+    return true;
   }
 
   private applyProductPriceForQuantity(product: ProductRecord): void {
@@ -738,6 +777,10 @@ export class InvoiceNewPageComponent implements OnInit {
       }
       return false;
     }
+    if (product.status === 'Inactivo') {
+      this.lineEditorMessage = `El producto "${product.description}" está inactivo y no se puede facturar.`;
+      return false;
+    }
 
     const qty = Number(this.lineEditorForm.quantity) || 0;
     const price = Number(this.lineEditorForm.unitPrice) || 0;
@@ -808,7 +851,7 @@ export class InvoiceNewPageComponent implements OnInit {
       rnc: '',
       invoiceNumber: '',
       invoiceDate: new Date().toISOString().slice(0, 10),
-      ncfType: this.getNcfOptionBySeriesOrCode(this.defaultNcfElectronic32),
+      ncfType: this.defaultInvoiceNcfType,
       ncf: '',
       paymentMethod: 'Contado',
       notes: '',
@@ -837,6 +880,7 @@ export class InvoiceNewPageComponent implements OnInit {
         number: string; date: string; customer: string; rnc: string; phone: string; email: string; address: string; notes: string;
         lines: { code: string; description: string; quantity: number; price: number; itbis: number }[];
       };
+      if (this.saleOrder) this.quotationNumber = quotation.number;
       const client = this.clients.find((item) => item.documentNumber.trim() === quotation.rnc.trim());
       this.invoiceForm = {
         ...this.invoiceForm,
@@ -899,7 +943,7 @@ export class InvoiceNewPageComponent implements OnInit {
       rnc: '',
       invoiceNumber: '',
       invoiceDate: new Date().toISOString().slice(0, 10),
-      ncfType: this.getNcfOptionBySeriesOrCode(this.defaultNcfElectronic32),
+      ncfType: this.defaultInvoiceNcfType,
       ncf: '',
       paymentMethod: 'Contado',
       notes: '',
@@ -1112,6 +1156,7 @@ export class InvoiceNewPageComponent implements OnInit {
     } else if (Number(this.paymentMethodCode) === 4) {
       this.paymentMethodCode = 1;
     }
+    this.applyNcfTypeByRnc(this.selectedClient);
   }
 
   onInvoicePaymentMethodChange(): void {
@@ -1120,6 +1165,7 @@ export class InvoiceNewPageComponent implements OnInit {
     } else if (this.invoiceForm.paymentMethod === 'Credito') {
       this.invoiceForm.paymentMethod = 'Contado';
     }
+    this.applyNcfTypeByRnc(this.selectedClient);
   }
 
   /**
@@ -1160,7 +1206,7 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   async saveInvoice(): Promise<void> {
-    if (this.isSavingInvoice) return;
+    if (this.isSavingInvoice || this.isDocumentReadOnly) return;
     if (this.invoiceSaved) {
       this.invoiceMessage = `La factura ${this.savedInvoice?.numero_factura} ya fue guardada. Usa Enviar a DGII, Imprimir o Limpiar para continuar.`;
       return;
@@ -1219,7 +1265,23 @@ export class InvoiceNewPageComponent implements OnInit {
       return;
     }
 
+    const inactiveLine = this.invoiceLines.find((line) => {
+      const product = this.getProductById(line.productId);
+      return !product || product.status === 'Inactivo';
+    });
+    if (inactiveLine) {
+      this.invoiceMessage = `No se puede facturar porque el producto "${inactiveLine.description}" está inactivo o ya no está disponible.`;
+      return;
+    }
+
     this.invoiceForm.customerName = customerName;
+
+    // Una orden de venta es un documento comercial, no un cobro. Se guarda
+    // directamente y la impresión queda disponible como acción posterior.
+    if (this.saleOrder) {
+      await this.confirmInvoiceSave();
+      return;
+    }
 
     if (this.isCreditSale) {
       if (!matchedClient) {
@@ -1269,16 +1331,21 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   async confirmInvoiceSave(): Promise<void> {
-    if (this.isSavingInvoice || !this.isPaymentConfirmationVisible) return;
+    if (this.isSavingInvoice || (!this.saleOrder && !this.isPaymentConfirmationVisible)) return;
+    // Preserve the selected document type while async data loads finish.
+    const selectedNcfType = this.invoiceForm.ncfType;
+    const isProformaInvoice = this.isProforma;
+    const requiresEcfProcessing = this.requiresDgiiOnSave;
+    const isCashierSale = this.isCashierMode;
     const paid = Number(this.paymentReceived);
-    if (!this.isCashierMode && !this.isCreditSale && (!Number.isFinite(paid) || paid < this.invoiceGrandTotal)) {
+    if (!this.saleOrder && !isCashierSale && !this.isCreditSale && (!Number.isFinite(paid) || paid < this.invoiceGrandTotal)) {
       this.invoiceMessage = 'El monto pagado debe ser igual o mayor que el valor de la factura.';
       return;
     }
 
     this.isPaymentConfirmationVisible = false;
 
-    if (!this.invoiceForm.ncf && !this.isCashierMode && !this.isProforma) {
+    if (!this.saleOrder && !this.invoiceForm.ncf && !isCashierSale && !isProformaInvoice) {
       const sequence = this.ncfSequences
         .filter((s) => s.status === 'Activa' && s.ncfType === this.invoiceForm.ncfType && s.total > 0)
         .find((s) => s.used < s.total);
@@ -1300,6 +1367,7 @@ export class InvoiceNewPageComponent implements OnInit {
     this.isSavingInvoice = true;
     try {
       const invoiceData = {
+        quotationNumber: this.saleOrder ? this.quotationNumber : undefined,
         customerId: this.invoiceForm.customerId,
         customerName: this.invoiceForm.customerName.trim(),
         rnc: this.invoiceForm.rnc.trim(),
@@ -1308,7 +1376,7 @@ export class InvoiceNewPageComponent implements OnInit {
         customerAddress: this.invoiceForm.customerAddress,
         customerCity: this.invoiceForm.customerCity,
         invoiceDate: this.invoiceForm.invoiceDate,
-        ncfType: this.toStoredNcfType(this.invoiceForm.ncfType),
+        ncfType: this.toStoredNcfType(selectedNcfType),
         ncf: this.invoiceForm.ncf,
         paymentMethod: this.invoiceForm.paymentMethod,
         paymentMethodCode: this.paymentMethodCode,
@@ -1320,13 +1388,24 @@ export class InvoiceNewPageComponent implements OnInit {
           .filter((line) => line.productId && line.quantity > 0)
           .map((line) => ({ ...line, productCode: this.getInvoiceProductCode(line.productId) }))
       };
-      const savedInvoice = this.editingExistingInvoiceId
-        ? await this.invoicesService.updateInvoice(this.editingExistingInvoiceId, invoiceData)
-        : await this.invoicesService.createInvoice(invoiceData);
+      const savedInvoice = this.saleOrder
+        ? this.editingExistingInvoiceId
+          ? await this.salesOrdersService.updateOrder(this.editingExistingInvoiceId, invoiceData)
+          : await this.salesOrdersService.createOrder(invoiceData)
+        : this.editingExistingInvoiceId
+          ? await this.invoicesService.updateInvoice(this.editingExistingInvoiceId, invoiceData)
+          : await this.invoicesService.createInvoice(invoiceData);
       this.invoiceForm.invoiceNumber = savedInvoice.numero_factura;
+      if (!this.saleOrder) this.invoiceForm.ncfType = this.getNcfOptionByStoredType(invoiceData.ncfType);
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
-      if (this.isCashierMode) {
+      if (this.saleOrder) {
+        this.invoiceMessage = this.editingExistingInvoiceId
+          ? `Orden de venta ${savedInvoice.numero_factura} actualizada correctamente.`
+          : `Orden de venta ${savedInvoice.numero_factura} guardada correctamente.`;
+        return;
+      }
+      if (isCashierSale) {
         const number = savedInvoice.numero_factura;
         const edited = !!this.editingExistingInvoiceId;
         this.clearInvoice(true);
@@ -1336,16 +1415,21 @@ export class InvoiceNewPageComponent implements OnInit {
         void Swal.fire({ icon: 'success', title: `Factura ${number} enviada a caja`, timer: 1800, showConfirmButton: false, toast: true, position: 'top-end' });
         return;
       }
-      if (this.requiresDgiiOnSave) {
-        this.invoiceMessage = `Factura ${savedInvoice.numero_factura} guardada. Enviando a DGII...`;
+      if (requiresEcfProcessing) {
+        this.invoiceMessage = isProformaInvoice
+          ? `Factura ${savedInvoice.numero_factura} guardada. Firmando factura...`
+          : `Factura ${savedInvoice.numero_factura} guardada. Enviando a DGII...`;
         await this.sendInvoiceToDgii(true);
+      } else if (this.isConsumerInvoiceType(selectedNcfType) && !this.isCreditSale) {
+        this.invoiceMessage = `Factura ${savedInvoice.numero_factura} cobrada. Imprimiendo...`;
+        await this.printInvoice();
       } else {
         this.invoiceMessage = this.editingExistingInvoiceId
           ? `Factura ${savedInvoice.numero_factura} actualizada correctamente y marcada como No enviado.`
           : `Factura ${savedInvoice.numero_factura} guardada correctamente y marcada como No enviado.`;
       }
     } catch (error) {
-      this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo guardar la factura.');
+      this.invoiceMessage = this.formatSupabaseError(error, this.saleOrder ? 'No se pudo guardar la orden de venta.' : 'No se pudo guardar la factura.');
     } finally {
       this.isSavingInvoice = false;
     }
@@ -1353,8 +1437,11 @@ export class InvoiceNewPageComponent implements OnInit {
 
   async editSavedInvoice(invoiceId: number): Promise<void> {
     try {
-      const invoice = await this.invoicesService.getInvoiceForEditing(invoiceId);
+      const invoice = this.saleOrder
+        ? await this.salesOrdersService.getOrderForEditing(invoiceId)
+        : await this.invoicesService.getInvoiceForEditing(invoiceId);
       this.loadInvoiceForEditing(invoice);
+      this.isViewingOrder = false;
       this.billingTab = 'create';
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo cargar la factura para editar.');
@@ -1362,9 +1449,28 @@ export class InvoiceNewPageComponent implements OnInit {
     }
   }
 
+  async viewSavedOrder(orderId: number): Promise<void> {
+    try {
+      const order = await this.salesOrdersService.getOrderForEditing(orderId);
+      this.loadInvoiceForEditing(order);
+      this.isViewingOrder = true;
+      this.savedInvoice = { id: order.id, numero_factura: order.number, dgii_estado: 'No enviado' };
+      this.billingTab = 'create';
+      this.invoiceMessage = `Consultando la orden de venta ${order.number}.`;
+    } catch (error) {
+      this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo cargar la orden para consulta.');
+    }
+  }
+
+  async printSavedOrder(orderId: number): Promise<void> {
+    await this.viewSavedOrder(orderId);
+    if (this.savedInvoice?.id === orderId) await this.printInvoice();
+  }
+
   async resendInvoiceToDgii(invoiceId: number): Promise<void> {
     try {
       const invoice = await this.invoicesService.getInvoiceForEditing(invoiceId);
+      this.loadInvoiceForEditing(invoice);
       this.savedInvoice = {
         id: invoice.id,
         numero_factura: invoice.number,
@@ -1403,10 +1509,25 @@ export class InvoiceNewPageComponent implements OnInit {
     this.invoiceLines = invoice.lines.map((line, index) => ({ ...line, id: index + 1 }));
     this.nextInvoiceLineId = this.invoiceLines.length + 1;
     this.editingExistingInvoiceId = invoice.id;
+    this.isViewingOrder = false;
     this.savedInvoice = null;
     this.editingLineId = null;
     this.resetLineEditor();
-    this.invoiceMessage = `Editando la factura ${invoice.number}. Guarda los cambios para actualizarla.`;
+    this.invoiceMessage = `Editando ${this.documentName.toLowerCase()} ${invoice.number}. Guarda los cambios para actualizarla.`;
+  }
+
+  private async prepareInvoiceFromOrder(orderId: number): Promise<void> {
+    try {
+      const order = await this.salesOrdersService.getOrderForEditing(orderId);
+      this.loadInvoiceForEditing(order);
+      this.editingExistingInvoiceId = null;
+      this.savedInvoice = null;
+      this.invoiceForm.invoiceNumber = '';
+      this.invoiceForm.ncf = '';
+      this.invoiceMessage = `Factura nueva preparada con los datos de la orden ${order.number}.`;
+    } catch (error) {
+      this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo cargar la orden para facturar.');
+    }
   }
 
   requestSendInvoiceToDgii(): void {
@@ -1420,20 +1541,20 @@ export class InvoiceNewPageComponent implements OnInit {
 
   confirmSendInvoiceToDgii(): void {
     this.isDgiiSendConfirmationVisible = false;
-    void this.sendInvoiceToDgii();
+    void this.sendInvoiceToDgii(true);
   }
 
   private async sendInvoiceToDgii(printAfterSend = false): Promise<void> {
     if (!this.savedInvoice || this.isSendingDgii) return;
     this.isSendingDgii = true;
     this.dgiiDialog = 'processing';
-    this.dgiiDialogMessage = this.isProforma ? 'Firmando proforma...' : 'Enviando la factura a la cola...';
+    this.dgiiDialogMessage = this.isProforma ? 'Firmando factura...' : 'Enviando la factura a la cola...';
     try {
       const result = await this.ecfService.sendInvoice(this.savedInvoice.id);
       this.applyOperationResult(result);
       if (printAfterSend) {
-        if (['Aceptado', 'Aceptado condicional', 'Firmada'].includes(result.dgii_estado ?? '')) await this.printInvoice();
-        else if (['En cola', 'Enviando DGII', 'En proceso DGII'].includes(result.dgii_estado ?? '')) this.printAfterOperation = result.id;
+        const readyToPrint = ['Aceptado', 'Aceptado condicional', 'Firmada', 'En cola', 'Enviando DGII', 'En proceso DGII'];
+        if (readyToPrint.includes(result.dgii_estado ?? '')) await this.printInvoice();
       }
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo enviar la factura a DGII.');
@@ -1466,11 +1587,15 @@ export class InvoiceNewPageComponent implements OnInit {
     const savedInvoiceId = this.savedInvoice.id;
 
     const isAcceptedByDgii = this.dgiiStatus === 'Aceptado';
-    const documentTitle = this.isProforma ? 'Factura PROFORMA' : isAcceptedByDgii ? 'Factura electrónica' : 'Factura de consumo final';
+    const documentTitle = this.saleOrder
+      ? 'Orden de venta'
+      : this.isProforma ? 'Factura FACTURA' : isAcceptedByDgii ? 'Factura electrónica' : 'Factura de consumo final';
     const session = await this.auth.restoreSession();
     const seller = session?.fullName ?? this.data.userName;
     const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId) ?? this.data.companies[0];
-    const printDetail = await this.invoicesService.getInvoiceForEditing(savedInvoiceId);
+    const printDetail = this.saleOrder
+      ? await this.salesOrdersService.getOrderForEditing(savedInvoiceId)
+      : await this.invoicesService.getInvoiceForEditing(savedInvoiceId);
     const fiscalCodes = await this.createFiscalCodes(
       printDetail.qrLink || `${this.savedInvoice.numero_factura}|${this.invoiceForm.ncf}|${this.invoiceGrandTotal.toFixed(2)}`,
       this.savedInvoice.numero_factura
@@ -1481,7 +1606,7 @@ export class InvoiceNewPageComponent implements OnInit {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
-    const money = (value: number): string => `RD$${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const money = (value: number): string => value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const lines = this.invoiceLines.map((line) => {
       const priceWithoutTax = line.taxRate > 0 ? line.unitPrice / (1 + (line.taxRate / 100)) : line.unitPrice;
       return `<tr><td>${escape(this.getInvoiceProductCode(line.productId))} &nbsp; ${escape(line.quantity)} x ${money(priceWithoutTax)}<br><b>${escape(line.description)}</b></td><td>${money(line.taxAmount)}</td><td>${money(line.lineTotal)}</td></tr>`;
@@ -1504,7 +1629,11 @@ export class InvoiceNewPageComponent implements OnInit {
     this.clearInvoice(true);
 
     try {
-      await this.invoicesService.markInvoicePrinted(savedInvoiceId);
+      if (this.saleOrder) {
+        await this.salesOrdersService.markOrderPrinted(savedInvoiceId);
+      } else {
+        await this.invoicesService.markInvoicePrinted(savedInvoiceId);
+      }
     } catch {
       // Printing should remain available even if only the print timestamp could not be stored.
     }
@@ -1609,7 +1738,16 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   private applyNcfTypeByRnc(client?: ClientRecord | null): void {
-    const hasValidRnc = this.hasValidInvoiceRnc || !!client;
+    if (this.proformaEnabled && !this.isCashPaymentMethod) {
+      this.invoiceForm.ncfType = this.consumerNcfType;
+      return;
+    }
+    if (this.proformaEnabled && !this.hasValidInvoiceRnc) {
+      this.invoiceForm.ncfType = this.defaultInvoiceNcfType;
+      return;
+    }
+
+    const hasValidRnc = this.hasValidInvoiceRnc || (!this.proformaEnabled && !!client);
 
     if (hasValidRnc) {
       if (!this.availableNcfTypes.includes(this.invoiceForm.ncfType)) {
@@ -1632,6 +1770,19 @@ export class InvoiceNewPageComponent implements OnInit {
     return option.trim().startsWith(`${code} -`);
   }
 
+  displayNcfType(value: string): string {
+    return value.replace(/^\s*(?:E)?\d{2,3}\s*-\s*/i, '').trim() || value;
+  }
+
+  private get defaultInvoiceNcfType(): string {
+    if (this.proformaEnabled && this.isCashPaymentMethod && !this.hasValidInvoiceRnc) return this.proformaNcfType;
+    return this.consumerNcfType;
+  }
+
+  private get proformaNcfType(): string { return '332 - Factura de Consumo'; }
+  private get consumerNcfType(): string { return this.getNcfOptionBySeriesOrCode(this.defaultNcfElectronic32); }
+  private get isCashPaymentMethod(): boolean { return Number(this.paymentMethodCode) === 1; }
+
   private toStoredNcfType(value: string): string {
     const code = value.match(/332|\d{2}/)?.[0];
     return code ? `E${code}` : value.trim().toUpperCase();
@@ -1639,6 +1790,7 @@ export class InvoiceNewPageComponent implements OnInit {
 
   private getNcfOptionByStoredType(value: string): string {
     const code = value.match(/332|\d{2}/)?.[0];
+    if (code === '332' && this.proformaEnabled) return '332 - Factura de Consumo';
     return code
       ? this.ncfTypes.find((option) => this.isNcfCode(option, code)) ?? value
       : value;

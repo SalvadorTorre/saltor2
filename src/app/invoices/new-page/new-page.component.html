@@ -1,31 +1,32 @@
-<section class="dashboard-content invoice-content">
+<section class="dashboard-content invoice-content" [class.invoice-content--sale-order]="saleOrder" [class.invoice-content--read-only]="isDocumentReadOnly">
   <div class="invoice-sticky-header">
   <div class="dashboard-header company-header">
     <div>
-      <h2>Facturacion</h2>
+      <h2>{{ saleOrder ? 'Orden de venta' : 'Facturacion' }}</h2>
     </div>
     <div class="company-header__actions" *ngIf="billingTab === 'create'">
-      <div class="dashboard-header__pill">{{ isEditingExistingInvoice ? 'Editando factura' : 'Nueva Factura' }}</div>
-      <button class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
-      <button *ngIf="!invoiceSaved" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
+      <div class="dashboard-header__pill">{{ isDocumentReadOnly ? 'Consultando orden de venta' : isEditingExistingInvoice ? ('Editando ' + documentName.toLowerCase()) : (saleOrder ? 'Nueva orden de venta' : 'Nueva Factura') }}</div>
+      <button *ngIf="!isDocumentReadOnly" class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
+      <button *ngIf="!invoiceSaved && !isDocumentReadOnly" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
       <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
       <button *ngIf="invoiceSaved" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
     </div>
   </div>
 
-  <div class="invoice-module-tabs" role="tablist" aria-label="Opciones de facturación">
-    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'create'" [class.invoice-module-tabs__button--active]="billingTab === 'create'" class="invoice-module-tabs__button" (click)="billingTab = 'create'">Nueva factura</button>
-    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="billingTab = 'consultation'">Consulta de facturas</button>
+  <div class="invoice-module-tabs" role="tablist" [attr.aria-label]="saleOrder ? 'Opciones de orden de venta' : 'Opciones de facturación'">
+    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'create'" [class.invoice-module-tabs__button--active]="billingTab === 'create'" class="invoice-module-tabs__button" (click)="billingTab = 'create'">{{ saleOrder ? 'Nueva orden de venta' : 'Nueva factura' }}</button>
+    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="billingTab = 'consultation'">{{ saleOrder ? 'Consulta de órdenes' : 'Consulta de facturas' }}</button>
   </div>
   <p class="invoice-feedback" *ngIf="invoiceMessage">{{ invoiceMessage }}</p>
   </div>
 
-  <app-invoice-consultation-page *ngIf="billingTab === 'consultation'" (editRequested)="editSavedInvoice($event)" (resendRequested)="resendInvoiceToDgii($event)"></app-invoice-consultation-page>
+  <app-invoice-consultation-page *ngIf="!saleOrder && billingTab === 'consultation'" (editRequested)="editSavedInvoice($event)" (resendRequested)="resendInvoiceToDgii($event)"></app-invoice-consultation-page>
+  <app-orders-consultation-page *ngIf="saleOrder && billingTab === 'consultation'" (editRequested)="editSavedInvoice($event)" (viewRequested)="viewSavedOrder($event)" (printRequested)="printSavedOrder($event)"></app-orders-consultation-page>
   <ng-container *ngIf="billingTab === 'create'">
   <div *ngIf="isClearConfirmationVisible" class="invoice-clear-confirmation" role="dialog" aria-modal="true" aria-labelledby="clearInvoiceTitle">
     <div class="invoice-clear-confirmation__dialog">
-      <h3 id="clearInvoiceTitle">Limpiar factura</h3>
-      <p>¿Deseas limpiar la factura? Se perderán los datos y productos actuales.</p>
+      <h3 id="clearInvoiceTitle">Limpiar {{ documentName.toLowerCase() }}</h3>
+      <p>¿Deseas limpiar {{ saleOrder ? 'la orden de venta' : 'la factura' }}? Se perderán los datos y productos actuales.</p>
       <div class="invoice-clear-confirmation__actions">
         <button class="secondary-action" type="button" (click)="cancelInvoiceClear()">Cancelar</button>
         <button class="primary-action" type="button" (click)="confirmInvoiceClear()">Sí, limpiar</button>
@@ -36,14 +37,14 @@
     <div class="invoice-payment-confirmation__dialog">
       <div class="invoice-payment-confirmation__icon" aria-hidden="true">$</div>
       <div class="invoice-payment-confirmation__heading">
-        <p>Confirmar factura</p>
+        <p>Confirmar {{ documentName.toLowerCase() }}</p>
         <h3 id="invoicePaymentConfirmTitle">Revisa el pago antes de guardar</h3>
       </div>
       <div class="invoice-payment-confirmation__details">
-        <label><span>No. factura</span><input [value]="invoiceForm.invoiceNumber || 'Se genera al guardar'" readonly></label>
+        <label><span>{{ documentNumberLabel }}</span><input [value]="invoiceForm.invoiceNumber || 'Se genera al guardar'" readonly></label>
         <label><span>Cliente</span><input [value]="invoiceForm.customerName || 'Cliente contado'" readonly></label>
         <label><span>Forma de pago</span><select name="paymentConfirmationMethod" [(ngModel)]="paymentMethodCode"><option *ngFor="let method of paymentMethods" [ngValue]="method.code">{{ method.code }} - {{ method.description }}</option></select></label>
-        <label class="invoice-payment-confirmation__invoice-total"><span>Valor de la factura</span><input [value]="invoiceGrandTotal | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO'" readonly></label>
+        <label class="invoice-payment-confirmation__invoice-total"><span>Valor de {{ documentName.toLowerCase() }}</span><input [value]="invoiceGrandTotal | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO'" readonly></label>
         <label class="invoice-payment-confirmation__paid" [class.invoice-payment-confirmation__paid--invalid]="!isPaymentSufficient"><span>Monto pagado</span><input type="number" name="paymentConfirmationReceived" [min]="invoiceGrandTotal" step="0.01" [(ngModel)]="paymentReceived" autofocus><small *ngIf="!isPaymentSufficient">Faltan {{ paymentShortfall | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO' }}</small></label>
         <div class="invoice-payment-confirmation__change" [class.invoice-payment-confirmation__change--invalid]="!isPaymentSufficient"><span>{{ isPaymentSufficient ? 'Cambio' : 'Monto pendiente' }}</span><strong>{{ (isPaymentSufficient ? paymentChange : paymentShortfall) | currency:'DOP':'symbol-narrow':'1.2-2':'es-DO' }}</strong></div>
       </div>
@@ -56,8 +57,8 @@
   <div *ngIf="isDgiiSendConfirmationVisible" class="dgii-process-dialog" role="dialog" aria-modal="true" aria-labelledby="dgiiSendConfirmTitle">
     <div class="dgii-process-dialog__panel">
       <div class="dgii-process-dialog__confirm-icon" aria-hidden="true">?</div>
-      <h3 id="dgiiSendConfirmTitle">{{ isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</h3>
-      <p>{{ isProforma ? '¿Deseas firmar la proforma ' + savedInvoice?.numero_factura + '?' : '¿Deseas enviar la factura ' + savedInvoice?.numero_factura + ' a DGII?' }}</p>
+      <h3 id="dgiiSendConfirmTitle">{{ isProforma ? 'Firmar Factura' : 'Enviar a DGII' }}</h3>
+      <p>{{ isProforma ? '¿Deseas firmar la Factura ' + savedInvoice?.numero_factura + '?' : '¿Deseas enviar la factura ' + savedInvoice?.numero_factura + ' a DGII?' }}</p>
       <div class="dgii-process-dialog__actions">
         <button class="secondary-action" type="button" (click)="cancelSendInvoiceToDgii()">Cancelar</button>
         <button class="primary-action" type="button" (click)="confirmSendInvoiceToDgii()">{{ isProforma ? 'Sí, firmar' : 'Sí, enviar' }}</button>
@@ -135,25 +136,25 @@
           <div class="invoice-form">
             <div class="panel__header company-panel-header">
               <div>
-                <h3>Datos de Factura</h3>
+                <h3>Datos de {{ documentName }}</h3>
               </div>
             </div>
             <div class="company-form__grid invoice-form__grid">
               <label class="field invoice-inline-field">
-                <span>No. Factura</span>
+                <span>{{ documentNumberLabel }}</span>
                 <input type="text" name="invoiceNumber" [value]="invoiceForm.invoiceNumber || 'Genera al guardar'" [readonly]="true" [disabled]="true" />
               </label>
               <label class="field invoice-inline-field">
                 <span>Fecha</span>
                 <input type="date" name="invoiceDate" [value]="invoiceForm.invoiceDate" [readonly]="true" [disabled]="true" />
               </label>
-              <label class="field invoice-inline-field">
+              <label class="field invoice-inline-field" *ngIf="!saleOrder">
                 <span>Tipo NCF</span>
                 <select name="invoiceNcfType" tabindex="-1" [(ngModel)]="invoiceForm.ncfType" (ngModelChange)="onNcfTypeChange()">
                   <option *ngFor="let type of availableNcfTypes" [ngValue]="type">{{ type }}</option>
                 </select>
               </label>
-              <label class="field invoice-inline-field">
+              <label class="field invoice-inline-field" *ngIf="!saleOrder">
                 <span>NCF</span>
                 <input type="text" name="invoiceNcf" [value]="invoiceForm.ncf || 'Genera al guardar'" [readonly]="true" [disabled]="true" />
               </label>
@@ -272,7 +273,7 @@
               </div>
               <button *ngIf="!invoiceSaved" class="primary-action invoice-summary__save" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
               <div *ngIf="invoiceSaved" class="invoice-summary__actions">
-                <button *ngIf="requiresDgiiOnSave" class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
+                <button *ngIf="requiresDgiiOnSave" class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar factuta' : 'Enviar a DGII' }}</button>
                 <button class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
               </div>
             </aside>

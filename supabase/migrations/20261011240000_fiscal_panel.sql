@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- 1) El archivo del certificado y su clave cifrada solo los leen las funciones
 --    del servidor (service_role).  Los usuarios ven titular y vigencia.
@@ -8,7 +7,6 @@ revoke select on myappdb.certificados_firma_digital from authenticated, anon;
 grant select (id, empresa_id, nombre_archivo, tipo_archivo, titular, emisor, numero_serie,
               valido_desde, valido_hasta, cargado_en, actualizado_en)
   on myappdb.certificados_firma_digital to authenticated;
-
 -- ===========================================================================
 -- 2) Panel fiscal: alertas, estado de e-CF y resumen de ITBIS del período.
 --    SECURITY INVOKER: el RLS limita todo a la empresa del usuario.
@@ -26,7 +24,6 @@ as $$
   end;
 $$;
 grant execute on function private.fecha_texto(text) to authenticated, service_role;
-
 create or replace function private.estado_ecf(p text)
 returns text
 language sql
@@ -42,7 +39,6 @@ as $$
   end;
 $$;
 grant execute on function private.estado_ecf(text) to authenticated, service_role;
-
 create or replace function myappdb.panel_fiscal(p_desde date, p_hasta date)
 returns jsonb
 language sql
@@ -180,8 +176,6 @@ select jsonb_build_object(
   )
 );
 $$;
-
 revoke all on function myappdb.panel_fiscal(date, date) from public, anon;
 grant execute on function myappdb.panel_fiscal(date, date) to authenticated, service_role;
-
 commit;

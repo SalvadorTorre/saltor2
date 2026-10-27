@@ -1,5 +1,4 @@
 begin;
-
 -- ---------------------------------------------------------------------------
 -- Facturación: inventario por código de reemplazo y precio mayor solo con
 -- ventaxmayor = 'S'.
@@ -17,15 +16,12 @@ begin;
 alter table myappdb.factura_detalles
   add column if not exists producto_inventario_id integer
   references myappdb.products(id) on delete set null;
-
 create index if not exists factura_detalles_producto_inventario_idx
   on myappdb.factura_detalles (producto_inventario_id);
-
 -- Las facturas existentes rebajaron siempre el producto digitado.
 update myappdb.factura_detalles
 set producto_inventario_id = producto_id
 where producto_inventario_id is null and producto_id is not null;
-
 create or replace function private.producto_para_inventario(p_producto_id integer)
 returns integer
 language plpgsql
@@ -64,10 +60,8 @@ begin
   return v_id;
 end;
 $$;
-
 revoke all on function private.producto_para_inventario(integer) from public, anon;
 grant execute on function private.producto_para_inventario(integer) to authenticated, service_role;
-
 -- ---------------------------------------------------------------------------
 -- crear_factura
 -- ---------------------------------------------------------------------------
@@ -199,7 +193,6 @@ begin
   return query select nueva_factura_id, nuevo_numero_factura;
 end;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- actualizar_factura
 -- ---------------------------------------------------------------------------
@@ -328,7 +321,6 @@ begin
   return query select p_factura_id, numero_existente;
 end;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- anular_factura
 -- ---------------------------------------------------------------------------
@@ -379,5 +371,4 @@ begin
   where id = p_factura_id;
 end;
 $$;
-
 commit;

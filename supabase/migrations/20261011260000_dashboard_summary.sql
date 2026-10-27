@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Resumen del Inicio en un solo llamado (fecha de Santo Domingo, no UTC).
 -- SECURITY INVOKER: el RLS limita todo a la empresa del usuario.
@@ -154,8 +153,6 @@ select jsonb_build_object(
     ) x), '[]'::jsonb)
 );
 $$;
-
 revoke all on function myappdb.dashboard_inicio() from public, anon;
 grant execute on function myappdb.dashboard_inicio() to authenticated, service_role;
-
 commit;

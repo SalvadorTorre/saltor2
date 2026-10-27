@@ -1,13 +1,13 @@
 /* ---- Distribución compacta de la pantalla de usuarios ---------------------- */
 
-/* Dos columnas: lista (y resumen debajo) | formulario ancho */
+/* Tres columnas: lista | formulario | resumen a la derecha. */
 .user-grid {
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(250px, 300px) minmax(460px, 1fr) minmax(260px, 320px);
   align-items: start;
 }
 .user-grid > .company-list-panel { grid-column: 1; grid-row: 1; }
-.user-grid > .company-form-panel { grid-column: 2; grid-row: 1 / span 2; }
-.user-grid > .company-detail-panel { grid-column: 1; grid-row: 2; }
+.user-grid > .company-form-panel { grid-column: 2; grid-row: 1; }
+.user-grid > .company-detail-panel { grid-column: 3; grid-row: 1; }
 
 /* Formulario en cuadrícula: personal a la izquierda; acceso, empresa y rol a la derecha */
 .user-form {
@@ -59,6 +59,13 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "hero" "personal" "access" "company" "role" "actions";
   }
+}
+
+@media (max-width: 1120px) {
+  .user-grid { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
+  .user-grid > .company-list-panel { grid-column: 1; grid-row: 1; }
+  .user-grid > .company-form-panel { grid-column: 2; grid-row: 1; }
+  .user-grid > .company-detail-panel { grid-column: 1 / -1; grid-row: 2; }
 }
 
 /* Tablet y celular: todo en una columna (lista, formulario, resumen) */

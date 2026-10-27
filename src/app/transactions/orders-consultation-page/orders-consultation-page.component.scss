@@ -1,0 +1,12 @@
+.orders-consultation { padding: 22px; background: #fff; border: 1px solid #dbe5f0; border-radius: 14px; }
+.orders-consultation__filters { display:flex; gap:14px; align-items:end; margin-bottom:20px; }
+.orders-consultation__filters label { display:grid; gap:6px; font-size:16px; font-weight:700; color:#24405e; }
+.orders-consultation input,.orders-consultation select { min-width:210px; padding:10px 12px; border:1px solid #b9c9db; border-radius:8px; font-size:17px; }
+.orders-consultation button { border:0; border-radius:7px; padding:9px 11px; background:#e8f0fa; color:#163b6b; cursor:pointer; font-size:15px; font-weight:700; }
+.orders-consultation__table-wrap { overflow:auto; }
+table { width:100%; min-width:900px; border-collapse:collapse; }
+th { padding:12px; text-align:left; background:#edf3f9; color:#35506e; font-size:16px; }
+td { padding:13px 12px; border-bottom:1px solid #e6edf4; font-size:17px; }
+.orders-consultation__actions { display:flex; gap:8px; flex-wrap:wrap; }.orders-consultation__icon { width:38px; height:36px; display:grid; place-items:center; padding:7px; border:1px solid transparent; }.orders-consultation__icon img { width:21px; height:21px; }.orders-consultation__icon.is-view { background:#e6f4ff; border-color:#91caff; }.orders-consultation__icon.is-edit { background:#fff7d6; border-color:#ffd666; }.orders-consultation__icon.is-print { background:#efe7ff; border-color:#cbb5ff; }.orders-consultation__icon.is-invoice { background:#e8f8ef; border-color:#87d6a5; }.orders-consultation__actions .is-delete { background:#fee4e2; border-color:#fda29b; }
+.orders-consultation__status { padding:4px 8px; border-radius:999px; background:#e7f6ef; color:#067647; font-weight:700; font-size:14px; }.orders-consultation__empty,.orders-consultation__error { font-size:18px; color:#6c7f96; padding:22px; text-align:center; }.orders-consultation__error { color:#b42318; }
+@media(max-width:800px){.orders-consultation__filters{align-items:stretch; flex-direction:column}.orders-consultation input,.orders-consultation select{width:100%}}

@@ -1,4 +1,4 @@
-import { endpoint, parseResult, serviceBase } from './ecf-queue.ts';
+import { directSignatureEndpoint, endpoint, parseResult, serviceBase } from './ecf-queue.ts';
 import { queryOperation, submitOperation, type Operation } from './ecf-operation.ts';
 const assert = (value: unknown, message = 'Assertion failed') => { if (!value) throw new Error(message); };
 function operation(modo: 'COLA' | 'FIRMA' = 'COLA'): Operation {
@@ -18,6 +18,7 @@ Deno.test('URLs test/prod normalizan configuraciones anteriores y escapan operat
   assert(serviceBase('https://service.example/ecf/') === 'https://service.example');
   assert(endpoint('https://service.example/api', 'PROD') === 'https://service.example/ecf/prod/firmar-y-encolar-direct-cert');
   assert(endpoint('https://service.example', 'TEST', false, 'a/b') === 'https://service.example/ecf/test/operaciones-encoladas/a%2Fb');
+  assert(directSignatureEndpoint('https://service.example/ecf', 'TEST') === 'https://service.example/api/test/generate-xml-no-send-direct-cert');
 });
 Deno.test('202 guarda firma, operación y estado pendiente; persist siempre true', async () => {
   const original = globalThis.fetch; const op = operation();
@@ -38,12 +39,14 @@ Deno.test('proforma solo firma, omite persist y nunca crea operación de cola', 
   const original = globalThis.fetch; const op = operation('FIRMA');
   try {
     globalThis.fetch = async (url, init) => {
-      assert(String(url).endsWith('/generate-xml-no-send-direct-cert'));
+      assert(String(url).endsWith('/api/test/generate-xml-no-send-direct-cert'));
       assert(!new Headers(init?.headers).has('x-cert-persist'));
-      return new Response(JSON.stringify({ xmlFirmado: '<proforma/>', qrUrl: 'https://qr', operationId: 'unexpected', trackId: 'unexpected' }));
+      assert(JSON.parse(String(init?.body)).TipoeCF === '32');
+      return new Response(JSON.stringify({ securityCode: 'ABC', signatureDateTime: '16-10-2026 12:30:00', qrUrl: 'https://qr', xmls: { ecf: '<proforma/>' }, operationId: 'unexpected', trackId: 'unexpected' }));
     };
     const result = await submitOperation(database(op), op, { TipoeCF: '32' }, { 'x-cert-persist': 'true' });
     assert(result.dgii_estado === 'Firmada' && result.ecf_operation_id === null && !result.dgii_track_id);
+    assert(result.ecf_xml_firmado === '<proforma/>' && result.codSeguridad === 'ABC' && result.qr_link === 'https://qr');
   } finally { globalThis.fetch = original; }
 });
 Deno.test('doble clic reutiliza operación sin otro HTTP', async () => {
@@ -102,6 +105,11 @@ Deno.test('consulta fallida o estado desconocido no destruyen operación', async
 Deno.test('parsea datos nuevos también dentro de data', () => {
   const result = parseResult({ data: { operationId: 'op', codigoSeguridad: 'XYZ', xmlFirmado: '<xml/>' } }, 'EN_COLA', '{}');
   assert(result.ecf_operation_id === 'op' && result.codSeguridad === 'XYZ');
+});
+
+Deno.test('expone el mensaje útil de una respuesta HTML del servicio', () => {
+  const result = parseResult({}, 'ERROR', '<html><body><pre>Cannot POST /ruta-inexistente</pre></body></html>');
+  assert(result.dgii_mensaje_respuesta === 'Cannot POST /ruta-inexistente');
 });
 
 Deno.test('intento interrumpido termina por confirmar sin reenviar', async () => {

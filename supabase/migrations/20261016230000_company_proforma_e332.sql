@@ -1,5 +1,4 @@
 begin;
-
 -- E332 es una numeración interna. Nunca se registra como rango autorizado DGII.
 create table if not exists myappdb.empresas_proforma (
   empresa_id integer primary key references myappdb.empresas(id) on delete restrict,
@@ -30,7 +29,6 @@ create policy empresas_proforma_read on myappdb.empresas_proforma for select to 
 drop policy if exists empresas_proforma_historial_read on myappdb.empresas_proforma_historial;
 create policy empresas_proforma_historial_read on myappdb.empresas_proforma_historial for select to authenticated
   using (empresa_id = (select private.current_empresa_id()) or (select private.es_dueno_sistema()));
-
 -- Conserva el contador de la antigua secuencia alterna, sin habilitar empresas automáticamente.
 insert into myappdb.empresas_proforma(empresa_id, ultimo_numero)
 select distinct on (s.empresa_id) s.empresa_id,
@@ -46,7 +44,6 @@ where not exists (
   select 1 from myappdb.empresas_proforma_historial h
   where h.empresa_id = p.empresa_id and h.accion = 'Contador anterior importado'
 );
-
 create or replace function myappdb.plataforma_configurar_proforma(p_empresa_id integer, p_activa boolean)
 returns jsonb language plpgsql security definer set search_path = ''
 as $$
@@ -71,7 +68,6 @@ end;
 $$;
 revoke all on function myappdb.plataforma_configurar_proforma(integer, boolean) from public, anon;
 grant execute on function myappdb.plataforma_configurar_proforma(integer, boolean) to authenticated;
-
 create or replace function myappdb.ajustar_contador_proforma(p_ultimo_numero bigint, p_numero_esperado bigint, p_actualizado_en timestamptz, p_empresa_id integer default null)
 returns jsonb language plpgsql security definer set search_path = ''
 as $$

@@ -45,6 +45,8 @@ export interface OtherPreferences {
   defaultNcfType: string;
   defaultPaymentMethod: string;
   printPaper: PrintPaper;
+  useWindowsDefaultPrinter: boolean;
+  printerName: string;
   billingMode: BillingMode;
   displayProfile: DisplayProfile;
 }
@@ -109,6 +111,8 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
   ];
   readonly detectedOs: QzOs | null = this.detectOs();
   qzStatus: 'checking' | 'active' | 'inactive' = 'checking';
+  availablePrinters: string[] = [];
+  loadingPrinters = false;
 
   preferences: OtherPreferences = {
     primaryColor: '#2563eb',
@@ -133,6 +137,8 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
     defaultNcfType: '02 - Consumo',
     defaultPaymentMethod: 'Contado',
     printPaper: 'carta',
+    useWindowsDefaultPrinter: true,
+    printerName: '',
     billingMode: 'Directo',
     displayProfile: 'auto'
   };
@@ -155,6 +161,9 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     void this.loadPrintPaper();
     void this.checkQzTray();
+    const printerPreference = this.qzPrint.getPrinterPreference();
+    this.preferences.useWindowsDefaultPrinter = printerPreference.useWindowsDefault;
+    this.preferences.printerName = printerPreference.printerName;
     this.preferences.displayProfile = this.displayPreferences.getProfile();
     this.preferences.theme = this.displayPreferences.getTheme();
     this.originalPreferences = { ...this.preferences };
@@ -168,6 +177,16 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
     // Preferencias de este equipo: siempre se guardan.
     this.displayPreferences.save(this.preferences.displayProfile);
     this.displayPreferences.saveTheme(this.preferences.theme);
+
+    if (!this.preferences.useWindowsDefaultPrinter && !this.preferences.printerName) {
+      this.otherMessage = 'Selecciona una impresora o elige usar la predeterminada de Windows.';
+      await Swal.fire({ icon: 'warning', title: 'Impresora requerida', text: this.otherMessage });
+      return;
+    }
+    this.qzPrint.savePrinterPreference({
+      useWindowsDefault: this.preferences.useWindowsDefaultPrinter,
+      printerName: this.preferences.printerName
+    });
 
     // Datos de la empresa: solo si cambiaron (y solo un administrador puede).
     const problems: string[] = [];
@@ -221,6 +240,8 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       defaultNcfType: '02 - Consumo',
       defaultPaymentMethod: 'Contado',
       printPaper: 'carta',
+      useWindowsDefaultPrinter: true,
+      printerName: '',
       billingMode: this.preferences.billingMode,
       displayProfile: 'auto'
     };
@@ -262,6 +283,17 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
   async checkQzTray(): Promise<void> {
     this.qzStatus = 'checking';
     this.qzStatus = (await this.qzPrint.checkConnection()) ? 'active' : 'inactive';
+    if (this.qzStatus === 'active') await this.loadAvailablePrinters();
+  }
+
+  async loadAvailablePrinters(): Promise<void> {
+    this.loadingPrinters = true;
+    try {
+      this.availablePrinters = await this.qzPrint.getAvailablePrinters();
+      if (!this.availablePrinters.length) this.otherMessage = 'QZ Tray está activo, pero no encontró impresoras instaladas en este equipo.';
+    } finally {
+      this.loadingPrinters = false;
+    }
   }
 
   private detectOs(): QzOs | null {

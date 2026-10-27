@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Anulación de facturas con tipo y motivo, y consulta de comprobantes
 -- anulados (base del Formato 608 de la DGII).
@@ -20,16 +19,13 @@ alter table myappdb.facturas add column if not exists tipo_anulacion smallint;
 alter table myappdb.facturas add column if not exists motivo_anulacion text;
 alter table myappdb.facturas add column if not exists anulada_en timestamptz;
 alter table myappdb.facturas add column if not exists anulada_por text;
-
 alter table myappdb.facturas drop constraint if exists facturas_tipo_anulacion_check;
 alter table myappdb.facturas add constraint facturas_tipo_anulacion_check
   check (tipo_anulacion is null or tipo_anulacion between 1 and 10);
-
 create table if not exists myappdb.tipos_anulacion (
   codigo smallint primary key check (codigo between 1 and 10),
   descripcion text not null
 );
-
 insert into myappdb.tipos_anulacion (codigo, descripcion) values
   (1, 'Deterioro de factura preimpresa'),
   (2, 'Errores de impresión (factura preimpresa)'),
@@ -42,19 +38,16 @@ insert into myappdb.tipos_anulacion (codigo, descripcion) values
   (9, 'Por cese de operaciones'),
   (10, 'Pérdida o hurto de talonarios')
 on conflict (codigo) do update set descripcion = excluded.descripcion;
-
 alter table myappdb.tipos_anulacion enable row level security;
 drop policy if exists tipos_anulacion_authenticated_read on myappdb.tipos_anulacion;
 create policy tipos_anulacion_authenticated_read on myappdb.tipos_anulacion for select to authenticated using (true);
 revoke all on myappdb.tipos_anulacion from anon, authenticated;
 grant select on myappdb.tipos_anulacion to authenticated;
 grant all on myappdb.tipos_anulacion to service_role;
-
 -- ---------------------------------------------------------------------------
 -- anular_factura con tipo y motivo (repone inventario igual que antes)
 -- ---------------------------------------------------------------------------
 drop function if exists myappdb.anular_factura(bigint);
-
 create or replace function myappdb.anular_factura(p_factura_id bigint, p_tipo_anulacion smallint default 4, p_motivo text default null)
 returns void
 language plpgsql
@@ -112,10 +105,8 @@ begin
   where id = p_factura_id;
 end;
 $$;
-
 revoke all on function myappdb.anular_factura(bigint, smallint, text) from public, anon;
 grant execute on function myappdb.anular_factura(bigint, smallint, text) to authenticated, service_role;
-
 -- ---------------------------------------------------------------------------
 -- Comprobantes anulados (respeta la seguridad del usuario)
 -- ---------------------------------------------------------------------------
@@ -146,7 +137,5 @@ select
 from myappdb.facturas f
 left join myappdb.tipos_anulacion t on t.codigo = f.tipo_anulacion
 where f.estado = 'Anulada';
-
 grant select on myappdb.comprobantes_anulados to authenticated;
-
 commit;

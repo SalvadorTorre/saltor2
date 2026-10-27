@@ -5,6 +5,13 @@ import { SupabaseService } from '../supabase/supabase.service';
 
 export type PrintResult = 'qz' | 'browser' | 'unavailable';
 
+export interface PrinterPreference {
+  useWindowsDefault: boolean;
+  printerName: string;
+}
+
+const PRINTER_PREFERENCE_KEY = 'saltor.print.printer-preference';
+
 @Injectable({ providedIn: 'root' })
 export class QzPrintService {
   private readonly qz: any = (qzModule as any).default ?? qzModule;
@@ -27,6 +34,37 @@ export class QzPrintService {
   /** Intenta conectar con QZ Tray en este equipo e indica si está funcionando. */
   checkConnection(): Promise<boolean> {
     return this.connectIfAvailable();
+  }
+
+  getPrinterPreference(): PrinterPreference {
+    try {
+      const value = localStorage.getItem(PRINTER_PREFERENCE_KEY);
+      if (!value) return { useWindowsDefault: true, printerName: '' };
+      const saved = JSON.parse(value) as Partial<PrinterPreference>;
+      return {
+        useWindowsDefault: saved.useWindowsDefault !== false,
+        printerName: typeof saved.printerName === 'string' ? saved.printerName : ''
+      };
+    } catch {
+      return { useWindowsDefault: true, printerName: '' };
+    }
+  }
+
+  savePrinterPreference(preference: PrinterPreference): void {
+    localStorage.setItem(PRINTER_PREFERENCE_KEY, JSON.stringify({
+      useWindowsDefault: preference.useWindowsDefault,
+      printerName: preference.useWindowsDefault ? '' : preference.printerName.trim()
+    }));
+  }
+
+  async getAvailablePrinters(): Promise<string[]> {
+    if (!(await this.connectIfAvailable())) return [];
+    try {
+      const printers = await this.qz.printers.find();
+      return Array.isArray(printers) ? printers.map(String).sort((a, b) => a.localeCompare(b, 'es')) : [];
+    } catch {
+      return [];
+    }
   }
 
   private async connectIfAvailable(): Promise<boolean> {
@@ -81,12 +119,21 @@ export class QzPrintService {
 
     if (await this.connectIfAvailable()) {
       try {
-        const printer = await this.qz.printers.getDefault();
-        const config = this.qz.configs.create(printer, {
-          jobName: title,
-          units: 'mm',
-          size: this.qzPaperSize(paper)
-        });
+        const preference = this.getPrinterPreference();
+        const printer = preference.useWindowsDefault || !preference.printerName
+          ? await this.qz.printers.getDefault()
+          : preference.printerName;
+        if (!printer) throw new Error('No hay una impresora predeterminada configurada en Windows.');
+
+        // El tipo de papel configurado puede ser 80 mm aunque el usuario cambie
+        // temporalmente a una impresora convencional. En ese caso no debemos
+        // enviarle un rollo de 80 mm: el controlador de Windows decide su papel.
+        const configOptions: Record<string, unknown> = { jobName: title };
+        if (this.isThermalPrinter(printer) && (paper === '80mm' || paper === '90mm')) {
+          configOptions['units'] = 'mm';
+          configOptions['size'] = this.qzPaperSize(paper);
+        }
+        const config = this.qz.configs.create(printer, configOptions);
         await this.qz.print(config, [{ type: 'pixel', format: 'html', flavor: 'plain', data: documentHtml.replace(/<script[\s\S]*?<\/script>/gi, '') }]);
         return 'qz';
       } catch {
@@ -112,13 +159,19 @@ export class QzPrintService {
     }
   }
 
+  private isThermalPrinter(printer: string): boolean {
+    return /(?:\bpos\b|thermal|t[eé]rmica|(?:^|\D)(?:80|90)\s*(?:mm)?\b|epson\s*tm|xprinter|bixolon|zebra|rongta|gprinter|star\s*micronics)/i.test(printer);
+  }
+
   private applyPaperLayout(html: string, paper: PrintPaper): string {
     const layout = paper === '80mm'
       ? '@page{size:80mm auto;margin:3mm!important}html,body{width:74mm!important;max-width:74mm!important;margin:0!important}.print-document{width:80mm!important}'
       : paper === '90mm'
         ? '@page{size:90mm auto;margin:3mm!important}html,body{width:84mm!important;max-width:84mm!important;margin:0!important}.print-document{width:90mm!important}'
         : paper === 'media_carta'
-          ? '@page{size:139.7mm 215.9mm;margin:10mm!important}html,body{width:auto!important;max-width:none!important}.print-document{width:auto!important;max-width:none!important}'
+          // Cada documento define su orientación para media carta. Forzar aquí
+          // 139.7 mm de ancho recortaba documentos horizontales, como cotizaciones.
+          ? 'html,body{width:auto!important;max-width:none!important}.print-document{width:auto!important;max-width:none!important}'
           : '@page{size:215.9mm 279.4mm;margin:12mm!important}html,body{width:auto!important;max-width:none!important}.print-document{width:auto!important;max-width:none!important}';
 
     return html.replace('</head>', `<style id="company-print-paper">${layout}</style></head>`);

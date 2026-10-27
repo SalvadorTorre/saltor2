@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Análisis de ventas: un solo llamado devuelve todos los cortes del período.
 --   * Montos "neto" = sin ITBIS (total_linea incluye ITBIS).
@@ -185,8 +184,6 @@ select jsonb_build_object(
   )
 );
 $$;
-
 revoke all on function myappdb.reporte_ventas_analisis(date, date) from public, anon;
 grant execute on function myappdb.reporte_ventas_analisis(date, date) to authenticated, service_role;
-
 commit;

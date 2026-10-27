@@ -6,6 +6,7 @@ import { UserRecord, UserFormModel, Company } from '../../app.models';
 import { CompaniesService } from '../../core/services/companies/companies.service';
 import { UsersService } from '../../core/services/users/users.service';
 import { BranchesService } from '../../core/services/branches/branches.service';
+import { AuthService } from '../../core/services/auth/auth.service';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -34,13 +35,15 @@ export class UsersPageComponent implements OnInit {
   isSavingUser = false;
   selectedUserId: number | null = null;
   openUserOptionsId: number | null = null;
+  private activeCompanyId: number | null = null;
   userForm: UserFormModel = this.createEmptyUserForm();
 
   constructor(
     public data: AppDataService,
     private readonly usersService: UsersService,
     private readonly companiesService: CompaniesService,
-    private readonly branchesService: BranchesService
+    private readonly branchesService: BranchesService,
+    private readonly auth: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -287,7 +290,7 @@ export class UsersPageComponent implements OnInit {
       confirmPassword: '',
       email: '',
       phone: '',
-      companyId: null,
+      companyId: this.activeCompanyId,
       branch: '',
       role: '',
       status: 'Activo'
@@ -297,12 +300,18 @@ export class UsersPageComponent implements OnInit {
   private async loadInitialData(): Promise<void> {
     this.isLoadingUsers = true;
     try {
+      const session = await this.auth.restoreSession();
+      if (!session?.companyId) {
+        throw new Error('No se encontró una empresa activa para esta sesión.');
+      }
+
+      this.activeCompanyId = session.companyId;
       const [users, companies] = await Promise.all([
-        this.usersService.getUsers(),
+        this.usersService.getUsers(session.companyId),
         this.companiesService.getCompanies()
       ]);
       this.data.users = users;
-      this.data.companies = companies;
+      this.data.companies = companies.filter((company) => company.id === session.companyId);
       const firstUser = users[0];
       if (firstUser) {
         this.selectedUserId = firstUser.id;
@@ -314,6 +323,7 @@ export class UsersPageComponent implements OnInit {
       } else {
         this.selectedUserId = null;
         this.startCreateUser();
+        await this.loadBranchesForCompany(session.companyId);
         this.userMessage = 'No hay usuarios registrados. Puedes crear el primero.';
       }
     } catch (error) {

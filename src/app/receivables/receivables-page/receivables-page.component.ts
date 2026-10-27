@@ -298,7 +298,7 @@ export class ReceivablesPageComponent implements OnInit {
   // -------------------------------------------------------------------------
   printReceipt(receipt: Receipt): void {
     const method = this.methodName(receipt.paymentCode);
-    const rows = receipt.applications.map((a) => `<tr><td>${this.esc(a.invoiceNumber)}</td><td class="n">${this.money(a.amount)}</td></tr>`).join('');
+    const rows = receipt.applications.map((a) => `<tr><td>${this.esc(a.invoiceNumber)}</td><td class="n">${this.printMoney(a.amount)}</td></tr>`).join('');
     const body = `
       ${this.printHeader('RECIBO DE COBRO', receipt.number)}
       ${receipt.status === 'Anulado' ? '<p class="void">ANULADO</p>' : ''}
@@ -308,7 +308,7 @@ export class ReceivablesPageComponent implements OnInit {
         ${receipt.reference ? `<tr><th>Referencia</th><td colspan="3">${this.esc(receipt.reference)}</td></tr>` : ''}
       </table>
       <table class="lines"><thead><tr><th>Factura</th><th class="n">Monto aplicado</th></tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><th>Total recibido</th><th class="n">${this.money(receipt.total)}</th></tr></tfoot></table>
+        <tfoot><tr><th>Total recibido</th><th class="n">${this.printMoney(receipt.total)}</th></tr></tfoot></table>
       ${receipt.notes ? `<p class="notes">${this.esc(receipt.notes)}</p>` : ''}
       <div class="signs"><span>Recibido por: ${this.esc(receipt.userName)}</span><span>Firma del cliente</span></div>`;
     this.openPrint(`Recibo ${receipt.number}`, body);
@@ -348,14 +348,14 @@ export class ReceivablesPageComponent implements OnInit {
         ${this.printHeader('ESTADO DE CUENTA', `Al ${this.date(this.today())}`)}
         <table class="meta">
           <tr><th>Cliente</th><td>${this.esc(client?.name ?? clientName)}</td><th>Documento</th><td>${this.esc(client?.document ?? '')}</td></tr>
-          <tr><th>Teléfono</th><td>${this.esc(client?.phone ?? '')}</td><th>Límite de crédito</th><td>${client?.creditLimit ? this.money(client.creditLimit) : 'Sin límite'}</td></tr>
-          <tr><th>Días de crédito</th><td>${client?.creditDays ?? 30}</td><th>Saldo actual</th><td><b>${this.money(this.sum(open.map((i) => i.balance)))}</b></td></tr>
+          <tr><th>Teléfono</th><td>${this.esc(client?.phone ?? '')}</td><th>Límite de crédito</th><td>${client?.creditLimit ? this.printMoney(client.creditLimit) : 'Sin límite'}</td></tr>
+          <tr><th>Días de crédito</th><td>${client?.creditDays ?? 30}</td><th>Saldo actual</th><td><b>${this.printMoney(this.sum(open.map((i) => i.balance)))}</b></td></tr>
         </table>
         <table class="lines"><thead><tr><th>Fecha</th><th>Tipo</th><th>Documento</th><th>Detalle</th><th class="n">Cargo</th><th class="n">Abono</th><th class="n">Saldo</th></tr></thead>
-          <tbody>${lines.map((l) => `<tr><td>${this.date(l.date)}</td><td>${l.type}</td><td>${this.esc(l.document)}</td><td>${this.esc(l.detail)}</td><td class="n">${l.charge ? this.money(l.charge) : ''}</td><td class="n">${l.credit ? this.money(l.credit) : ''}</td><td class="n">${this.money(l.balance)}</td></tr>`).join('') || '<tr><td colspan="7">Sin movimientos a crédito.</td></tr>'}</tbody></table>
+          <tbody>${lines.map((l) => `<tr><td>${this.date(l.date)}</td><td>${l.type}</td><td>${this.esc(l.document)}</td><td>${this.esc(l.detail)}</td><td class="n">${l.charge ? this.printMoney(l.charge) : ''}</td><td class="n">${l.credit ? this.printMoney(l.credit) : ''}</td><td class="n">${this.printMoney(l.balance)}</td></tr>`).join('') || '<tr><td colspan="7">Sin movimientos a crédito.</td></tr>'}</tbody></table>
         <h3>Antigüedad del saldo</h3>
         <table class="lines aging"><thead><tr>${buckets.map(([label]) => `<th class="n">${label}</th>`).join('')}<th class="n">Total</th></tr></thead>
-          <tbody><tr>${buckets.map(([, list]) => `<td class="n">${this.money(this.sum(list.map((i) => i.balance)))}</td>`).join('')}<td class="n"><b>${this.money(this.sum(open.map((i) => i.balance)))}</b></td></tr></tbody></table>`;
+          <tbody><tr>${buckets.map(([, list]) => `<td class="n">${this.printMoney(this.sum(list.map((i) => i.balance)))}</td>`).join('')}<td class="n"><b>${this.printMoney(this.sum(open.map((i) => i.balance)))}</b></td></tr></tbody></table>`;
       this.openPrint(`Estado de cuenta ${client?.name ?? clientName}`, body);
     } catch (error) {
       void Swal.fire({ icon: 'error', title: 'No se pudo generar el estado de cuenta', text: this.messageFrom(error, 'Intente de nuevo.') });
@@ -367,6 +367,7 @@ export class ReceivablesPageComponent implements OnInit {
   // -------------------------------------------------------------------------
   methodName(code: number): string { return this.paymentMethods.find((m) => m.code === code)?.description ?? `Forma ${code}`; }
   money(value: number): string { return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(value || 0); }
+  private printMoney(value: number): string { return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0); }
   date(value: string): string { if (!value) return ''; const [y, m, d] = value.slice(0, 10).split('-'); return `${d}/${m}/${y}`; }
   overdueLabel(days: number): string { return days <= 0 ? 'Al día' : `${days} día${days === 1 ? '' : 's'}`; }
 

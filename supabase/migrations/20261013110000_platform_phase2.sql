@@ -1,5 +1,4 @@
 begin;
-
 -- ===========================================================================
 -- Plataforma (fase 2): contratos con las empresas, equipos instalados en cada
 -- local (instalaciones) y visitas de servicio. Solo los dueños del sistema.
@@ -8,7 +7,6 @@ begin;
 
 -- Contratos -------------------------------------------------------------------
 create sequence if not exists myappdb.plataforma_contratos_numero_seq;
-
 create table if not exists myappdb.plataforma_contratos (
   id bigint generated always as identity primary key,
   numero text not null unique,
@@ -35,7 +33,6 @@ create table if not exists myappdb.plataforma_contratos (
   check (fecha_fin is null or fecha_fin >= fecha_inicio)
 );
 create index if not exists plataforma_contratos_empresa_idx on myappdb.plataforma_contratos (empresa_id, fecha_inicio desc);
-
 create or replace function private.tg_plataforma_contrato_numero()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -50,7 +47,6 @@ revoke all on function private.tg_plataforma_contrato_numero() from public, anon
 drop trigger if exists plataforma_contratos_numero on myappdb.plataforma_contratos;
 create trigger plataforma_contratos_numero before insert on myappdb.plataforma_contratos
   for each row execute function private.tg_plataforma_contrato_numero();
-
 -- Instalaciones locales (equipos en cada empresa/sucursal) ----------------------
 create table if not exists myappdb.plataforma_instalaciones (
   id bigint generated always as identity primary key,
@@ -75,7 +71,6 @@ create table if not exists myappdb.plataforma_instalaciones (
   actualizado_en timestamptz not null default now()
 );
 create index if not exists plataforma_instalaciones_empresa_idx on myappdb.plataforma_instalaciones (empresa_id);
-
 -- Visitas y servicios (instalación, mantenimiento, soporte, capacitación) --------
 create table if not exists myappdb.plataforma_visitas (
   id bigint generated always as identity primary key,
@@ -91,7 +86,6 @@ create table if not exists myappdb.plataforma_visitas (
   creado_en timestamptz not null default now()
 );
 create index if not exists plataforma_visitas_empresa_idx on myappdb.plataforma_visitas (empresa_id, fecha desc);
-
 -- Seguridad: solo los dueños -----------------------------------------------------
 do $$
 declare t text;
@@ -107,7 +101,6 @@ begin
     execute format('create trigger %I after insert or update or delete on myappdb.%I for each row execute function private.tg_bitacora()', t || '_bitacora', t);
   end loop;
 end $$;
-
 -- Un contrato vigente o firmado no se borra: se cancela.
 drop policy if exists plataforma_contratos_dueno on myappdb.plataforma_contratos;
 create policy plataforma_contratos_dueno on myappdb.plataforma_contratos for select to authenticated using ((select private.es_dueno_sistema()));
@@ -119,7 +112,6 @@ create policy plataforma_contratos_dueno_update on myappdb.plataforma_contratos 
 drop policy if exists plataforma_contratos_dueno_delete on myappdb.plataforma_contratos;
 create policy plataforma_contratos_dueno_delete on myappdb.plataforma_contratos for delete to authenticated
   using ((select private.es_dueno_sistema()) and estado = 'Borrador' and firmado_en is null);
-
 -- Resumen: agrega contratos, equipos y visitas -----------------------------------
 create or replace function myappdb.plataforma_resumen()
 returns jsonb
@@ -188,5 +180,4 @@ end;
 $$;
 revoke all on function myappdb.plataforma_resumen() from public, anon;
 grant execute on function myappdb.plataforma_resumen() to authenticated;
-
 commit;

@@ -1,4 +1,4 @@
-import { endpoint, parseResult, payload, PENDING, serviceBase, STATES, TERMINAL, type DocumentKind } from './ecf-queue.ts';
+import { directSignatureEndpoint, endpoint, parseResult, payload, PENDING, serviceBase, STATES, TERMINAL, type DocumentKind } from './ecf-queue.ts';
 // Supabase's Edge client is injected so this module shares the caller's schema and service role.
 type Db = any;
 export interface Operation {
@@ -31,14 +31,19 @@ export async function saveResult(db: Db, op: Operation, status: string, result: 
 }
 export async function submitOperation(db: Db, op: Operation, scenario: Record<string, string>, headers: Record<string, string>): Promise<any> {
   if (!op.claimed) return operationResult(op);
-  const body = { scenarios: [scenario] };
+  // El servicio de firma de proformas recibe un escenario directo; la cola
+  // de DGII conserva el sobre scenarios[] usado por su endpoint.
+  const body = op.modo === 'FIRMA' ? scenario : { scenarios: [scenario] };
   // La reclamación SQL ya bloquea otros POST. Guardar el payload antes del HTTP conserva trazabilidad.
   await saveResult(db, op, 'ENVIANDO_SERVICIO', { dgii_estado: 'Preparando envío' }, body);
   if (op.modo === 'COLA') headers['x-cert-persist'] = 'true';
   else delete headers['x-cert-persist'];
   let response: Response; let raw: string; let data: unknown;
   try {
-    response = await fetch(endpoint(op.url_base, op.ambiente, op.modo === 'FIRMA'), {
+    const url = op.modo === 'FIRMA'
+      ? directSignatureEndpoint(op.url_base, op.ambiente)
+      : endpoint(op.url_base, op.ambiente, false);
+    response = await fetch(url, {
       method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(120_000)
     });
     raw = await response.text();
@@ -53,7 +58,10 @@ export async function submitOperation(db: Db, op: Operation, scenario: Record<st
   const p = payload(data);
   let status: string;
   if (op.modo === 'FIRMA') {
-    status = response.ok && typeof p.xmlFirmado === 'string' && p.xmlFirmado.trim() ? 'FIRMADA' : response.ok ? 'ENVIO_INCIERTO' : 'ERROR';
+    // Los distintos proveedores pueden devolver el XML firmado dentro de
+    // responseXML, responseRFCE o en el resultado principal.
+    const signedXml = parseResult(data, 'FIRMADA', raw).ecf_xml_firmado;
+    status = response.ok && typeof signedXml === 'string' && signedXml.trim() ? 'FIRMADA' : response.ok ? 'ENVIO_INCIERTO' : 'ERROR';
   } else if (response.status === 202 && p.operationId) {
     status = PENDING.includes(String(p.status)) ? String(p.status) : 'EN_COLA';
   } else {

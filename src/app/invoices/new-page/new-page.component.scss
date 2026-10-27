@@ -46,3 +46,15 @@
 }
 
 .line-editor-notice { margin: 6px 0 0; padding: 6px 10px; border-radius: 6px; background: #eef5ff; color: #1d4f91; font-size: 13px; font-weight: 600; }
+
+/* Orden de venta: mismo flujo de productos, con identidad comercial distinta a Facturación. */
+.invoice-content--sale-order .invoice-sticky-header { background: linear-gradient(180deg, #fff7ed 0%, #fffbf5 100%); border-bottom-color: #fdba74; }
+.invoice-content--sale-order .dashboard-header h2,
+.invoice-content--sale-order .invoice-feedback { color: #9a3412; }
+.invoice-content--sale-order .dashboard-header__pill { color: #9a3412; background: #ffedd5; border-color: #fdba74; }
+.invoice-content--sale-order .invoice-module-tabs__button--active { color: #9a3412; border-color: #ea580c; background: #fff7ed; }
+.invoice-content--sale-order .primary-action { background: #c2410c; border-color: #c2410c; }
+.invoice-content--sale-order .primary-action:hover { background: #9a3412; border-color: #9a3412; }
+.invoice-content--sale-order .invoice-summary__card { border-top-color: #ea580c; }
+.invoice-content--read-only .invoice-main { pointer-events: none; opacity: .82; }
+.invoice-content--read-only .invoice-summary__actions { pointer-events: auto; opacity: 1; }

@@ -12,14 +12,11 @@
 -- Todo en una transacción: si algo falla, no se carga nada.
 -- ===========================================================================
 begin;
-
 alter table myappdb.clients drop constraint if exists clients_code_key;
 alter table myappdb.clients drop constraint if exists clients_document_number_key;
 drop index if exists myappdb.clients_code_key;
 drop index if exists myappdb.clients_document_number_key;
-
 alter table myappdb.clients disable trigger clients_bitacora;
-
 insert into myappdb.clients
   (empresa_id, codigo, nombre_completo, tipo_documento, numero_documento, telefono, direccion,
    limite_credito, dias_credito, estado, categoria)
@@ -76,13 +73,10 @@ values
   (2, '22278', 'ALDRIN MORENO', 'Cedula', 'SD-22278', '849-257-5654', 'C-YAMASA SAN FELIPE', 50000.00, 8, 'Activo', 'Minorista'),
   (2, '22279', 'D ANGELA N DRINK BAR', 'Cedula', 'SD-22279', '809-886-0098', 'CANAAN 1RO', 50000.00, 8, 'Activo', 'Minorista')
 on conflict do nothing;
-
 alter table myappdb.clients enable trigger clients_bitacora;
-
 insert into myappdb.bitacora (empresa_id, usuario_nombre, tabla, registro_id, accion, resumen, cambios)
 values (2, 'Migración DBF', 'clients', null, 'Crear', 'Migración de 51 clientes desde cliente.dbf',
         jsonb_build_object('clientes_cargados', jsonb_build_object('despues', 51)));
-
 do $$
 declare v_total int;
 begin
@@ -92,5 +86,4 @@ begin
   end if;
   raise notice 'Clientes migrados en GABANA: %', v_total;
 end $$;
-
 commit;

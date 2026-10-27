@@ -10,16 +10,13 @@
 --  * los 7 productos de prueba de GABANA pasan a Inactivo
 -- ===========================================================================
 begin;
-
 -- 1) Productos de prueba -> Inactivo (se anota en el resumen de la bitácora)
 update myappdb.products set estado = 'Inactivo'
 where empresa_id = 2 and codigo in ('4321', '789654', '01234', '911', '4231', '5878', '5555');
-
 -- 2) Carga: el Kardex registra cada existencia como "Saldo inicial" con esta nota.
 --    La bitácora anota un solo resumen en vez de 536 filas.
 select set_config('saltor.mov_nota', 'Migración desde inventario.dbf', true);
 alter table myappdb.products disable trigger products_bitacora;
-
 insert into myappdb.products
   (empresa_id, codigo, descripcion, unidad, categoria, ubicacion, marca, tipo, tamano,
    existencia, existenciamin, costo, precio_venta, precio_minimo, precio_mayor, cantidadxmayor, cantidadminventa,
@@ -562,14 +559,11 @@ values
   (2, '7460522300188', 'WHISKY KINGS FIRE', 'UNID', 'General', null, 'KINGS FIRE', null, '175ML', 18.00, 0.00, 149.00, 180.00, 171.35, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo'),
   (2, '7501035011328', 'TEQUILA JOSE CUERVO REPOSADO', 'UNID', 'General', null, 'JOSE CUERVO', 'REPOSADO', '750ML', 5.00, 0.00, 1375.00, 1550.00, 1550.00, 0, 0, 1, 'N', 'N', null, false, 18, 'Activo')
 on conflict (empresa_id, codigo) do nothing;
-
 alter table myappdb.products enable trigger products_bitacora;
-
 insert into myappdb.bitacora (empresa_id, usuario_nombre, tabla, registro_id, accion, resumen, cambios)
 values (2, 'Migración DBF', 'products', null, 'Crear', 'Migración de 536 productos desde inventario.dbf; 7 productos de prueba pasaron a Inactivo',
         jsonb_build_object('productos_cargados', jsonb_build_object('despues', 536),
                            'productos_inactivados', jsonb_build_object('despues', '4321, 789654, 01234, 911, 4231, 5878, 5555')));
-
 -- 3) Verificación: si no cuadra, se deshace todo.
 do $$
 declare v_total int; v_kardex int;
@@ -580,5 +574,4 @@ begin
   end if;
   raise notice 'Productos activos en GABANA: %', v_total;
 end $$;
-
 commit;

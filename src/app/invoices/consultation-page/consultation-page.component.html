@@ -20,8 +20,15 @@
         <option>Todos</option>
         <option>No enviado</option>
         <option>Pendiente de configuración</option>
+        <option>Preparando envío</option>
+        <option>En cola</option>
+        <option>Enviando DGII</option>
+        <option>En proceso DGII</option>
+        <option>Envío por confirmar</option>
+        <option>Firmada</option>
         <option>Enviado</option>
         <option>Aceptado</option>
+        <option>Aceptado condicional</option>
         <option>Rechazado</option>
         <option>Error</option>
       </select>
@@ -34,22 +41,21 @@
     <div class="supplier-table-count">Mostrando {{ filteredInvoices.length }} de {{ invoices.length }} facturas</div>
     <div class="invoice-consultation-table">
       <div class="invoice-consultation-table__row invoice-consultation-table__row--head">
-        <span>Fecha</span><span>Factura</span><span>Cliente</span><span>NCF</span><span>Tipo NCF</span><span>Total</span><span>DGII</span><span>Opciones</span>
+        <span>Fecha</span><span>Factura</span><span>Cliente</span><span>NCF</span><span>Tipo NCF</span><span>Total</span><span>Forma de pago</span><span>Opciones</span>
       </div>
       <div *ngFor="let invoice of filteredInvoices" class="invoice-consultation-table__row invoice-consultation-table__row--data">
         <span>{{ invoice.date | date:'dd/MM/yyyy' }}</span>
         <strong>{{ invoice.number }}</strong>
         <span>{{ invoice.customer }}<small *ngIf="invoice.seller" class="invoice-consultation-seller">Vendió: {{ invoice.seller }}</small></span>
         <span>{{ invoice.ncf || 'N/A' }}</span>
-        <span>{{ invoice.ncfType || 'N/A' }}</span>
+        <span class="invoice-ncf-type" [ngClass]="ncfTypeClass(invoice.ncfType)">{{ receiptDocumentType(invoice.ncfType) }}</span>
         <strong>RD${{ invoice.total | number:'1.2-2' }}</strong>
-        <span class="invoice-dgii-status">{{ invoice.status === 'Anulada' ? 'Anulada' : invoice.dgiiStatus }}</span>
+        <span>{{ invoice.paymentMethod }}</span>
         <span class="invoice-consultation-actions">
           <button class="invoice-consultation-view invoice-consultation-view--view" type="button" title="Ver factura" aria-label="Ver factura" (click)="selectInvoice(invoice)"><img src="assets/icons/invoice-view.svg" alt="" /></button>
           <button class="invoice-consultation-view invoice-consultation-view--edit" type="button" title="Editar factura" aria-label="Editar factura" [disabled]="!canEdit(invoice)" (click)="requestEdit(invoice)"><img src="assets/icons/invoice-edit.svg" alt="" /></button>
           <button class="invoice-consultation-view invoice-consultation-view--print" type="button" title="Imprimir factura" aria-label="Imprimir factura" (click)="printInvoice(invoice)"><img src="assets/icons/invoice-print.svg" alt="" /></button>
-          <button class="invoice-consultation-view invoice-consultation-view--send" type="button" title="Reenviar a DGII" aria-label="Reenviar a DGII" [disabled]="!canSendToDgii(invoice)" (click)="resendToDgii(invoice)"><img src="assets/icons/invoice-send.svg" alt="" /></button>
-          <button class="invoice-consultation-view invoice-consultation-view--cancel" type="button" title="Anular factura" aria-label="Anular factura" [disabled]="invoice.status === 'Anulada' || isDgiiLocked(invoice)" (click)="cancelInvoice(invoice)"><img src="assets/icons/invoice-cancel.svg" alt="" /></button>
+          <button class="invoice-consultation-view invoice-consultation-view--cancel" type="button" title="Anular factura" aria-label="Anular factura" [disabled]="invoice.status === 'Anulada' || isDgiiLocked(invoice)" (click)="cancelInvoice(invoice)"><img src="assets/icons/line-trash-red.svg" alt="" /></button>
         </span>
       </div>
       <p *ngIf="!isLoading && !filteredInvoices.length" class="invoice-consultation-empty">No hay facturas que coincidan con la consulta.</p>
@@ -102,6 +108,11 @@
         <h4>Firma y respuesta electrónica</h4>
         <div class="invoice-view-modal__customer">
           <p><strong>Estado:</strong> {{ viewingInvoice.dgiiStatus }}</p>
+          <p><strong>Id. de operación:</strong> {{ viewingInvoice.ecfOperationId || 'No disponible' }}</p>
+          <p><strong>Estado de cola:</strong> {{ viewingInvoice.ecfQueueStatus || 'No disponible' }}</p>
+          <p><strong>Intentos:</strong> {{ viewingInvoice.dgiiAttempts || 0 }}</p>
+          <p><strong>Última actualización:</strong> {{ viewingInvoice.dgiiUpdatedAt ? (viewingInvoice.dgiiUpdatedAt | date:'dd/MM/yyyy, hh:mm:ss a') : 'No disponible' }}</p>
+          <p><strong>Ambiente:</strong> {{ viewingInvoice.ecfEnvironment || 'No disponible' }}</p>
           <p><strong>Código de seguridad:</strong> {{ viewingInvoice.securityCode || 'No disponible' }}</p>
           <p><strong>Fecha de firma:</strong> {{ viewingInvoice.signatureDate ? (viewingInvoice.signatureDate | date:'dd/MM/yyyy, hh:mm:ss a') : 'Pendiente' }}</p>
           <p><strong>Código de respuesta:</strong> {{ viewingInvoice.dgiiCode || 'No disponible' }}</p>
