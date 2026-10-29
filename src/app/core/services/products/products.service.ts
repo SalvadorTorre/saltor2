@@ -55,7 +55,8 @@ export interface ProductEntryLine {
 }
 
 export interface ProductEntryPayload {
-  supplierId: number;
+  supplierId: number | null;
+  supplierName: string;
   date: string;
   reference: string;
   purchaseOrder: string;
@@ -159,7 +160,7 @@ export class ProductsService {
   async getEntries(): Promise<ProductEntryRecord[]> {
     const { data: headers, error: headersError } = await this.supabase.client
       .from('product_entry_headers')
-      .select('id, codigo, suplidor_id, fecha, referencia, orden_compra, fecha_factura_suplidor, codigo_usuario, nombre_usuario, notas, suplidor:suplidores(nombre_comercial)')
+      .select('id, codigo, suplidor_id, suplidor_nombre, fecha, referencia, orden_compra, fecha_factura_suplidor, codigo_usuario, nombre_usuario, notas, suplidor:suplidores(nombre_comercial)')
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
@@ -169,7 +170,7 @@ export class ProductsService {
 
     const { data: lines, error: linesError } = await this.supabase.client
       .from('product_entries')
-      .select('id, entrada_id, producto_id, cantidad, costo_unitario, producto:products(codigo, descripcion)')
+      .select('id, entrada_id, producto_id, cantidad, costo_unitario, producto:products(codigo, descripcion, marca, tipo, tamano)')
       .in('entrada_id', entryIds)
       .order('id', { ascending: true });
     if (linesError) throw linesError;
@@ -182,7 +183,9 @@ export class ProductsService {
         id: Number(line.id),
         productId: Number(line.producto_id),
         productCode: line.producto?.codigo ?? '',
-        productDescription: line.producto?.descripcion ?? 'Producto no disponible',
+        productDescription: [line.producto?.descripcion, line.producto?.marca, line.producto?.tipo, line.producto?.tamano]
+          .filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+          .join(' ') || 'Producto no disponible',
         quantity: Number(line.cantidad),
         unitCost: Number(line.costo_unitario)
       });
@@ -193,7 +196,7 @@ export class ProductsService {
       id: Number(header.id),
       code: header.codigo,
       supplierId: header.suplidor_id === null ? null : Number(header.suplidor_id),
-      supplierName: header.suplidor?.nombre_comercial ?? 'Sin suplidor',
+      supplierName: header.suplidor?.nombre_comercial ?? header.suplidor_nombre ?? 'Sin suplidor',
       date: header.fecha,
       reference: header.referencia ?? '',
       purchaseOrder: header.orden_compra ?? '',
@@ -308,6 +311,7 @@ export class ProductsService {
   private toEntryPayload(payload: ProductEntryPayload): Record<string, unknown> {
     return {
       p_suplidor_id: payload.supplierId,
+      p_suplidor_nombre: payload.supplierName,
       p_fecha: payload.date,
       p_referencia: payload.reference,
       p_orden_compra: payload.purchaseOrder,

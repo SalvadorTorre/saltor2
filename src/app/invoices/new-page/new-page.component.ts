@@ -213,6 +213,7 @@ export class InvoiceNewPageComponent implements OnInit {
   dgiiDialog: 'processing' | 'success' | 'error' | null = null;
   dgiiDialogMessage = '';
   savedInvoice: InvoiceRow | null = null;
+  private savedAsProforma = false;
   private editingExistingInvoiceId: number | null = null;
   isViewingOrder = false;
   private nextInvoiceLineId = 1;
@@ -348,8 +349,12 @@ export class InvoiceNewPageComponent implements OnInit {
 
   get availableNcfTypes(): string[] {
     const activeTypes = this.data.ncfTypeList.filter((type) => type.status === 'Activa');
-    if (this.proformaEnabled && !this.isCashPaymentMethod) return [this.consumerNcfType];
-    if (this.proformaEnabled && !this.hasValidInvoiceRnc) return [this.proformaNcfType];
+    // Con un RNC validado se habilitan los comprobantes fiscales. Sin RNC,
+    // la venta conserva el único tipo visible E32.
+    if (!this.saleOrder) {
+      if (!this.hasValidInvoiceRnc) return [this.consumerNcfType];
+      return this.toNcfOptions(activeTypes.filter((type) => type.type === 1 && type.code !== '332'));
+    }
     const allowedTypes = this.hasValidInvoiceRnc
       ? activeTypes.filter((type) => type.type === 1 && type.code !== '32')
       : activeTypes.filter((type) => type.code === '32');
@@ -372,7 +377,7 @@ export class InvoiceNewPageComponent implements OnInit {
   billingMode: BillingMode = 'Directo';
   get isCashierMode(): boolean { return !this.saleOrder && this.billingMode === 'Caja'; }
 
-  get isProforma(): boolean { return !this.saleOrder && /(?:^|\D)332(?:\D|$)/.test(this.invoiceForm.ncfType); }
+  get isProforma(): boolean { return !this.saleOrder && (this.savedAsProforma || /(?:^|\D)332(?:\D|$)/.test(this.invoiceForm.ncfType)); }
 
   get documentName(): string { return this.saleOrder ? 'Orden de venta' : 'Factura'; }
 
@@ -384,9 +389,8 @@ export class InvoiceNewPageComponent implements OnInit {
 
   get requiresDgiiOnSave(): boolean {
     if (this.saleOrder) return false;
-    if (this.isProforma) return true;
-    const typeCode = this.invoiceForm.ncfType.match(/(?:^|\D)(31|44|45|46)(?:\D|$)/)?.[1];
-    return !!typeCode;
+    // E32 normal se encola; E332 se firma como proforma. Ambos se procesan.
+    return true;
   }
 
   get saveInvoiceLabel(): string {
@@ -845,6 +849,7 @@ export class InvoiceNewPageComponent implements OnInit {
 
   startNewInvoice(): void {
     this.selectedClient = null;
+    this.savedAsProforma = false;
     this.invoiceForm = {
       customerId: null,
       customerName: '',
@@ -937,6 +942,7 @@ export class InvoiceNewPageComponent implements OnInit {
   clearInvoice(silent = false): void {
     this.isClearConfirmationVisible = false;
     this.selectedClient = null as any;
+    this.savedAsProforma = false;
     this.invoiceForm = {
       customerId: null,
       customerName: '',
@@ -1074,6 +1080,7 @@ export class InvoiceNewPageComponent implements OnInit {
         this.data.rncRecords = [record, ...this.data.rncRecords.filter((item) => item.rnc !== record.rnc)];
         this.populateCustomerFromRncRecord(record);
         this.isRncInvalid = false;
+        this.applyNcfTypeByRnc(null);
         this.invoiceMessage = `RNC consultado en Megaplus: ${record.legalName}.`;
       } catch (error) {
         this.invoiceMessage = error instanceof Error ? error.message : 'No se pudo consultar el RNC.';
@@ -1334,8 +1341,12 @@ export class InvoiceNewPageComponent implements OnInit {
     if (this.isSavingInvoice || (!this.saleOrder && !this.isPaymentConfirmationVisible)) return;
     // Preserve the selected document type while async data loads finish.
     const selectedNcfType = this.invoiceForm.ncfType;
-    const isProformaInvoice = this.isProforma;
-    const requiresEcfProcessing = this.requiresDgiiOnSave;
+    const usesFiscalNcf = !this.saleOrder && this.hasValidInvoiceRnc;
+    const isProformaInvoice = !this.saleOrder && !usesFiscalNcf && Number(this.paymentMethodCode) === 1;
+    const storedNcfType = this.saleOrder
+      ? this.toStoredNcfType(this.invoiceForm.ncfType)
+      : usesFiscalNcf ? this.toStoredNcfType(selectedNcfType) : isProformaInvoice ? 'E332' : 'E32';
+    const requiresEcfProcessing = !this.saleOrder;
     const isCashierSale = this.isCashierMode;
     const paid = Number(this.paymentReceived);
     if (!this.saleOrder && !isCashierSale && !this.isCreditSale && (!Number.isFinite(paid) || paid < this.invoiceGrandTotal)) {
@@ -1376,7 +1387,7 @@ export class InvoiceNewPageComponent implements OnInit {
         customerAddress: this.invoiceForm.customerAddress,
         customerCity: this.invoiceForm.customerCity,
         invoiceDate: this.invoiceForm.invoiceDate,
-        ncfType: this.toStoredNcfType(selectedNcfType),
+        ncfType: storedNcfType,
         ncf: this.invoiceForm.ncf,
         paymentMethod: this.invoiceForm.paymentMethod,
         paymentMethodCode: this.paymentMethodCode,
@@ -1396,7 +1407,10 @@ export class InvoiceNewPageComponent implements OnInit {
           ? await this.invoicesService.updateInvoice(this.editingExistingInvoiceId, invoiceData)
           : await this.invoicesService.createInvoice(invoiceData);
       this.invoiceForm.invoiceNumber = savedInvoice.numero_factura;
-      if (!this.saleOrder) this.invoiceForm.ncfType = this.getNcfOptionByStoredType(invoiceData.ncfType);
+      if (!this.saleOrder) {
+        this.savedAsProforma = isProformaInvoice;
+        this.invoiceForm.ncfType = usesFiscalNcf ? this.getNcfOptionByStoredType(storedNcfType) : this.consumerNcfType;
+      }
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
       if (this.saleOrder) {
@@ -1496,7 +1510,7 @@ export class InvoiceNewPageComponent implements OnInit {
       rnc: invoice.rnc,
       invoiceNumber: invoice.number,
       invoiceDate: invoice.invoiceDate,
-      ncfType: this.getNcfOptionByStoredType(invoice.ncfType),
+      ncfType: this.saleOrder ? this.getNcfOptionByStoredType(invoice.ncfType) : this.consumerNcfType,
       ncf: invoice.ncf,
       paymentMethod: invoice.paymentMethod,
       notes: invoice.notes,
@@ -1509,6 +1523,7 @@ export class InvoiceNewPageComponent implements OnInit {
     this.invoiceLines = invoice.lines.map((line, index) => ({ ...line, id: index + 1 }));
     this.nextInvoiceLineId = this.invoiceLines.length + 1;
     this.editingExistingInvoiceId = invoice.id;
+    this.savedAsProforma = /(?:^|\D)332(?:\D|$)/.test(invoice.ncfType);
     this.isViewingOrder = false;
     this.savedInvoice = null;
     this.editingLineId = null;
@@ -1612,7 +1627,7 @@ export class InvoiceNewPageComponent implements OnInit {
       return `<tr><td>${escape(this.getInvoiceProductCode(line.productId))} &nbsp; ${escape(line.quantity)} x ${money(priceWithoutTax)}<br><b>${escape(line.description)}</b></td><td>${money(line.taxAmount)}</td><td>${money(line.lineTotal)}</td></tr>`;
     }).join('');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(documentTitle)} ${escape(this.savedInvoice.numero_factura)}</title><style>
-      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(2),th:nth-child(3),td:nth-child(2),td:nth-child(3){text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:28mm;height:28mm;display:block;margin:0 auto 5px}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
+      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px;table-layout:fixed}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(1),td:nth-child(1){width:43%}th:nth-child(2),td:nth-child(2){width:19%;text-align:right}th:nth-child(3),td:nth-child(3){width:38%;text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:28mm;height:28mm;display:block;margin:0 auto 5px}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
       <div class="head">${company?.logoUrl ? `<img class="logo" src="${escape(company.logoUrl)}" alt="">` : ''}<div class="company">${escape(company?.legalName || company?.tradeName || session?.companyName || this.data.companyName)}</div><div class="muted">RNC: ${escape(company?.rnc || 'N/D')}</div><div class="muted">${escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${escape(company?.phone || 'N/D')}</div></div>
       <div class="document-data"><div><span>No. Factura:</span>${escape(this.savedInvoice.numero_factura)}</div><div><span>Fecha:</span>${escape(this.invoiceForm.invoiceDate)}</div><div><span>e-NCF:</span>${escape(this.invoiceForm.ncf || 'N/A')}</div></div>
       <div class="receipt-type">${escape(this.receiptDocumentType(this.invoiceForm.ncfType || documentTitle))}</div>
@@ -1738,6 +1753,21 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   private applyNcfTypeByRnc(client?: ClientRecord | null): void {
+    if (!this.saleOrder) {
+      if (this.hasValidInvoiceRnc) {
+        const currentCode = this.invoiceForm.ncfType.match(/(?:^|\D)(31|32|33|34|41|43|44|45|46)(?:\D|$)/)?.[1];
+        // Al pasar de consumidor final a un cliente con RNC, E31 es la
+        // selección inicial. Una vez seleccionado, el usuario puede editarla.
+        if (currentCode === '32' || !this.availableNcfTypes.includes(this.invoiceForm.ncfType)) {
+          this.invoiceForm.ncfType = this.availableNcfTypes.find((type) => this.isNcfCode(type, '31'))
+            ?? this.availableNcfTypes[0]
+            ?? this.consumerNcfType;
+        }
+      } else {
+        this.invoiceForm.ncfType = this.consumerNcfType;
+      }
+      return;
+    }
     if (this.proformaEnabled && !this.isCashPaymentMethod) {
       this.invoiceForm.ncfType = this.consumerNcfType;
       return;
@@ -1761,7 +1791,7 @@ export class InvoiceNewPageComponent implements OnInit {
       ?? this.getNcfOptionBySeriesOrCode(this.defaultNcfElectronic32);
   }
 
-  private get hasValidInvoiceRnc(): boolean {
+  get hasValidInvoiceRnc(): boolean {
     const rnc = this.invoiceForm.rnc.trim();
     return !!rnc && !!(this.findClientByRnc(rnc) ?? this.findRncRecord(rnc));
   }
@@ -1775,7 +1805,6 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   private get defaultInvoiceNcfType(): string {
-    if (this.proformaEnabled && this.isCashPaymentMethod && !this.hasValidInvoiceRnc) return this.proformaNcfType;
     return this.consumerNcfType;
   }
 

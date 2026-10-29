@@ -121,6 +121,21 @@ export interface SubscriptionUpdate {
   notas: string | null;
 }
 
+export interface ProformaSchedule {
+  empresa_id: number;
+  activo: boolean;
+  hora_desde: string;
+  hora_hasta: string;
+  intervalo_minutos: number;
+  lote_por_ciclo: number;
+  maximo_diario: number;
+  contador_fecha: string | null;
+  enviadas_hoy: number;
+  ultimo_proceso_en: string | null;
+  ultimo_resumen: Record<string, unknown>;
+  actualizado_en: string | null;
+}
+
 export interface SubscriptionNotice {
   estado: SubscriptionState;
   estado_calculado: ComputedState;
@@ -258,6 +273,26 @@ export class PlatformService {
     const { data, error } = await this.db.rpc('plataforma_resumen');
     if (error) throw error;
     return data as PlatformSummary;
+  }
+
+  async getProformaSchedule(companyId: number): Promise<ProformaSchedule> {
+    const { data, error } = await this.db.rpc('plataforma_obtener_programacion_proformas', { p_empresa_id: companyId });
+    if (error) throw error;
+    return data as ProformaSchedule;
+  }
+
+  async saveProformaSchedule(schedule: Pick<ProformaSchedule, 'empresa_id' | 'activo' | 'hora_desde' | 'hora_hasta' | 'intervalo_minutos' | 'lote_por_ciclo' | 'maximo_diario'>): Promise<ProformaSchedule> {
+    const { data, error } = await this.db.rpc('plataforma_guardar_programacion_proformas', {
+      p_empresa_id: schedule.empresa_id,
+      p_activo: schedule.activo,
+      p_hora_desde: schedule.hora_desde,
+      p_hora_hasta: schedule.hora_hasta,
+      p_intervalo_minutos: schedule.intervalo_minutos,
+      p_lote_por_ciclo: schedule.lote_por_ciclo,
+      p_maximo_diario: schedule.maximo_diario
+    });
+    if (error) throw error;
+    return data as ProformaSchedule;
   }
 
   async getPlans(): Promise<PlatformPlan[]> {

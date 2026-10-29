@@ -46,6 +46,19 @@ export interface PendingInvoice {
   branchId: number | null;
 }
 
+export type PendingInvoiceView = 'pending' | 'proforma';
+
+export interface ProformaPeriodSummary {
+  period: string;
+  invoices: number;
+  billedTotal: number;
+  proformas: number;
+  proformaTotal: number;
+  deliveryNotes: number;
+  deliveryNoteTotal: number;
+  total: number;
+}
+
 interface Rep607DatabaseRow {
   id: number;
   numero_factura: string;
@@ -123,7 +136,11 @@ export class Rep607Service {
       .filter((invoice) => ['Aceptado', 'Rechazado', 'Aceptado condicional', 'Error'].includes(invoice.status));
   }
 
-  async getPendingInvoices(companyId: number, filters: Pick<Rep607Filters, 'branchId' | 'invoice' | 'from' | 'to'>): Promise<PendingInvoice[]> {
+  async getPendingInvoices(
+    companyId: number,
+    filters: Pick<Rep607Filters, 'branchId' | 'invoice' | 'from' | 'to'>,
+    view: PendingInvoiceView = 'pending'
+  ): Promise<PendingInvoice[]> {
     let query = this.supabase.client
       .from('facturas')
       .select('id, numero_factura, fecha_factura, cliente_nombre, tipo_ncf, ncf, condicion_pago, total, estado_dgii, dgii_estado, idsucursal')
@@ -135,6 +152,9 @@ export class Rep607Service {
     if (filters.invoice.trim()) query = query.ilike('numero_factura', `%${filters.invoice.trim()}%`);
     if (filters.from) query = query.gte('fecha_factura', filters.from);
     if (filters.to) query = query.lte('fecha_factura', filters.to);
+    if (view === 'proforma') {
+      query = query.or('tipo_ncf.ilike.E332%,tipo_ncf.ilike.332%');
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -152,7 +172,77 @@ export class Rep607Service {
         status: row.estado_dgii ?? row.dgii_estado ?? 'No enviado',
         branchId: row.idsucursal
       }))
-      .filter((invoice) => ['No enviado', 'Pendiente de configuración', 'Error', 'Rechazado', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(invoice.status));
+      .filter((invoice) => {
+        const isProforma = /(?:^|\D)332(?:\D|$)/.test(invoice.type);
+        if (view === 'proforma') return isProforma;
+        return !isProforma && ['No enviado', 'Pendiente de configuración', 'Error', 'Rechazado', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(invoice.status);
+      });
+  }
+
+  async getProformaPeriodSales(
+    companyId: number,
+    filters: Pick<Rep607Filters, 'branchId' | 'from' | 'to'>
+  ): Promise<ProformaPeriodSummary[]> {
+    let query = this.supabase.client
+      .from('facturas')
+      .select('fecha_factura, tipo_ncf, total, estado')
+      .eq('idempres', companyId)
+      .neq('estado', 'Anulada')
+      .order('fecha_factura', { ascending: true });
+
+    if (filters.branchId !== 'Todas') query = query.eq('idsucursal', Number(filters.branchId));
+    if (filters.from) query = query.gte('fecha_factura', filters.from);
+    if (filters.to) query = query.lte('fecha_factura', filters.to);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const parseDate = (value: string) => new Date(`${value}T12:00:00`);
+    const start = filters.from ? parseDate(filters.from) : null;
+    const end = filters.to ? parseDate(filters.to) : null;
+    const rangeDays = start && end ? Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1 : 31;
+    const grouping = rangeDays <= 7 ? 'day' : rangeDays <= 31 ? 'week' : 'month';
+    const groups = new Map<string, ProformaPeriodSummary>();
+    const format = (value: Date) => value.toISOString().slice(0, 10);
+    const monthName = new Intl.DateTimeFormat('es-DO', { month: 'long', year: 'numeric' });
+    for (const row of (data ?? []) as Array<{ fecha_factura: string; tipo_ncf: string | null; total: number | string; estado: string | null }>) {
+      const date = parseDate(row.fecha_factura);
+      let key: string;
+      let period: string;
+      if (grouping === 'day') {
+        key = format(date);
+        period = key;
+      } else if (grouping === 'week') {
+        const monday = new Date(date);
+        monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        key = format(monday);
+        period = `${format(monday)} - ${format(sunday)}`;
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        period = monthName.format(date);
+      }
+      const summary = groups.get(key) ?? {
+        period, invoices: 0, billedTotal: 0, proformas: 0, proformaTotal: 0,
+        deliveryNotes: 0, deliveryNoteTotal: 0, total: 0
+      };
+      const amount = Number(row.total ?? 0);
+      const status = String(row.estado ?? '').trim().toUpperCase();
+      summary.total += amount;
+      if (status === 'PROFORMA') {
+        summary.proformas += 1;
+        summary.proformaTotal += amount;
+      } else if (status === 'CONDUCE') {
+        summary.deliveryNotes += 1;
+        summary.deliveryNoteTotal += amount;
+      } else if (status === 'FACTURA') {
+        summary.invoices += 1;
+        summary.billedTotal += amount;
+      }
+      groups.set(key, summary);
+    }
+    return [...groups.values()];
   }
 
   async resetInvoiceEcf(invoiceId: number): Promise<void> {

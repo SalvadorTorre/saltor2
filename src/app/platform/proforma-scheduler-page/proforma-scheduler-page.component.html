@@ -1,0 +1,54 @@
+<section class="pf ps">
+  <header class="pf__header">
+    <div>
+      <p class="pf__eyebrow">Plataforma · Facturación electrónica</p>
+      <h2>Envío gradual de proformas</h2>
+      <span>Firma las proformas E332 que marques como <b>PENDIENTE_ENVIO</b>, una por una y dentro del horario configurado.</span>
+    </div>
+  </header>
+
+  <p class="pf__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <section class="ps__notice">
+    <strong>Cómo trabaja</strong>
+    <p>El sistema revisa la cola cada minuto. Respeta la pausa, el lote y el límite diario para evitar procesar una cantidad grande al mismo tiempo.</p>
+    <p>Las proformas se firman gradualmente; por su tipo E332 no se envían a la DGII.</p>
+  </section>
+
+  <form class="pf-form ps__form" (ngSubmit)="save()" *ngIf="companies.length; else noCompanies">
+    <label class="pf-form__wide">Empresa
+      <select name="empresa" [(ngModel)]="selectedCompanyId" (ngModelChange)="changeCompany()" [disabled]="isLoading || isSaving">
+        <option *ngFor="let company of companies" [ngValue]="company.id">{{ company.nombre_comercial }}{{ company.rnc ? ' · RNC ' + company.rnc : '' }}</option>
+      </select>
+    </label>
+
+    <div class="ps__switch pf-form__wide">
+      <div><strong>Procesamiento automático</strong><small>{{ form.activo ? 'Activo: la empresa se procesará dentro de su horario.' : 'Pausado: no se procesarán proformas hasta activarlo.' }}</small></div>
+      <label><input type="checkbox" name="activo" [(ngModel)]="form.activo"><span>{{ form.activo ? 'Activo' : 'Pausado' }}</span></label>
+    </div>
+
+    <label>Hora desde<input name="horaDesde" type="time" [(ngModel)]="form.hora_desde" required></label>
+    <label>Hora hasta<input name="horaHasta" type="time" [(ngModel)]="form.hora_hasta" required></label>
+    <label>Pausa entre ciclos (min.)<input name="pausa" type="number" min="1" max="120" [(ngModel)]="form.intervalo_minutos" required></label>
+    <label>Facturas por ciclo<input name="lote" type="number" min="1" max="10" [(ngModel)]="form.lote_por_ciclo" required></label>
+    <label>Máximo por día<input name="maximo" type="number" min="1" max="5000" [(ngModel)]="form.maximo_diario" required></label>
+
+    <div class="pf-form__wide ps__actions">
+      <small *ngIf="selectedCompany">Configuración de {{ selectedCompany.nombre_comercial }}.</small>
+      <button class="pf__btn" type="submit" [disabled]="isLoading || isSaving">{{ isSaving ? 'Guardando…' : 'Guardar programación' }}</button>
+    </div>
+  </form>
+
+  <section class="ps__status" *ngIf="schedule">
+    <h3>Última actividad</h3>
+    <div class="ps__facts">
+      <div><span>Último ciclo</span><b>{{ schedule.ultimo_proceso_en ? (schedule.ultimo_proceso_en | date:'dd/MM/yyyy h:mm a') : 'Aún no procesado' }}</b></div>
+      <div><span>Firmadas hoy</span><b>{{ schedule.contador_fecha === (latestSummary['fechaLocal'] || '') ? schedule.enviadas_hoy : 0 }} / {{ schedule.maximo_diario }}</b></div>
+      <div><span>Último lote</span><b>{{ latestSummary['processed'] ?? 0 }} procesadas · {{ latestSummary['failed'] ?? 0 }} con error</b></div>
+    </div>
+    <p *ngIf="latestSummary['skipped']" class="ps__muted">{{ latestSummary['skipped'] }}</p>
+    <p *ngIf="latestSummary['errors']" class="pf__error">{{ latestSummary['errors'] }}</p>
+  </section>
+</section>
+
+<ng-template #noCompanies><p class="pf__empty">No hay empresas disponibles para configurar.</p></ng-template>

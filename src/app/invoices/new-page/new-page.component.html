@@ -150,7 +150,7 @@
               </label>
               <label class="field invoice-inline-field" *ngIf="!saleOrder">
                 <span>Tipo NCF</span>
-                <select name="invoiceNcfType" tabindex="-1" [(ngModel)]="invoiceForm.ncfType" (ngModelChange)="onNcfTypeChange()">
+                <select name="invoiceNcfType" [disabled]="!hasValidInvoiceRnc" [(ngModel)]="invoiceForm.ncfType" (ngModelChange)="onNcfTypeChange()">
                   <option *ngFor="let type of availableNcfTypes" [ngValue]="type">{{ type }}</option>
                 </select>
               </label>

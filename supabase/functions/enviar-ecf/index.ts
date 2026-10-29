@@ -30,26 +30,46 @@ function taxTotals(lines: TaxLine[]): Record<string, string> {
 function byteaToBase64(value: string): string { const hex = value.startsWith('\\x') ? value.slice(2) : value; let binary = ''; for (let i = 0; i < hex.length; i += 2) binary += String.fromCharCode(Number.parseInt(hex.slice(i, i + 2), 16)); return btoa(binary); }
 function base64ToBytes(value: string): ArrayBuffer { return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)).buffer as ArrayBuffer; }
 async function decryptPassword(value: string): Promise<string> { const secret = Deno.env.get('ECF_ENCRYPTION_KEY') ?? Deno.env.get('JWT_SECRET'); if (!secret) throw new Error('No está configurada la clave de protección para el certificado digital.'); const [ivText, dataText] = value.split('.'); if (!ivText || !dataText) throw new Error('La clave del certificado no tiene un formato válido.'); const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret)); const key = await crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['decrypt']); const decoded = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(ivText) }, key, base64ToBytes(dataText)); return new TextDecoder().decode(decoded); }
+function validInternalScheduler(request: Request): boolean {
+  const expected = Deno.env.get('ECF_RECONCILER_SECRET');
+  const received = request.headers.get('x-ecf-reconciler-secret');
+  if (!expected || !received || expected.length !== received.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) difference |= expected.charCodeAt(index) ^ received.charCodeAt(index);
+  return difference === 0;
+}
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Método no permitido.' }, 405);
   try {
-    const authorization = request.headers.get('Authorization') ?? '';
-    const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authorization } } });
-    const { data: authData, error: authError } = await userClient.auth.getUser();
-    if (authError || !authData.user) return json({ error: 'Sesión no válida.' }, 401);
+    const internalScheduler = validInternalScheduler(request);
     const body = await request.json();
     const invoiceId = Number(body.invoiceId);
     if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) return json({ error: 'Indica una factura válida para enviar.' }, 400);
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'myappdb' } });
-    const { data: user } = await admin.from('usuarios').select('empresa_id, sucursal_id').eq('auth_usuario_id', authData.user.id).eq('estado', 'Activo').single();
-    if (!user) return json({ error: 'El usuario no tiene una empresa activa.' }, 403);
-    const { data: invoice } = await admin.from('facturas').select('id, idempres, idsucursal, fecha_factura, tipo_ncf, cliente_rnc, cliente_nombre, cliente_direccion, subtotal, itbis, total, forma_pago_codigo, dgii_estado, estado, dgii_intentos').eq('id', invoiceId).eq('idempres', user.empresa_id).eq('idsucursal', user.sucursal_id).single();
+    let user: { empresa_id: number; sucursal_id: number } | null = null;
+    if (!internalScheduler) {
+      const authorization = request.headers.get('Authorization') ?? '';
+      const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authorization } } });
+      const { data: authData, error: authError } = await userClient.auth.getUser();
+      if (authError || !authData.user) return json({ error: 'Sesión no válida.' }, 401);
+      const { data: currentUser } = await admin.from('usuarios').select('empresa_id, sucursal_id').eq('auth_usuario_id', authData.user.id).eq('estado', 'Activo').single();
+      if (!currentUser) return json({ error: 'El usuario no tiene una empresa activa.' }, 403);
+      user = currentUser;
+    }
+
+    let invoiceQuery = admin.from('facturas').select('id, idempres, idsucursal, fecha_factura, tipo_ncf, cliente_rnc, cliente_nombre, cliente_direccion, subtotal, itbis, total, forma_pago_codigo, dgii_estado, estado, dgii_intentos, ecf_queue_status').eq('id', invoiceId);
+    if (user) invoiceQuery = invoiceQuery.eq('idempres', user.empresa_id).eq('idsucursal', user.sucursal_id);
+    const { data: invoice } = await invoiceQuery.single();
     if (!invoice) return json({ error: 'No se encontró la factura de la empresa y sucursal actual.' }, 404);
     if (invoice.estado === 'Anulada' || ['Aceptado', 'Aceptado condicional', 'Firmada'].includes(invoice.dgii_estado)) return json({ error: 'La factura no puede enviarse en su estado actual.' }, 409);
     const proforma = String(invoice.tipo_ncf ?? '').replace(/[^0-9]/g, '') === '332';
+    if (internalScheduler && (!proforma || invoice.ecf_queue_status !== 'PENDIENTE_ENVIO')) {
+      return json({ error: 'La factura no está marcada como proforma pendiente para el procesamiento gradual.' }, 409);
+    }
+    if (!user) user = { empresa_id: invoice.idempres, sucursal_id: Number(invoice.idsucursal) };
     const tipoEcf = proforma ? '32' : typeCode(invoice.tipo_ncf);
     if (!tipoEcf) return json({ error: 'La factura no tiene un tipo e-CF válido.' }, 400);
     const [{ data: company }, { data: config }, { data: certificate }, { data: lines }] = await Promise.all([

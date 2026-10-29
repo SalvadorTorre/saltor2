@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { BranchRecord, BranchesService } from '../../core/services/branches/branches.service';
-import { PendingInvoice, Rep607Invoice, Rep607Service } from '../../core/services/accounting/rep607.service';
+import { PendingInvoice, PendingInvoiceView, ProformaPeriodSummary, Rep607Invoice, Rep607Service } from '../../core/services/accounting/rep607.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
 import { NcfType, SupplierFormModel, SupplierRecord } from '../../app.models';
 import { NcfTypesService } from '../../core/services/ncf-types/ncf-types.service';
@@ -43,7 +43,12 @@ export class AccountingPageComponent implements OnInit {
   isLoadingRep607 = false;
   rep607Error = '';
   pendingFilters = { branchId: 'Todas', invoice: '', from: '', to: '' };
+  pendingTab: PendingInvoiceView = 'pending';
+  proformaTab: 'pending' | 'period' = 'pending';
   pendingInvoices: PendingInvoice[] = [];
+  proformaPeriodRows: ProformaPeriodSummary[] = [];
+  isLoadingProformaPeriod = false;
+  proformaPeriodError = '';
   isLoadingPending = false;
   pendingError = '';
   isProcessingPending = false;
@@ -670,6 +675,45 @@ export class AccountingPageComponent implements OnInit {
 
   get pendingTotal(): number { return this.pendingInvoices.reduce((total, invoice) => total + invoice.total, 0); }
 
+  get isProformaPendingTab(): boolean { return this.pendingTab === 'proforma'; }
+  get isProformaPeriodTab(): boolean { return this.pendingTab === 'proforma' && this.proformaTab === 'period'; }
+  get proformaPeriodTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.total, 0); }
+  get proformaBilledTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.billedTotal, 0); }
+  get proformaTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.proformaTotal, 0); }
+  get proformaDeliveryNoteTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.deliveryNoteTotal, 0); }
+  get proformaPeriodGroupingName(): string {
+    if (!this.pendingFilters.from || !this.pendingFilters.to) return 'semana';
+    const from = new Date(`${this.pendingFilters.from}T12:00:00`);
+    const to = new Date(`${this.pendingFilters.to}T12:00:00`);
+    const days = Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
+    return days <= 7 ? 'día' : days <= 31 ? 'semana' : 'mes';
+  }
+
+  selectPendingTab(tab: PendingInvoiceView): void {
+    if (this.pendingTab === tab) return;
+    this.pendingTab = tab;
+    if (tab === 'pending' || this.proformaTab === 'pending') void this.loadPendingInvoices();
+    else void this.loadProformaPeriodSales();
+  }
+
+  selectProformaTab(tab: 'pending' | 'period'): void {
+    if (this.proformaTab === tab) return;
+    this.proformaTab = tab;
+    if (tab === 'pending') void this.loadPendingInvoices();
+    else {
+      this.setCurrentMonthPeriodIfEmpty();
+      void this.loadProformaPeriodSales();
+    }
+  }
+
+  private setCurrentMonthPeriodIfEmpty(): void {
+    if (this.pendingFilters.from && this.pendingFilters.to) return;
+    const today = new Date();
+    const format = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    this.pendingFilters.from = format(new Date(today.getFullYear(), today.getMonth(), 1));
+    this.pendingFilters.to = format(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  }
+
   async loadPendingInvoices(): Promise<void> {
     this.isLoadingPending = true;
     this.pendingError = '';
@@ -678,7 +722,7 @@ export class AccountingPageComponent implements OnInit {
       if (!user) throw new Error('No hay una sesión activa.');
       this.loggedCompanyName = user.companyName;
       if (!this.branches.length) this.branches = await this.branchesService.getBranches(user.companyId);
-      this.pendingInvoices = await this.rep607Service.getPendingInvoices(user.companyId, this.pendingFilters);
+      this.pendingInvoices = await this.rep607Service.getPendingInvoices(user.companyId, this.pendingFilters, this.pendingTab);
     } catch (error) {
       this.pendingInvoices = [];
       this.pendingError = error instanceof Error ? error.message : 'No se pudieron consultar las facturas pendientes.';
@@ -687,9 +731,28 @@ export class AccountingPageComponent implements OnInit {
     }
   }
 
+  async loadProformaPeriodSales(): Promise<void> {
+    this.isLoadingProformaPeriod = true;
+    this.proformaPeriodError = '';
+    this.setCurrentMonthPeriodIfEmpty();
+    try {
+      const user = await this.auth.restoreSession();
+      if (!user) throw new Error('No hay una sesión activa.');
+      this.loggedCompanyName = user.companyName;
+      if (!this.branches.length) this.branches = await this.branchesService.getBranches(user.companyId);
+      this.proformaPeriodRows = await this.rep607Service.getProformaPeriodSales(user.companyId, this.pendingFilters);
+    } catch (error) {
+      this.proformaPeriodRows = [];
+      this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudo consultar las ventas por período.';
+    } finally {
+      this.isLoadingProformaPeriod = false;
+    }
+  }
+
   clearPendingFilters(): void {
     this.pendingFilters = { branchId: 'Todas', invoice: '', from: '', to: '' };
-    void this.loadPendingInvoices();
+    if (this.isProformaPeriodTab) void this.loadProformaPeriodSales();
+    else void this.loadPendingInvoices();
   }
 
   canSendPending(invoice: PendingInvoice): boolean {

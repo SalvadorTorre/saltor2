@@ -145,6 +145,7 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'empresas' },
       { path: 'empresas', title: 'Plataforma · Empresas', loadComponent: () => import('./platform/companies-page/platform-companies-page.component').then((m) => m.PlatformCompaniesPageComponent) },
+      { path: 'proformas-programadas', title: 'Plataforma · Proformas programadas', loadComponent: () => import('./platform/proforma-scheduler-page/proforma-scheduler-page.component').then((m) => m.ProformaSchedulerPageComponent) },
       { path: 'pagos', title: 'Plataforma · Pagos', loadComponent: () => import('./platform/payments-page/platform-payments-page.component').then((m) => m.PlatformPaymentsPageComponent) },
       { path: 'contratos', title: 'Plataforma · Contratos', loadComponent: () => import('./platform/contracts-page/platform-contracts-page.component').then((m) => m.PlatformContractsPageComponent) },
       { path: 'instalador', title: 'Plataforma · Instalador local', loadComponent: () => import('./platform/local-installer-page/local-installer-page.component').then((m) => m.LocalInstallerPageComponent) },

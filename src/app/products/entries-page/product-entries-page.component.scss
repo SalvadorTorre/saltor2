@@ -28,6 +28,11 @@
 .entry-lines-table__row { font-size: 22px; }
 .entry-lines-table__row--head { background: #102773; border-top: 0; color: #fff; font-size: 20px; font-weight: 800; }
 .entry-lines-table__row button { background: #fff1f2; border: 0; border-radius: 6px; color: #be123c; cursor: pointer; font-weight: 700; padding: 7px; }
+.entry-line-actions { display: flex; gap: 7px; }
+.entry-line-actions button { align-items: center; display: inline-flex; height: 38px; justify-content: center; padding: 0; width: 38px; }
+.entry-line-actions svg { fill: none; height: 19px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; width: 19px; }
+.entry-line-actions__edit { background: #fef3c7 !important; color: #b45309 !important; }
+.entry-line-actions__delete { background: #fee2e2 !important; color: #dc2626 !important; }
 .entry-lines-table__empty { color: #64748b; margin: 0; padding: 12px; text-align: center; }
 .entry-footer { align-items: center; display: flex; gap: 10px; justify-content: flex-end; }
 .entry-footer strong { color: #102773; font-size: 22px; margin-right: auto; }
@@ -55,7 +60,7 @@
 .entry-table-panel { overflow-x: auto; padding: 0; }
 .entry-table-count { color: #64748b; margin: 0; padding: 18px 20px 10px; }
 .entry-table { min-width: 1120px; }
-.entry-table__row { align-items: center; border-top: 1px solid #e2e8f0; display: grid; gap: 14px; grid-template-columns: 105px 135px minmax(220px, 1.7fr) minmax(170px, 1.1fr) 140px 90px 145px 125px; padding: 13px 18px; }
+.entry-table__row { align-items: center; border-top: 1px solid #e2e8f0; display: grid; gap: 14px; grid-template-columns: 105px 135px minmax(200px, 1.5fr) 140px 90px 145px 125px; padding: 13px 18px; }
 .entry-table__row { font-size: 22px; }
 .entry-table__row--head { background: #eff6ff; border-top: 0; color: #174ea6; font-size: 20px; font-weight: 800; text-transform: uppercase; }
 .entry-table small { color: #64748b; display: block; font-size: 15px; margin-top: 3px; }
@@ -64,6 +69,7 @@
 .entry-table__icon-button svg { fill: none; height: 19px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 19px; }
 .entry-table__icon-button--view { background: #e0f2fe; border-color: #bae6fd; color: #0369a1; }
 .entry-table__icon-button--edit { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+.entry-table__icon-button--print { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
 .entry-table-empty { color: #64748b; padding: 22px; text-align: center; }
 .entry-dialog { align-items: center; background: rgba(15, 23, 42, .55); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 80; }
 .entry-dialog__panel { display: grid; gap: 20px; margin: auto; max-height: calc(100dvh - 48px); max-width: 980px; overflow-y: auto; padding: 32px 36px; width: min(96vw, 980px); }

@@ -2,10 +2,15 @@ import { Component, ElementRef, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
-import { ProductFormModel, ProductRecord, SupplierFormModel, SupplierRecord } from '../../app.models';
+import { ProductFormModel, ProductRecord, SupplierFormModel, SupplierRecord, UserRecord } from '../../app.models';
 import { ProductEntryPayload, ProductEntryRecord, ProductsService } from '../../core/services/products/products.service';
 import { SuppliersService } from '../../core/services/suppliers/suppliers.service';
 import { RncService } from '../../core/services/rnc/rnc.service';
+import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { AuthService } from '../../core/services/auth/auth.service';
+import { CompaniesService } from '../../core/services/companies/companies.service';
+import { UsersService } from '../../core/services/users/users.service';
+import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-product-entries-page',
@@ -29,6 +34,9 @@ export class ProductEntriesPageComponent implements OnInit {
   supplierDocumentSearch = '';
   supplierNameSearch = '';
   supplierSearchResults: SupplierRecord[] = [];
+  entryUserName = '';
+  private entryUsers: UserRecord[] = [];
+  private userSearchRequest = 0;
   lineEditor = { productId: 0, code: '', productName: '', quantity: 1, cost: 0 };
   productSuggestionField: 'code' | 'description' | null = null;
   activeProductSuggestionIndex = 0;
@@ -38,6 +46,7 @@ export class ProductEntriesPageComponent implements OnInit {
   entryEditorMode: 'create' | 'view' | 'edit' = 'create';
   editingEntryId: number | null = null;
   editingEntryCode = '';
+  editingLineIndex: number | null = null;
   lines: Array<{ product: ProductRecord; quantity: number; cost: number }> = [];
   productForm: ProductFormModel = this.emptyProductForm();
   supplierForm: SupplierFormModel = this.emptySupplierForm();
@@ -47,6 +56,10 @@ export class ProductEntriesPageComponent implements OnInit {
     private readonly productsService: ProductsService,
     private readonly suppliersService: SuppliersService,
     private readonly rncService: RncService,
+    private readonly qzPrintService: QzPrintService,
+    private readonly auth: AuthService,
+    private readonly companiesService: CompaniesService,
+    private readonly usersService: UsersService,
     private readonly el: ElementRef<HTMLElement>
   ) {}
 
@@ -55,7 +68,7 @@ export class ProductEntriesPageComponent implements OnInit {
   get selectedProduct(): ProductRecord | null { return this.products.find((product) => product.id === Number(this.lineEditor.productId)) ?? null; }
   get selectedSupplier(): SupplierRecord | null { return this.suppliers.find((supplier) => supplier.id === Number(this.form.supplierId)) ?? null; }
   get entryTotal(): number { return this.lines.reduce((total, line) => total + line.quantity * line.cost, 0); }
-  get entryCode(): string { return this.editingEntryCode || 'ENT-' + String(this.entries.length + 1).padStart(6, '0'); }
+  get entryCode(): string { return this.editingEntryCode || 'Se genera al guardar'; }
   get isEntryReadOnly(): boolean { return this.entryEditorMode === 'view'; }
   get saveEntryLabel(): string {
     if (this.isSaving) return this.entryEditorMode === 'edit' ? 'Actualizando...' : 'Guardando...';
@@ -154,18 +167,29 @@ export class ProductEntriesPageComponent implements OnInit {
     this.focusNextEntryHeaderField(event);
   }
 
+  onEntryUserCodeChange(): void {
+    this.entryUserName = '';
+    if (this.form.userCode.trim()) void this.resolveEntryUser(false);
+  }
+
+  async onEntryUserCodeEnter(event: Event): Promise<void> {
+    event.preventDefault();
+    if (await this.resolveEntryUser(true)) this.focusNextEntryHeaderField(event);
+  }
+
   async onSupplierDocumentEnter(event: Event): Promise<void> {
     event.preventDefault();
     const supplier = this.suppliers.find((item) => item.documentNumber.trim().toLocaleLowerCase() === this.supplierDocumentSearch.trim().toLocaleLowerCase())
       ?? this.filteredSupplierDocuments[0];
     if (supplier) {
       this.selectSupplier(supplier);
+      this.focusNextEntryHeaderField(event);
       return;
     }
 
     const rnc = this.supplierDocumentSearch.replace(/\D/g, '');
     if (!rnc) {
-      this.message = 'Indica un RNC válido para consultar.';
+      this.focusNextEntryHeaderField(event);
       return;
     }
 
@@ -183,7 +207,7 @@ export class ProductEntriesPageComponent implements OnInit {
       }, this.form.date);
       this.data.suppliers = [supplier, ...this.data.suppliers.filter((item) => item.id !== supplier.id)];
       this.selectSupplier(supplier);
-      this.message = `RNC consultado en Megaplus y suplidor seleccionado: ${supplier.companyName}.`;
+      this.focusNextEntryHeaderField(event);
     } catch (error) {
       this.message = error instanceof Error ? error.message : 'No existe un suplidor registrado con ese RNC o cédula.';
     }
@@ -194,7 +218,7 @@ export class ProductEntriesPageComponent implements OnInit {
     this.supplierDocumentSearch = supplier?.documentNumber ?? '';
   }
 
-  ngOnInit(): void { void this.load(); }
+  ngOnInit(): void { void this.load().then(() => this.focusEntryHeaderField('supplierDocument')); }
 
   selectTab(tab: 'new' | 'consultation'): void {
     this.activeTab = tab;
@@ -203,7 +227,10 @@ export class ProductEntriesPageComponent implements OnInit {
       void this.loadEntries();
       return;
     }
-    if (this.entryEditorMode === 'create') this.resetEntryEditor();
+    if (this.entryEditorMode === 'create') {
+      this.resetEntryEditor();
+      this.focusEntryHeaderField('supplierDocument');
+    }
   }
 
   viewEntry(entry: ProductEntryRecord): void { this.openEntry(entry, 'view'); }
@@ -313,7 +340,13 @@ export class ProductEntriesPageComponent implements OnInit {
       '.entry-header-grid input:not([readonly]):not([disabled]), .entry-header-grid select:not([disabled]), .entry-header-grid textarea:not([disabled])'
     )).filter((field) => field.offsetParent !== null);
     const currentIndex = fields.indexOf(event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement);
-    fields[currentIndex + 1]?.focus();
+    const next = fields[currentIndex + 1];
+    if (next) next.focus();
+    else this.focusEntryLineField('lineProductCode');
+  }
+
+  private focusEntryHeaderField(name: string): void {
+    window.setTimeout(() => this.el.nativeElement.querySelector<HTMLInputElement>(`[name="${name}"]`)?.focus());
   }
 
   onLineEditorQuantityEnter(event: Event): void {
@@ -338,24 +371,41 @@ export class ProductEntriesPageComponent implements OnInit {
     const quantity = Number(this.lineEditor.quantity);
     const cost = Number(this.lineEditor.cost);
     if (!product || quantity <= 0 || cost < 0) { this.message = 'Selecciona un producto e indica cantidad y precio válidos.'; return; }
-    const current = this.lines.find((line) => line.product.id === product.id);
-    if (current) { current.quantity += quantity; current.cost = cost; }
-    else this.lines.push({ product, quantity, cost });
+    if (this.editingLineIndex !== null) {
+      this.lines[this.editingLineIndex] = { product, quantity, cost };
+    } else {
+      const current = this.lines.find((line) => line.product.id === product.id);
+      if (current) { current.quantity += quantity; current.cost = cost; }
+      else this.lines.push({ product, quantity, cost });
+    }
+    this.editingLineIndex = null;
     this.lineEditor = { productId: 0, code: '', productName: '', quantity: 1, cost: 0 };
     this.closeProductSuggestions();
   }
 
   removeLine(index: number): void { this.lines.splice(index, 1); }
 
+  editLine(index: number): void {
+    const line = this.lines[index];
+    if (!line || this.isEntryReadOnly) return;
+    this.editingLineIndex = index;
+    this.applyProductSelection(line.product);
+    this.lineEditor.quantity = line.quantity;
+    this.lineEditor.cost = line.cost;
+    this.focusEntryLineField('lineQuantity');
+  }
+
   async save(): Promise<void> {
     if (!this.catalogLoaded) {
       this.message = 'Aún no se pudo cargar el catálogo de productos de la empresa. Actualiza la página e inténtalo de nuevo.';
       return;
     }
-    if (!this.form.supplierId || !this.selectedSupplier) {
-      this.message = 'Selecciona el nombre del suplidor antes de guardar la entrada.';
+    if (!this.supplierNameSearch.trim()) {
+      this.message = 'Indica el nombre del suplidor antes de guardar la entrada.';
       return;
     }
+    if (!this.form.userCode.trim()) { this.message = 'Indica el código de usuario antes de guardar la entrada.'; return; }
+    if (!await this.resolveEntryUser(true)) return;
     if (!this.lines.length) { this.message = 'Agrega al menos un producto a la entrada.'; return; }
 
     this.isSaving = true;
@@ -363,9 +413,22 @@ export class ProductEntriesPageComponent implements OnInit {
     try {
       if (!await this.confirmEntryProducts()) return;
       const payload = this.getEntryPayload();
-      if (this.entryEditorMode === 'edit' && this.editingEntryId) await this.productsService.updateEntry(this.editingEntryId, payload);
-      else await this.productsService.createEntry(payload);
+      const savedEntryId = this.entryEditorMode === 'edit' && this.editingEntryId
+        ? (await this.productsService.updateEntry(this.editingEntryId, payload), this.editingEntryId)
+        : await this.productsService.createEntry(payload);
       await this.load();
+      const savedEntry = this.entries.find((entry) => entry.id === savedEntryId);
+      if (savedEntry) {
+        const answer = await Swal.fire({
+          icon: 'success',
+          title: 'Entrada guardada',
+          text: `Entrada ${savedEntry.code} registrada correctamente. ¿Deseas imprimirla ahora?`,
+          showCancelButton: true,
+          confirmButtonText: 'Imprimir',
+          cancelButtonText: 'No imprimir'
+        });
+        if (answer.isConfirmed) await this.printEntry(savedEntry);
+      }
       this.message = this.entryEditorMode === 'edit' ? 'Entrada actualizada correctamente.' : 'Entrada registrada correctamente.';
       this.resetEntryEditor();
     } catch (error) {
@@ -405,6 +468,25 @@ export class ProductEntriesPageComponent implements OnInit {
     } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudo eliminar la entrada.'; }
   }
 
+  async printEntry(entry: ProductEntryRecord): Promise<void> {
+    const session = await this.auth.restoreSession();
+    let company = null;
+    try {
+      company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId) ?? null;
+    } catch {
+      // La impresión sigue disponible aunque no pueda cargarse el logo.
+    }
+    const money = (value: number): string => Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const rows = entry.lines.map((line) => `<tr><td><b>${this.escape(line.productDescription)}</b><br><small>${this.escape(line.productCode)} · ${line.quantity} x ${money(line.unitCost)}</small></td><td>${money(line.quantity * line.unitCost)}</td></tr>`).join('');
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Entrada ${this.escape(entry.code)}</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;width:74mm;margin:0;color:#111}.center{text-align:center}.logo{display:block;max-width:42mm;max-height:22mm;object-fit:contain;margin:0 auto 4px}.company{font-size:14px;font-weight:800}.rule{border-top:1px dashed #222;margin:8px 0}.line{display:flex;justify-content:space-between;gap:8px;margin:3px 0}table{width:100%;border-collapse:collapse}th,td{padding:3px 0;text-align:left;vertical-align:top;font-size:10px}th:last-child,td:last-child{text-align:right}.total{font-size:13px;font-weight:800}.footer{font-size:9px;margin-top:12px;text-align:center}</style></head><body><div class="center">${company?.logoUrl ? `<img class="logo" src="${this.escape(company.logoUrl)}" alt="">` : ''}<div class="company">${this.escape(company?.legalName || company?.tradeName || session?.companyName || this.data.companyName)}</div></div><div class="center">ENTRADA DE PRODUCTOS</div><div class="rule"></div><div class="line"><span>Entrada:</span><b>${this.escape(entry.code)}</b></div><div class="line"><span>Fecha:</span><span>${this.escape(entry.date)}</span></div><div class="line"><span>Suplidor:</span><span>${this.escape(entry.supplierName)}</span></div>${entry.reference ? `<div class="line"><span>Factura:</span><span>${this.escape(entry.reference)}</span></div>` : ''}<div class="rule"></div><table><thead><tr><th>DESCRIPCIÓN</th><th>VALOR</th></tr></thead><tbody>${rows}</tbody></table><div class="rule"></div><div class="line total"><span>TOTAL</span><span>${money(this.getEntryTotal(entry))}</span></div>${entry.notes ? `<p><b>Nota:</b> ${this.escape(entry.notes)}</p>` : ''}<div class="footer">Documento generado por SaltoSystem</div><script>window.onload=()=>window.print()<\/script></body></html>`;
+    try {
+      const result = await this.qzPrintService.printHtml(html, `Entrada ${entry.code}`, 'width=420,height=720');
+      if (result === 'unavailable') this.message = 'No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo otra vez.';
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : 'No se pudo imprimir la entrada.';
+    }
+  }
+
   private async load(): Promise<void> {
     this.isLoading = true;
     this.catalogLoaded = false;
@@ -430,8 +512,37 @@ export class ProductEntriesPageComponent implements OnInit {
     catch (error) { this.message = error instanceof Error ? error.message : 'No se pudieron cargar las entradas.'; }
   }
 
+  private async resolveEntryUser(showMessage: boolean): Promise<boolean> {
+    const code = this.form.userCode.trim();
+    if (!code) {
+      this.entryUserName = '';
+      if (showMessage) this.message = 'Indica el código de usuario.';
+      return false;
+    }
+
+    const requestId = ++this.userSearchRequest;
+    try {
+      const session = await this.auth.restoreSession();
+      if (!session?.companyId) throw new Error('No se encontró la empresa activa.');
+      if (!this.entryUsers.length || showMessage) this.entryUsers = await this.usersService.getUsers(session.companyId);
+      if (requestId !== this.userSearchRequest) return false;
+      const user = this.entryUsers.find((item) => String(item.id) === code && item.status === 'Activo');
+      this.entryUserName = user?.fullName ?? '';
+      if (!user && showMessage) this.message = 'El código de usuario no existe o está inactivo en la empresa actual.';
+      return Boolean(user);
+    } catch (error) {
+      this.entryUserName = '';
+      if (showMessage) this.message = error instanceof Error ? error.message : 'No se pudo validar el código de usuario.';
+      return false;
+    }
+  }
+
   private emptyProductForm(): ProductFormModel {
     return { code: '', description: '', unit: 'Unidad', category: 'General', location: '', brand: '', type: '', size: '', stock: 0, minimumStock: 0, cost: 0, salePrice: 0, minimumPrice: 0, wholesaleEnabled: false, wholesalePrice: 0, minimumSaleQuantity: 1, minimumWholesaleQuantity: 0, replacementEnabled: false, replacementCode: '', exemptItbis: false, taxValue: 18, status: 'Activo' };
+  }
+
+  private escape(value: string | number | null | undefined): string {
+    return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] || character));
   }
 
   private emptySupplierForm(): SupplierFormModel {
@@ -478,12 +589,14 @@ export class ProductEntriesPageComponent implements OnInit {
     };
     this.supplierDocumentSearch = this.suppliers.find((supplier) => supplier.id === entry.supplierId)?.documentNumber ?? '';
     this.supplierNameSearch = this.suppliers.find((supplier) => supplier.id === entry.supplierId)?.companyName ?? entry.supplierName;
+    this.entryUserName = entry.userName;
     this.lines = entry.lines
       .map((line) => {
         const product = this.data.products.find((item) => item.id === line.productId);
         return product ? { product, quantity: line.quantity, cost: line.unitCost } : null;
       })
       .filter((line): line is { product: ProductRecord; quantity: number; cost: number } => line !== null);
+    this.editingLineIndex = null;
     this.lineEditor = { productId: 0, code: '', productName: '', quantity: 1, cost: 0 };
     this.activeTab = 'new';
     this.selectedEntry = null;
@@ -492,13 +605,14 @@ export class ProductEntriesPageComponent implements OnInit {
 
   private getEntryPayload(): ProductEntryPayload {
     return {
-      supplierId: Number(this.form.supplierId),
+      supplierId: this.form.supplierId ? Number(this.form.supplierId) : null,
+      supplierName: this.supplierNameSearch.trim(),
       date: this.form.date,
       reference: this.form.reference,
       purchaseOrder: this.form.purchaseOrder,
       supplierInvoiceDate: this.form.supplierInvoiceDate,
       userCode: this.form.userCode,
-      userName: this.data.userName,
+      userName: this.entryUserName,
       notes: this.form.notes,
       lines: this.lines.map((line) => ({ productId: line.product.id, quantity: line.quantity, unitCost: line.cost }))
     };
@@ -543,8 +657,11 @@ export class ProductEntriesPageComponent implements OnInit {
     this.supplierDocumentSearch = '';
     this.supplierNameSearch = '';
     this.supplierSearchResults = [];
+    this.entryUserName = '';
+    this.entryUsers = [];
     this.productSearchResults = [];
     this.lines = [];
+    this.editingLineIndex = null;
     this.lineEditor = { productId: 0, code: '', productName: '', quantity: 1, cost: 0 };
     this.closeProductSuggestions();
   }

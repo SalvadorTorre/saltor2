@@ -102,6 +102,7 @@ export class AppComponent implements OnInit {
           title: 'Empresa y seguridad', icon: 'shield', color: '#8b5cf6', links: [
             { label: 'Empresa', path: '/configuracion/empresa', adminOnly: true },
             { label: 'Usuarios', path: '/configuracion/usuarios', adminOnly: true },
+            { label: 'Firma digital DGII', path: '/configuracion/firma-digital' },
             { label: 'Bitácora', path: '/configuracion/bitacora', adminOnly: true }
           ]
         },
@@ -177,6 +178,7 @@ export class AppComponent implements OnInit {
         {
           title: 'Clientes', icon: 'building', color: '#7c3aed', links: [
             { label: 'Empresas y suscripciones', path: '/plataforma/empresas' },
+            { label: 'Envío gradual de proformas', path: '/plataforma/proformas-programadas' },
             { label: 'Contratos', path: '/plataforma/contratos' },
             { label: 'Instalaciones locales', path: '/plataforma/instalaciones' },
             { label: 'Instalador local', path: '/plataforma/instalador' },

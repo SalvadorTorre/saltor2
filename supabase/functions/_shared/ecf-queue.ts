@@ -39,6 +39,10 @@ function firstText(...values: unknown[]): string | null {
   }
   return null;
 }
+function errorText(value: unknown): string | null {
+  const error = record(value);
+  return firstText(error.message, error.detail, typeof value === 'string' ? value : null);
+}
 function messageFromHtmlError(raw: string): string | null {
   const match = raw.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
   if (!match?.[1]) return null;
@@ -64,6 +68,7 @@ export function parseResult(value: unknown, status: string, raw: string): Record
   const xmls = record(p.xmls);
   const dgii = record(responseRfce.dgiiResponse ?? p.dgiiResponse ?? p.dgii);
   const messages = p.mensajes ?? p.messages ?? dgii.mensajes ?? null;
+  const providerError = errorText(p.error) ?? errorText(record(value).error);
   const htmlError = messageFromHtmlError(raw);
   const signedXml = firstText(p.xmlFirmado, p.signedXml, responseXml.xmlFirmado, responseRfce.xmlFirmado, xmls.ecf);
   const securityCode = firstText(
@@ -85,11 +90,11 @@ export function parseResult(value: unknown, status: string, raw: string): Record
     dgii_estado: STATES[status], estado_dgii: STATES[status],
     dgii_track_id: (p.trackId ?? dgii.trackId) ? String(p.trackId ?? dgii.trackId) : null,
     dgii_codigo_respuesta: (p.codigo ?? p.code ?? dgii.codigo) != null ? String(p.codigo ?? p.code ?? dgii.codigo) : null,
-    dgii_mensaje_respuesta: String(p.mensaje ?? p.message ?? dgii.mensaje ?? p.detail ?? (typeof p.error === 'string' ? p.error : null) ?? htmlError ?? (messages ? JSON.stringify(messages) : STATES[status])),
+    dgii_mensaje_respuesta: String(providerError ?? p.mensaje ?? p.message ?? dgii.mensaje ?? p.detail ?? htmlError ?? (messages ? JSON.stringify(messages) : STATES[status])),
     codSeguridad: securityCode,
     qr_link: qrLink, fec_firma: signedAt,
     ecf_xml_firmado: signedXml,
     dgii_mensajes: messages, dgii_response_json: value, dgii_response_raw: raw,
-    dgii_error_message: status === 'ERROR' || status === 'ENVIO_INCIERTO' ? String(p.mensaje ?? p.message ?? p.detail ?? (typeof p.error === 'string' ? p.error : null) ?? htmlError ?? STATES[status]) : null
+    dgii_error_message: status === 'ERROR' || status === 'ENVIO_INCIERTO' ? String(providerError ?? p.mensaje ?? p.message ?? p.detail ?? htmlError ?? STATES[status]) : null
   };
 }

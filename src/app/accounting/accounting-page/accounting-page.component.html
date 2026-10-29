@@ -319,10 +319,22 @@
         <small>GESTIÓN FISCAL</small>
         <h1>Facturas sin e-CF pendientes de envío DGII</h1>
         <p>
-          Consulta facturas de la empresa activa que aún requieren transmisión a
-          DGII.
+          Consulta comprobantes de la empresa activa pendientes de envío o las
+          proformas ya generadas.
         </p>
       </header>
+      <nav class="pending-tabs" aria-label="Tipo de comprobante pendiente">
+        <button type="button" [class.is-active]="pendingTab === 'pending'" (click)="selectPendingTab('pending')">
+          Pendiente de envío
+        </button>
+        <button type="button" [class.is-active]="pendingTab === 'proforma'" (click)="selectPendingTab('proforma')">
+          Proformas
+        </button>
+      </nav>
+      <nav *ngIf="isProformaPendingTab" class="proforma-tabs" aria-label="Consulta de proformas">
+        <button type="button" [class.is-active]="proformaTab === 'pending'" (click)="selectProformaTab('pending')">Pendientes</button>
+        <button type="button" [class.is-active]="proformaTab === 'period'" (click)="selectProformaTab('period')">Ventas por período</button>
+      </nav>
       <section class="filters pending-filters">
         <label
           >Empresa<select disabled>
@@ -347,23 +359,23 @@
           <button
             class="blue"
             type="button"
-            (click)="loadPendingInvoices()"
-            [disabled]="isLoadingPending"
+            (click)="isProformaPeriodTab ? loadProformaPeriodSales() : loadPendingInvoices()"
+            [disabled]="isLoadingPending || isLoadingProformaPeriod"
           >
             Filtrar</button
           ><button type="button" (click)="clearPendingFilters()">Limpiar</button
-          ><button class="green" type="button" (click)="loadPendingInvoices()">
+          ><button class="green" type="button" (click)="isProformaPeriodTab ? loadProformaPeriodSales() : loadPendingInvoices()">
             Actualizar
           </button>
         </div>
       </section>
-      <p *ngIf="pendingError || pendingActionMessage" class="message">
-        {{ pendingError || pendingActionMessage }}
+      <p *ngIf="pendingError || pendingActionMessage || proformaPeriodError" class="message">
+        {{ pendingError || pendingActionMessage || proformaPeriodError }}
       </p>
-      <section class="report pending-report">
+      <ng-container *ngIf="!isProformaPeriodTab; else proformaPeriodReport"><section class="report pending-report">
         <header>
           <div>
-            <h3>Facturas pendientes de envío</h3>
+            <h3>{{ isProformaPendingTab ? 'Facturas proforma E332' : 'Facturas pendientes de envío' }}</h3>
             <p>
               Registros filtrados: {{ pendingInvoices.length }} &nbsp; Valor
               total: <strong>RD${{ pendingTotal | number: "1.2-2" }}</strong>
@@ -400,8 +412,8 @@
           ><span style="display: flex; gap: 5px"
             ><button
               type="button"
-              title="Enviar a DGII"
-              aria-label="Enviar a DGII"
+              [title]="isProformaPendingTab ? 'Firmar proforma' : 'Enviar a DGII'"
+              [attr.aria-label]="isProformaPendingTab ? 'Firmar proforma' : 'Enviar a DGII'"
               [disabled]="!canSendPending(invoice) || isProcessingPending"
               (click)="sendPendingInvoice(invoice)"
               style="
@@ -459,12 +471,34 @@
           <p>
             {{
               isLoadingPending
-                ? "Consultando facturas pendientes..."
-                : "No hay facturas pendientes de envío para los filtros indicados."
+                ? "Consultando facturas..."
+                : (isProformaPendingTab
+                    ? "No hay facturas proforma E332 para los filtros indicados."
+                    : "No hay facturas pendientes de envío para los filtros indicados.")
             }}
           </p>
         </div>
-      </section></ng-container
+      </section></ng-container>
+      <ng-template #proformaPeriodReport>
+        <section class="proforma-period">
+          <header class="proforma-period__heading"><div><h3>Detalle por {{ proformaPeriodGroupingName }}</h3><p>La agrupación cambia automáticamente según la duración del período seleccionado.</p></div></header>
+          <div class="proforma-period__metrics">
+            <article class="proforma-period__metric proforma-period__metric--total"><span>Total ventas</span><strong>RD$ {{ proformaPeriodTotal | number:'1.2-2' }}</strong><small>Suma de todas las facturas</small></article>
+            <article class="proforma-period__metric proforma-period__metric--billed"><span>Total FACTURA</span><strong>RD$ {{ proformaBilledTotal | number:'1.2-2' }}</strong><small>Estado FACTURA</small></article>
+            <article class="proforma-period__metric proforma-period__metric--proforma"><span>Total PROFORMA</span><strong>RD$ {{ proformaTotal | number:'1.2-2' }}</strong><small>Estado PROFORMA</small></article>
+            <article class="proforma-period__metric proforma-period__metric--delivery"><span>Total CONDUCE</span><strong>RD$ {{ proformaDeliveryNoteTotal | number:'1.2-2' }}</strong><small>Estado CONDUCE</small></article>
+          </div>
+          <div class="proforma-period__table-wrap">
+            <table>
+              <thead><tr><th>Período</th><th>Facturas</th><th>Total factura</th><th>Proformas</th><th>Total proforma</th><th>Conduces</th><th>Total conduce</th><th>Total ventas</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let row of proformaPeriodRows"><td>{{ row.period }}</td><td>{{ row.invoices }}</td><td>RD$ {{ row.billedTotal | number:'1.2-2' }}</td><td>{{ row.proformas }}</td><td>RD$ {{ row.proformaTotal | number:'1.2-2' }}</td><td>{{ row.deliveryNotes }}</td><td>RD$ {{ row.deliveryNoteTotal | number:'1.2-2' }}</td><td class="proforma-period__total">RD$ {{ row.total | number:'1.2-2' }}</td></tr>
+                <tr *ngIf="isLoadingProformaPeriod || !proformaPeriodRows.length"><td colspan="8" class="proforma-period__empty">{{ isLoadingProformaPeriod ? 'Consultando ventas por período...' : 'No hay ventas en el rango seleccionado.' }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </ng-template></ng-container
     >
     <ng-container *ngSwitchCase="'encf'"
       ><header class="heading">

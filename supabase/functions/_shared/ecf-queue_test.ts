@@ -112,6 +112,15 @@ Deno.test('expone el mensaje útil de una respuesta HTML del servicio', () => {
   assert(result.dgii_mensaje_respuesta === 'Cannot POST /ruta-inexistente');
 });
 
+Deno.test('expone el error anidado devuelto por la cola', () => {
+  const result = parseResult({
+    message: 'Operación consultada correctamente.',
+    data: { status: 'ERROR', error: { message: 'El certificado no corresponde al RNC emisor.' } }
+  }, 'ERROR', '{}');
+  assert(result.dgii_mensaje_respuesta === 'El certificado no corresponde al RNC emisor.');
+  assert(result.dgii_error_message === 'El certificado no corresponde al RNC emisor.');
+});
+
 Deno.test('intento interrumpido termina por confirmar sin reenviar', async () => {
   const op = { ...operation(), creado_en: new Date(Date.now()-181_000).toISOString() };
   const result = await queryOperation(database(op), op);
