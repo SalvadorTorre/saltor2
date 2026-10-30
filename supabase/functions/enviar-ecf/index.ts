@@ -66,8 +66,9 @@ Deno.serve(async (request) => {
     if (!invoice) return json({ error: 'No se encontró la factura de la empresa y sucursal actual.' }, 404);
     if (invoice.estado === 'Anulada' || ['Aceptado', 'Aceptado condicional', 'Firmada'].includes(invoice.dgii_estado)) return json({ error: 'La factura no puede enviarse en su estado actual.' }, 409);
     const proforma = String(invoice.tipo_ncf ?? '').replace(/[^0-9]/g, '') === '332';
-    if (internalScheduler && (!proforma || invoice.ecf_queue_status !== 'PENDIENTE_ENVIO')) {
-      return json({ error: 'La factura no está marcada como proforma pendiente para el procesamiento gradual.' }, 409);
+    const scheduledType = String(invoice.tipo_ncf ?? '').replace(/[^0-9]/g, '');
+    if (internalScheduler && (invoice.ecf_queue_status !== 'PENDIENTE_ENVIO' || !['32', '332'].includes(scheduledType))) {
+      return json({ error: 'La factura no está marcada como pendiente para el procesamiento gradual.' }, 409);
     }
     if (!user) user = { empresa_id: invoice.idempres, sucursal_id: Number(invoice.idsucursal) };
     const tipoEcf = proforma ? '32' : typeCode(invoice.tipo_ncf);

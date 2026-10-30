@@ -50,12 +50,21 @@ export type PendingInvoiceView = 'pending' | 'proforma';
 
 export interface ProformaPeriodSummary {
   period: string;
+  from: string;
+  to: string;
   invoices: number;
   billedTotal: number;
   proformas: number;
   proformaTotal: number;
   deliveryNotes: number;
   deliveryNoteTotal: number;
+  total: number;
+}
+
+export interface ProformaPeriodCandidate {
+  id: number;
+  number: string;
+  date: string;
   total: number;
 }
 
@@ -198,10 +207,6 @@ export class Rep607Service {
     if (error) throw error;
 
     const parseDate = (value: string) => new Date(`${value}T12:00:00`);
-    const start = filters.from ? parseDate(filters.from) : null;
-    const end = filters.to ? parseDate(filters.to) : null;
-    const rangeDays = start && end ? Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1 : 31;
-    const grouping = rangeDays <= 7 ? 'day' : rangeDays <= 31 ? 'week' : 'month';
     const groups = new Map<string, ProformaPeriodSummary>();
     const format = (value: Date) => value.toISOString().slice(0, 10);
     const monthName = new Intl.DateTimeFormat('es-DO', { month: 'long', year: 'numeric' });
@@ -209,24 +214,15 @@ export class Rep607Service {
       const date = parseDate(row.fecha_factura);
       let key: string;
       let period: string;
-      if (grouping === 'day') {
-        key = format(date);
-        period = key;
-      } else if (grouping === 'week') {
-        const monday = new Date(date);
-        monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-        key = format(monday);
-        period = `${format(monday)} - ${format(sunday)}`;
-      } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        period = monthName.format(date);
-      }
+      // Cada fila es un mes calendario; nunca se mezclan meses distintos.
+      key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      period = monthName.format(date);
       const summary = groups.get(key) ?? {
-        period, invoices: 0, billedTotal: 0, proformas: 0, proformaTotal: 0,
+        period, from: format(date), to: format(date), invoices: 0, billedTotal: 0, proformas: 0, proformaTotal: 0,
         deliveryNotes: 0, deliveryNoteTotal: 0, total: 0
       };
+      if (format(date) < summary.from) summary.from = format(date);
+      if (format(date) > summary.to) summary.to = format(date);
       const amount = Number(row.total ?? 0);
       const status = String(row.estado ?? '').trim().toUpperCase();
       summary.total += amount;
@@ -243,6 +239,24 @@ export class Rep607Service {
       groups.set(key, summary);
     }
     return [...groups.values()];
+  }
+
+  async getProformaCandidates(companyId: number, branchId: string, from: string, to: string): Promise<ProformaPeriodCandidate[]> {
+    let query = this.supabase.client.from('facturas').select('id, numero_factura, fecha_factura, total')
+      .eq('idempres', companyId).eq('estado', 'PROFORMA').gte('fecha_factura', from).lte('fecha_factura', to)
+      .order('fecha_factura', { ascending: true }).order('id', { ascending: true });
+    if (branchId !== 'Todas') query = query.eq('idsucursal', Number(branchId));
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).map((row: { id: number; numero_factura: string; fecha_factura: string; total: number | string }) => ({ id: row.id, number: row.numero_factura, date: row.fecha_factura, total: Number(row.total ?? 0) }));
+  }
+
+  async convertProformasToDeliveryNotes(from: string, to: string, branchId: string, amount: number): Promise<{ count: number; total: number; queuedCount: number; queuedTotal: number }> {
+    const { data, error } = await this.supabase.client.rpc('convertir_proformas_a_conduce', {
+      p_desde: from, p_hasta: to, p_sucursal_id: branchId === 'Todas' ? null : Number(branchId), p_monto: amount
+    });
+    if (error) throw error;
+    return { count: Number(data?.cantidad ?? 0), total: Number(data?.monto ?? 0), queuedCount: Number(data?.facturas_pendientes ?? 0), queuedTotal: Number(data?.monto_pendiente ?? 0) };
   }
 
   async resetInvoiceEcf(invoiceId: number): Promise<void> {

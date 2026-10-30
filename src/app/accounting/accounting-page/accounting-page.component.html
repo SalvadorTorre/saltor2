@@ -481,7 +481,7 @@
       </section></ng-container>
       <ng-template #proformaPeriodReport>
         <section class="proforma-period">
-          <header class="proforma-period__heading"><div><h3>Detalle por {{ proformaPeriodGroupingName }}</h3><p>La agrupación cambia automáticamente según la duración del período seleccionado.</p></div></header>
+          <header class="proforma-period__heading"><div><h3>Detalle mensual</h3><p>Cada fila corresponde a un solo mes. Usa Detalle para simular o convertir proformas a conduces.</p></div></header>
           <div class="proforma-period__metrics">
             <article class="proforma-period__metric proforma-period__metric--total"><span>Total ventas</span><strong>RD$ {{ proformaPeriodTotal | number:'1.2-2' }}</strong><small>Suma de todas las facturas</small></article>
             <article class="proforma-period__metric proforma-period__metric--billed"><span>Total FACTURA</span><strong>RD$ {{ proformaBilledTotal | number:'1.2-2' }}</strong><small>Estado FACTURA</small></article>
@@ -490,14 +490,41 @@
           </div>
           <div class="proforma-period__table-wrap">
             <table>
-              <thead><tr><th>Período</th><th>Facturas</th><th>Total factura</th><th>Proformas</th><th>Total proforma</th><th>Conduces</th><th>Total conduce</th><th>Total ventas</th></tr></thead>
+              <thead><tr><th>Período</th><th>Facturas</th><th>Total factura</th><th>Proformas</th><th>Total proforma</th><th>Conduces</th><th>Total conduce</th><th>Total ventas</th><th></th></tr></thead>
               <tbody>
-                <tr *ngFor="let row of proformaPeriodRows"><td>{{ row.period }}</td><td>{{ row.invoices }}</td><td>RD$ {{ row.billedTotal | number:'1.2-2' }}</td><td>{{ row.proformas }}</td><td>RD$ {{ row.proformaTotal | number:'1.2-2' }}</td><td>{{ row.deliveryNotes }}</td><td>RD$ {{ row.deliveryNoteTotal | number:'1.2-2' }}</td><td class="proforma-period__total">RD$ {{ row.total | number:'1.2-2' }}</td></tr>
-                <tr *ngIf="isLoadingProformaPeriod || !proformaPeriodRows.length"><td colspan="8" class="proforma-period__empty">{{ isLoadingProformaPeriod ? 'Consultando ventas por período...' : 'No hay ventas en el rango seleccionado.' }}</td></tr>
+                <tr *ngFor="let row of proformaPeriodRows"><td>{{ row.period }}</td><td>{{ row.invoices }}</td><td>RD$ {{ row.billedTotal | number:'1.2-2' }}</td><td>{{ row.proformas }}</td><td>RD$ {{ row.proformaTotal | number:'1.2-2' }}</td><td>{{ row.deliveryNotes }}</td><td>RD$ {{ row.deliveryNoteTotal | number:'1.2-2' }}</td><td class="proforma-period__total">RD$ {{ row.total | number:'1.2-2' }}</td><td><button type="button" class="proforma-period__detail-button" (click)="openProformaPeriodDialog(row)">Detalle</button></td></tr>
+                <tr *ngIf="isLoadingProformaPeriod || !proformaPeriodRows.length"><td colspan="9" class="proforma-period__empty">{{ isLoadingProformaPeriod ? 'Consultando ventas por período...' : 'No hay ventas en el rango seleccionado.' }}</td></tr>
               </tbody>
             </table>
           </div>
         </section>
+        <div *ngIf="proformaPeriodDialog as dialog" class="proforma-period-modal-backdrop" role="presentation" (click)="closeProformaPeriodDialog()">
+          <section class="proforma-period-modal" role="dialog" aria-modal="true" aria-label="Detalle y simulación del período" (click)="$event.stopPropagation()">
+            <header><div><small>VENTAS POR PERÍODO</small><h2>{{ dialog.row.period }}</h2><p>Detalle real y simulación de valores a convertir en conduce.</p></div><button type="button" (click)="closeProformaPeriodDialog()" aria-label="Cerrar">×</button></header>
+            <div class="proforma-period-modal__details">
+              <article><span>Total ventas</span><strong>RD$ {{ dialog.row.total | number:'1.2-2' }}</strong><small>{{ dialog.row.invoices + dialog.row.proformas + dialog.row.deliveryNotes }} documentos</small></article>
+              <article class="is-factura"><span>FACTURA</span><strong>RD$ {{ dialog.row.billedTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.invoices }} factura(s)</small></article>
+              <article class="is-proforma"><span>PROFORMA</span><strong>RD$ {{ dialog.row.proformaTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.proformas }} proforma(s)</small></article>
+              <article class="is-conduce"><span>CONDUCE</span><strong>RD$ {{ dialog.row.deliveryNoteTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.deliveryNotes }} conduce(s)</small></article>
+            </div>
+            <section class="proforma-period-modal__simulation">
+              <h3>Simular conversión</h3><p>Elige una forma de introducir el monto. Esta pantalla calcula el resultado, pero no modifica los documentos.</p>
+              <div class="proforma-period-modal__options">
+                <label [class.is-active]="dialog.option === 'convert'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'convert'" (change)="setProformaPeriodDialogOption('convert')"> Valor a convertir en conduce</label>
+                <label [class.is-active]="dialog.option === 'keep'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'keep'" (change)="setProformaPeriodDialogOption('keep')"> Valor a dejar como proforma</label>
+              </div>
+              <label class="proforma-period-modal__amount">{{ dialog.option === 'convert' ? 'Monto para convertir en conduce' : 'Monto que quedará como proforma' }}<input type="number" min="0" [max]="dialog.row.proformaTotal" step="0.01" [(ngModel)]="dialog.amount"><small>Disponible en proformas: RD$ {{ dialog.row.proformaTotal | number:'1.2-2' }}</small></label>
+              <p *ngIf="dialog.loading" class="proforma-period-modal__loading">Buscando proformas completas del período...</p>
+              <div class="proforma-period-modal__result" *ngIf="!dialog.loading">
+                <article><span>Se convertiría en conduce</span><strong>RD$ {{ simulatedConvertToDeliveryNote | number:'1.2-2' }}</strong><small>{{ simulatedConvertedCount }} factura(s)</small></article>
+                <article><span>Facturas E32 pendientes DGII</span><strong>RD$ {{ simulatedProformaTotal | number:'1.2-2' }}</strong><small>{{ simulatedQueuedInvoiceCount }} factura(s)</small></article>
+                <article><span>Conduce resultante</span><strong>RD$ {{ simulatedDeliveryNoteTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.deliveryNotes + simulatedConvertedCount }} factura(s)</small></article>
+                <article><span>FACTURA resultante</span><strong>RD$ {{ simulatedInvoiceTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.invoices + simulatedQueuedInvoiceCount }} factura(s)</small></article>
+              </div>
+            </section>
+            <footer><button type="button" class="proforma-period-modal__convert" [disabled]="dialog.loading || dialog.applying || !simulatedConvertedCount" (click)="convertProformaPeriod()">{{ dialog.applying ? 'Convirtiendo…' : 'Convertir a conduce' }}</button><button type="button" class="proforma-period-modal__close" (click)="closeProformaPeriodDialog()">Cerrar</button></footer>
+          </section>
+        </div>
       </ng-template></ng-container
     >
     <ng-container *ngSwitchCase="'encf'"

@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { BranchRecord, BranchesService } from '../../core/services/branches/branches.service';
-import { PendingInvoice, PendingInvoiceView, ProformaPeriodSummary, Rep607Invoice, Rep607Service } from '../../core/services/accounting/rep607.service';
+import { PendingInvoice, PendingInvoiceView, ProformaPeriodCandidate, ProformaPeriodSummary, Rep607Invoice, Rep607Service } from '../../core/services/accounting/rep607.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
 import { NcfType, SupplierFormModel, SupplierRecord } from '../../app.models';
 import { NcfTypesService } from '../../core/services/ncf-types/ncf-types.service';
@@ -20,6 +20,7 @@ import { QzPrintService } from '../../core/services/printing/qz-print.service';
 type FiscalView = 'pending' | 'rep607' | 'encf' | 'credit' | 'expenses' | 'receivables' | 'rep606' | 'e41';
 type DgiiSendDialog = { phase: 'confirm' | 'processing' | 'success' | 'error'; invoiceNumber: string; message: string };
 type DgiiSendTarget = { source: 'pending' | 'rep607'; invoice: PendingInvoice | Rep607Invoice };
+type ProformaPeriodDialog = { row: ProformaPeriodSummary; option: 'convert' | 'keep'; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean };
 const MINOR_CATEGORIES = ['Oficina y suministros', 'Combustible', 'Viáticos', 'Hospedaje', 'Alimentación', 'Mantenimiento', 'Transporte', 'Comunicaciones', 'Servicios profesionales', 'Publicidad', 'Impuestos y tasas', 'Otros gastos'];
 const MINOR_CENTERS = ['Administración', 'Ventas', 'Operaciones', 'Logística', 'Mercadeo', 'General'];
 const MINOR_PAYMENTS = ['Efectivo', 'Tarjeta débito', 'Tarjeta crédito', 'Transferencia', 'Cheque', 'Otro'];
@@ -49,6 +50,7 @@ export class AccountingPageComponent implements OnInit {
   proformaPeriodRows: ProformaPeriodSummary[] = [];
   isLoadingProformaPeriod = false;
   proformaPeriodError = '';
+  proformaPeriodDialog: ProformaPeriodDialog | null = null;
   isLoadingPending = false;
   pendingError = '';
   isProcessingPending = false;
@@ -681,12 +683,86 @@ export class AccountingPageComponent implements OnInit {
   get proformaBilledTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.billedTotal, 0); }
   get proformaTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.proformaTotal, 0); }
   get proformaDeliveryNoteTotal(): number { return this.proformaPeriodRows.reduce((total, row) => total + row.deliveryNoteTotal, 0); }
+  get simulatedConvertToDeliveryNote(): number {
+    return this.selectedProformaCandidates.reduce((total, invoice) => total + invoice.total, 0);
+  }
+  get selectedProformaCandidates(): ProformaPeriodCandidate[] {
+    const dialog = this.proformaPeriodDialog;
+    if (!dialog) return [];
+    const typed = Math.max(0, Math.min(Number(dialog.amount) || 0, dialog.row.proformaTotal));
+    const limit = dialog.option === 'convert' ? typed : Math.max(0, dialog.row.proformaTotal - typed);
+    let total = 0;
+    return dialog.candidates.filter((invoice) => {
+      if (total + invoice.total > limit + 0.005) return false;
+      total += invoice.total;
+      return true;
+    });
+  }
+  get simulatedConvertedCount(): number { return this.selectedProformaCandidates.length; }
+  get simulatedProformaTotal(): number {
+    const dialog = this.proformaPeriodDialog;
+    return dialog ? Math.max(0, dialog.row.proformaTotal - this.simulatedConvertToDeliveryNote) : 0;
+  }
+  get simulatedInvoiceTotal(): number {
+    const dialog = this.proformaPeriodDialog;
+    return dialog ? dialog.row.billedTotal + this.simulatedProformaTotal : 0;
+  }
+  get simulatedQueuedInvoiceCount(): number {
+    const dialog = this.proformaPeriodDialog;
+    return dialog ? dialog.row.proformas - this.simulatedConvertedCount : 0;
+  }
+  get simulatedDeliveryNoteTotal(): number {
+    const dialog = this.proformaPeriodDialog;
+    return dialog ? dialog.row.deliveryNoteTotal + this.simulatedConvertToDeliveryNote : 0;
+  }
   get proformaPeriodGroupingName(): string {
-    if (!this.pendingFilters.from || !this.pendingFilters.to) return 'semana';
+    if (!this.pendingFilters.from || !this.pendingFilters.to) return 'mes';
     const from = new Date(`${this.pendingFilters.from}T12:00:00`);
     const to = new Date(`${this.pendingFilters.to}T12:00:00`);
     const days = Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
-    return days <= 7 ? 'día' : days <= 31 ? 'semana' : 'mes';
+    return 'mes';
+  }
+
+  async openProformaPeriodDialog(row: ProformaPeriodSummary): Promise<void> {
+    this.proformaPeriodDialog = { row, option: 'convert', amount: row.proformaTotal, candidates: [], loading: true, applying: false };
+    try {
+      const user = await this.auth.restoreSession();
+      if (!user) throw new Error('No hay una sesión activa.');
+      const candidates = await this.rep607Service.getProformaCandidates(user.companyId, this.pendingFilters.branchId, row.from, row.to);
+      if (this.proformaPeriodDialog?.row === row) this.proformaPeriodDialog.candidates = candidates;
+    } catch (error) {
+      this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudieron consultar las proformas del período.';
+    } finally {
+      if (this.proformaPeriodDialog?.row === row) this.proformaPeriodDialog.loading = false;
+    }
+  }
+
+  closeProformaPeriodDialog(): void { this.proformaPeriodDialog = null; }
+
+  setProformaPeriodDialogOption(option: 'convert' | 'keep'): void {
+    if (!this.proformaPeriodDialog) return;
+    this.proformaPeriodDialog.option = option;
+    this.proformaPeriodDialog.amount = option === 'convert'
+      ? this.proformaPeriodDialog.row.proformaTotal
+      : 0;
+  }
+
+  async convertProformaPeriod(): Promise<void> {
+    const dialog = this.proformaPeriodDialog;
+    if (!dialog || dialog.loading || dialog.applying || !this.simulatedConvertedCount) return;
+    const amount = this.simulatedConvertToDeliveryNote;
+    const formatted = amount.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!window.confirm(`Se convertirán ${this.simulatedConvertedCount} proforma(s) por RD$ ${formatted} a conduce. ¿Deseas continuar?`)) return;
+    dialog.applying = true;
+    try {
+      const result = await this.rep607Service.convertProformasToDeliveryNotes(dialog.row.from, dialog.row.to, this.pendingFilters.branchId, amount);
+      this.closeProformaPeriodDialog();
+      await this.loadProformaPeriodSales();
+      this.pendingActionMessage = `Se convirtieron ${result.count} proforma(s) a conduce por RD$ ${result.total.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ${result.queuedCount} factura(s) E32 quedaron pendientes de envío a DGII por RD$ ${result.queuedTotal.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`;
+    } catch (error) {
+      this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudo realizar la conversión.';
+      dialog.applying = false;
+    }
   }
 
   selectPendingTab(tab: PendingInvoiceView): void {

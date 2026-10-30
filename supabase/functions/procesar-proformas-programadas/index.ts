@@ -88,7 +88,9 @@ Deno.serve(async (request) => {
       .select('id, numero_factura')
       .eq('idempres', rawSchedule.empresa_id)
       .eq('ecf_queue_status', 'PENDIENTE_ENVIO')
-      .ilike('tipo_ncf', '%332%')
+      // El proceso gradual también recibe E32 resultantes de convertir
+      // proformas: ambos tipos se encolan usando el mismo flujo e-CF.
+      .in('tipo_ncf', ['E32', 'E332'])
       .neq('estado', 'Anulada')
       .order('creado_en', { ascending: true })
       .limit(limit);
@@ -111,6 +113,12 @@ Deno.serve(async (request) => {
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(String(body?.error ?? `Respuesta ${response.status}`));
+          const status = String(body?.ecf_queue_status ?? '');
+          const accepted = ['EN_COLA', 'ENVIANDO_DGII', 'EN_PROCESO_DGII', 'ACEPTADO', 'FIRMADA'];
+          if (!accepted.includes(status)) {
+            const providerMessage = body?.dgii_response_json?.data?.error?.message;
+            throw new Error(String(providerMessage ?? body?.dgii_error_message ?? body?.error ?? 'El servicio e-CF no aceptó la factura para envío.'));
+          }
           item.processed += 1;
         } catch (failure) {
           item.failed += 1;
