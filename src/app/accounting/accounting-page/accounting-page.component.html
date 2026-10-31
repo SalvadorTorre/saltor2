@@ -498,7 +498,7 @@
             </table>
           </div>
         </section>
-        <div *ngIf="proformaPeriodDialog as dialog" class="proforma-period-modal-backdrop" role="presentation" (click)="closeProformaPeriodDialog()">
+        <div *ngIf="proformaPeriodDialog as dialog" class="proforma-period-modal-backdrop" role="presentation">
           <section class="proforma-period-modal" role="dialog" aria-modal="true" aria-label="Detalle y simulación del período" (click)="$event.stopPropagation()">
             <header><div><small>VENTAS POR PERÍODO</small><h2>{{ dialog.row.period }}</h2><p>Detalle real y simulación de valores a convertir en conduce.</p></div><button type="button" (click)="closeProformaPeriodDialog()" aria-label="Cerrar">×</button></header>
             <div class="proforma-period-modal__details">

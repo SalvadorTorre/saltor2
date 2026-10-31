@@ -271,6 +271,74 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  preparingQzSetup = false;
+  qzSetupMessage = '';
+
+  /**
+   * Genera un instalador para Windows que instala QZ Tray (si falta), copia el
+   * certificado de SaltorSystem como override.crt y reinicia QZ Tray. Así QZ
+   * confía en el sistema y deja marcar "Allow" + "Remember".
+   */
+  async downloadQzSetup(): Promise<void> {
+    this.preparingQzSetup = true;
+    this.qzSetupMessage = '';
+    try {
+      const certificate = (await this.qzPrint.getCertificate()).replace(/\r\n/g, '\n').trim() + '\n';
+      const base64 = btoa(String.fromCharCode(...new TextEncoder().encode(certificate)));
+      const x64 = QZ_TRAY_RELEASE_URL + `qz-tray-${QZ_TRAY_VERSION}-x86_64.exe`;
+      const arm = QZ_TRAY_RELEASE_URL + `qz-tray-${QZ_TRAY_VERSION}-arm64.exe`;
+      const script = [
+        '@echo off',
+        'setlocal',
+        'title SaltorSystem - Instalar QZ Tray',
+        'net session >nul 2>&1',
+        'if errorlevel 1 (',
+        '  echo Solicitando permisos de administrador...',
+        `  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"`,
+        '  exit /b',
+        ')',
+        'set "QZDIR=%ProgramFiles%\\QZ Tray"',
+        'set "QZEXE=%QZDIR%\\qz-tray.exe"',
+        `set "QZURL=${x64}"`,
+        `if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "QZURL=${arm}"`,
+        'if not exist "%QZEXE%" (',
+        `  echo Descargando QZ Tray ${QZ_TRAY_VERSION} ^(unos 130 MB^)...`,
+        '  curl.exe -L --fail -o "%TEMP%\\qz-tray-setup.exe" "%QZURL%"',
+        '  if errorlevel 1 ( echo No se pudo descargar QZ Tray. Revisa el internet. & pause & exit /b 1 )',
+        '  echo Instalando QZ Tray...',
+        '  start /wait "" "%TEMP%\\qz-tray-setup.exe" /S',
+        '  del "%TEMP%\\qz-tray-setup.exe" >nul 2>&1',
+        ')',
+        'if not exist "%QZDIR%" ( echo QZ Tray no quedo instalado. & pause & exit /b 1 )',
+        'echo Instalando el certificado de SaltorSystem...',
+        `powershell -NoProfile -Command "[IO.File]::WriteAllBytes('%QZDIR%\\override.crt', [Convert]::FromBase64String('${base64}'))"`,
+        'if errorlevel 1 ( echo No se pudo copiar el certificado. & pause & exit /b 1 )',
+        'echo Reiniciando QZ Tray...',
+        'taskkill /F /IM qz-tray.exe >nul 2>&1',
+        'taskkill /F /IM qz-tray-console.exe >nul 2>&1',
+        'timeout /t 3 /nobreak >nul',
+        'start "" "%QZEXE%"',
+        'echo.',
+        'echo Listo. Vuelve a SaltorSystem, recarga la pagina y pulsa "Comprobar de nuevo".',
+        'echo Si QZ Tray pregunta, marca "Remember this decision" y pulsa "Allow".',
+        'pause',
+        ''
+      ].join('\r\n');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([script], { type: 'application/octet-stream' }));
+      link.download = 'instalar-qz-saltorsystem.cmd';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 30000);
+      this.qzSetupMessage = 'Descargado. Ábrelo en este equipo y acepta los permisos de administrador.';
+    } catch (error) {
+      this.qzSetupMessage = 'No se pudo preparar el instalador: ' + String((error as { message?: string })?.message ?? error);
+    } finally {
+      this.preparingQzSetup = false;
+    }
+  }
+
   qzDownloadUrl(installer: QzInstaller): string {
     return QZ_TRAY_RELEASE_URL + installer.fileName;
   }

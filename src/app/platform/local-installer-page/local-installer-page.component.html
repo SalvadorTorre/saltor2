@@ -12,8 +12,22 @@
       <fieldset [disabled]="isBuilding">
         <h3>Cliente</h3>
         <div class="pf-form">
-          <label class="pf-form__wide">Nombre de la empresa *<input name="cliente" [(ngModel)]="form.cliente" placeholder="Ej. Farmacia Central SRL" required></label>
-          <label>RNC / cédula *<input name="rnc" [(ngModel)]="form.rnc" placeholder="101000000" required></label>
+          <label class="li__check pf-form__wide"><input type="checkbox" name="includeData" [(ngModel)]="includeData" (ngModelChange)="toggleIncludeData()"> Llevar los datos de una empresa que ya usa el sistema en la nube</label>
+          <ng-container *ngIf="includeData">
+            <label class="pf-form__wide">Empresa *
+              <select name="empresaDatos" [ngModel]="form.empresaDatosId" (ngModelChange)="pickCompany($event)">
+                <option [ngValue]="null">Elige la empresa…</option>
+                <option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}{{ c.rnc ? ' · ' + c.rnc : '' }}</option>
+              </select>
+            </label>
+            <p class="li__note pf-form__wide" *ngIf="selectedCompany">
+              Se llevan sus usuarios (con sus mismas contraseñas), {{ selectedCompany.productos }} producto(s) con su existencia, clientes con su saldo pendiente,
+              suplidores, secuencias de NCF y configuración e-CF. No se lleva el historial (facturas, cobros, cierres) ni la firma digital.
+              <b>Después de instalar, esta empresa debe facturar solo en el servidor local</b> para no repetir números de e-NCF.
+            </p>
+          </ng-container>
+          <label class="pf-form__wide">Nombre de la empresa *<input name="cliente" [(ngModel)]="form.cliente" placeholder="Ej. Farmacia Central SRL" required [readonly]="includeData"></label>
+          <label>RNC / cédula *<input name="rnc" [(ngModel)]="form.rnc" placeholder="101000000" required [readonly]="includeData"></label>
           <label>Teléfono<input name="telefono" [(ngModel)]="form.telefono" placeholder="809-000-0000"></label>
           <label class="pf-form__wide">Correo de la empresa<input name="correoEmpresa" type="email" [(ngModel)]="form.correoEmpresa" placeholder="Si lo dejas vacío se usa el del dueño"></label>
         </div>
@@ -95,7 +109,7 @@
       <h3>Qué incluye</h3>
       <ul>
         <li>La base de datos con el esquema actual de SaltorSystem (tablas, funciones, seguridad y catálogos), sin datos de otras empresas.</li>
-        <li>La empresa del cliente, con su sucursal PRINCIPAL y su licencia.</li>
+        <li>La empresa del cliente, con su sucursal PRINCIPAL y su licencia. Si lo eliges, también sus datos maestros de la nube.</li>
         <li>El sistema web en su versión actual y las funciones (inicio de sesión, usuarios, e-CF, RNC, QZ).</li>
         <li>Los scripts <code>instalar</code>, <code>iniciar</code>, <code>detener</code> y <code>respaldo</code>.</li>
       </ul>

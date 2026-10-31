@@ -280,6 +280,17 @@
         </span>
       </div>
 
+      <div class="qz-setup">
+        <div>
+          <b>Windows: instalar y configurar en un paso (recomendado)</b>
+          <small>Instala QZ Tray si falta, agrega el certificado de SaltorSystem y lo reinicia. Así QZ deja marcar "Allow" + "Remember" y aparece la lista de impresoras.</small>
+          <small *ngIf="qzSetupMessage" class="qz-setup__msg">{{ qzSetupMessage }}</small>
+        </div>
+        <button class="primary-action" type="button" [disabled]="preparingQzSetup" (click)="downloadQzSetup()">
+          {{ preparingQzSetup ? 'Preparando…' : 'Descargar instalador para SaltorSystem' }}
+        </button>
+      </div>
+
       <div class="qz-downloads">
         <a *ngFor="let installer of qzInstallers" class="qz-download" [class.qz-download--recommended]="isRecommendedQz(installer)"
            [href]="qzDownloadUrl(installer)" [attr.download]="installer.fileName" rel="noopener">
@@ -293,6 +304,7 @@
       <ol class="qz-steps">
         <li>Descarga el instalador de tu sistema (versión {{ qzVersion }}) y ábrelo. En Windows, si aparece un aviso de seguridad, elige "Más información" → "Ejecutar de todas formas".</li>
         <li>Sigue el asistente con las opciones predeterminadas. QZ Tray queda en la bandeja del sistema y arranca solo con el equipo.</li>
+        <li>Si lo instalaste con estos enlaces, ejecuta también el instalador para SaltorSystem de arriba para agregar el certificado (sin él, QZ no deja recordar "Allow").</li>
         <li>Pon como predeterminada en el sistema la impresora que quieras usar y pulsa "Comprobar de nuevo".</li>
       </ol>
 

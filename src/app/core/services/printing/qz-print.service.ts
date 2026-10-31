@@ -95,6 +95,13 @@ export class QzPrintService {
     return this.connecting;
   }
 
+  /** Certificado público con el que SaltorSystem firma las impresiones (para override.crt). */
+  async getCertificate(): Promise<string> {
+    const { data, error } = await this.supabase.client.functions.invoke('qz-sign', { body: { action: 'certificate' } });
+    if (error || !data?.certificate) throw error ?? new Error('No se recibió el certificado de QZ Tray.');
+    return String(data.certificate);
+  }
+
   private async configureSigning(): Promise<void> {
     if (this.signingConfigured || !this.qz?.security) return;
     const { data, error } = await this.supabase.client.functions.invoke('qz-sign', { body: { action: 'certificate' } });

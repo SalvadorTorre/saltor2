@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth/auth.service';
-import { PlatformPlan, PlatformService } from '../../core/services/platform/platform.service';
+import { PlatformCompany, PlatformPlan, PlatformService } from '../../core/services/platform/platform.service';
 import { SupabaseService } from '../../core/services/supabase/supabase.service';
 import {
   INSTALLER_IMAGES, InstallerSources, LicenseType, LocalInstallerOptions, buildInstallerPackage, randomSecret, validateOptions
@@ -21,6 +21,8 @@ interface FunctionsBundle { archivos: { ruta: string; contenido: string }[] }
 export class LocalInstallerPageComponent implements OnInit {
   readonly images = INSTALLER_IMAGES;
   plans: PlatformPlan[] = [];
+  companies: PlatformCompany[] = [];
+  includeData = false;
   form: LocalInstallerOptions = this.defaults();
   showPasswords = false;
   showAdvanced = false;
@@ -45,6 +47,7 @@ export class LocalInstallerPageComponent implements OnInit {
       this.form.rootUsuario = user.username;
       this.form.rootNombre = (user.fullName || '').split(' ')[0] || 'Soporte';
     }
+    try { this.companies = (await this.platform.getSummary()).empresas; } catch { /* solo para traer datos */ }
     try {
       this.plans = (await this.platform.getPlans()).filter((p) => p.activo);
       if (this.plans.length && !this.plans.some((p) => p.nombre === this.form.plan)) this.form.plan = this.plans[0].nombre;
@@ -58,8 +61,28 @@ export class LocalInstallerPageComponent implements OnInit {
       rootPassword: randomSecret(14), postgresPassword: randomSecret(28),
       licencia: 'Activa', licenciaHasta: this.isoPlusDays(365), plan: '',
       puertoWeb: 8080, exponerPostgres: false, puertoPostgres: 5432,
-      qzCertificado: '', qzLlave: ''
+      qzCertificado: '', qzLlave: '', empresaDatosId: null
     };
+  }
+
+  /** Marca o desmarca "traer datos": al elegir la empresa se copian sus datos al formulario. */
+  toggleIncludeData(): void {
+    if (!this.includeData) { this.form.empresaDatosId = null; return; }
+    if (this.form.empresaDatosId) this.pickCompany(this.form.empresaDatosId);
+  }
+
+  pickCompany(id: number | null): void {
+    this.form.empresaDatosId = id;
+    const company = this.companies.find((c) => c.id === id);
+    if (!company) return;
+    this.form.cliente = company.nombre_comercial;
+    this.form.rnc = company.rnc ?? '';
+    this.form.telefono = company.telefono ?? '';
+    this.form.correoEmpresa = company.correo ?? '';
+  }
+
+  get selectedCompany(): PlatformCompany | undefined {
+    return this.companies.find((c) => c.id === this.form.empresaDatosId);
   }
 
   setLicense(type: LicenseType): void {
@@ -77,6 +100,7 @@ export class LocalInstallerPageComponent implements OnInit {
     this.result = null;
     this.form.puertoWeb = Number(this.form.puertoWeb);
     this.form.puertoPostgres = Number(this.form.puertoPostgres);
+    if (this.includeData && !this.form.empresaDatosId) { this.errorMessage = 'Elige la empresa cuyos datos quieres llevar.'; return; }
     const invalid = validateOptions(this.form);
     if (invalid) { this.errorMessage = invalid; return; }
 
@@ -108,6 +132,18 @@ export class LocalInstallerPageComponent implements OnInit {
         : error.message);
     }
 
+    let datosSql: string | undefined;
+    if (this.form.empresaDatosId) {
+      this.step('Copiando los datos de la empresa…', 9);
+      const { data, error: dataError } = await this.supabase.client.rpc('plataforma_datos_maestros_instalador', { p_empresa_id: this.form.empresaDatosId });
+      if (dataError) {
+        throw new Error(/plataforma_datos_maestros_instalador/.test(dataError.message ?? '')
+          ? 'Falta aplicar la migración 20261031100000_instalador_datos_maestros.sql en la base de datos.'
+          : dataError.message);
+      }
+      datosSql = String(data);
+    }
+
     this.step('Leyendo el sistema web…', 12);
     const manifest = await this.fetchJson<BuildManifest>('instalador/manifiesto.json');
     const bundle = await this.fetchJson<FunctionsBundle>('instalador/funciones.json');
@@ -127,7 +163,7 @@ export class LocalInstallerPageComponent implements OnInit {
     };
     await Promise.all(Array.from({ length: 6 }, worker));
 
-    return { esquemaSql: String(esquemaSql), web, funciones: bundle.archivos, version: manifest.version };
+    return { esquemaSql: String(esquemaSql), datosSql, web, funciones: bundle.archivos, version: manifest.version };
   }
 
   private async fetchJson<T>(path: string): Promise<T> {

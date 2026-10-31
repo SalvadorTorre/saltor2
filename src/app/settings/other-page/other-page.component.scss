@@ -194,3 +194,8 @@
     flex-direction: column;
   }
 }
+
+.qz-setup { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; padding: 14px 16px; border: 1px solid #c7d7f5; border-left: 5px solid #2563dd; border-radius: 10px; background: #f4f8ff; }
+.qz-setup b { display: block; color: #102f52; }
+.qz-setup small { display: block; margin-top: 4px; color: #4d6a8a; max-width: 640px; }
+.qz-setup .qz-setup__msg { color: #087857; font-weight: 700; }
