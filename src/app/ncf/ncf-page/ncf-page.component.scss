@@ -143,3 +143,32 @@ dialog.sequence-editor .sequence-feedback { margin: 16px 24px 0; }
 @media(max-width:360px) { dialog.sequence-editor .sequence-fields { grid-template-columns: minmax(0, 1fr); } dialog.sequence-editor .sequence-fields__wide { grid-column: auto; } }
 /* La capa superior de dialog no recibe el filtro oscuro del elemento html. */
 :host-context(html[data-theme='dark']) dialog.sequence-editor { filter: invert(.9) hue-rotate(180deg); }
+
+/* Escala de lectura del módulo e-NCF. */
+.sequence-page { font-size: 18px; }
+.sequence-eyebrow { font-size: 12px; }
+h2 { font-size: 27px; }
+h3 { font-size: 22px; }
+p { font-size: 17px; }
+.sequence-overview { font-size: 16px; }
+button, .sequence-primary, .sequence-secondary { font-size: 19px; }
+.sequence-primary, .sequence-secondary { min-height: 50px; padding: 11px 19px; }
+.sequence-icon-button { font-size: 18px; min-height: 42px; width: 42px; }
+input, select { font-size: 19px; min-height: 50px; padding: 11px 14px; }
+.sequence-toolbar { padding: 18px; }
+table { font-size: 18px; }
+th { font-size: 16px; height: 52px; }
+th, td { padding: 15px 16px; }
+.sequence-grid--register td { height: 82px; }
+.sequence-series { font-size: 14px; min-height: 29px; }
+.sequence-record, small, .sequence-status { font-size: 13px; }
+.sequence-type__name, .sequence-muted, .sequence-number { font-size: 17px; }
+.sequence-feedback { font-size: 18px; }
+.sequence-grid-footer { font-size: 17px; padding: 16px 20px; }
+.sequence-fields label { font-size: 18px; gap: 9px; }
+.sequence-editor__footer p { font-size: 17px; }
+dialog.sequence-editor > header { padding: 26px 28px; }
+dialog.sequence-editor .sequence-fields { margin: 24px 28px; }
+dialog.sequence-editor .sequence-editor__footer { padding: 18px 28px; }
+dialog.sequence-editor .sequence-feedback { margin: 18px 28px 0; }
+.sequence-lock-note, .sequence-proforma-note { font-size: 17px; }
