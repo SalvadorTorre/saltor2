@@ -7,6 +7,8 @@ export interface SalesOrderHeaderRow {
   id: number;
   numero_orden: string;
   numero_cotizacion: string | null;
+  /** Factura creada desde esta orden (la orden queda cerrada y solo se consulta). */
+  numero_factura?: string | null;
   cliente_id: number | null;
   cliente_nombre: string;
   cliente_rnc: string | null;
@@ -58,7 +60,7 @@ export class SalesOrdersService {
   async getOrders(): Promise<SalesOrderHeaderRow[]> {
     const { data, error } = await this.supabase.client
       .from('ordenventa')
-      .select('id, numero_orden, numero_cotizacion, cliente_id, cliente_nombre, cliente_rnc, cliente_telefono, cliente_correo, cliente_direccion, cliente_ciudad, fecha_orden, condicion_pago, forma_pago_codigo, notas, subtotal, itbis, total, estado, creado_en')
+      .select('id, numero_orden, numero_cotizacion, numero_factura, cliente_id, cliente_nombre, cliente_rnc, cliente_telefono, cliente_correo, cliente_direccion, cliente_ciudad, fecha_orden, condicion_pago, forma_pago_codigo, notas, subtotal, itbis, total, estado, creado_en')
       .order('id', { ascending: false });
     if (error) throw error;
     return (data ?? []) as SalesOrderHeaderRow[];
@@ -86,6 +88,12 @@ export class SalesOrdersService {
     const { error: detailsError } = await this.supabase.client.from('ordenventa_detalle').insert(details);
     if (detailsError) throw detailsError;
     return { id: data.id, numero_factura: data.numero_orden, dgii_estado: 'No enviado' };
+  }
+
+  /** Anota en la orden (y en su cotización) la factura que se creó a partir de ella. */
+  async linkInvoice(invoiceId: number, orderId: number): Promise<void> {
+    const { error } = await this.supabase.client.rpc('vincular_factura_orden', { p_factura_id: invoiceId, p_orden_id: orderId });
+    if (error) throw error;
   }
 
   async deleteOrder(orderId: number): Promise<void> {

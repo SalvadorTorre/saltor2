@@ -46,7 +46,10 @@ export class OrdersConsultationPageComponent implements OnInit {
 
   view(order: SalesOrderHeaderRow): void { this.viewRequested.emit(order.id); }
 
-  edit(order: SalesOrderHeaderRow): void { this.editRequested.emit(order.id); }
+  edit(order: SalesOrderHeaderRow): void {
+    if (order.numero_factura) { this.view(order); return; }
+    this.editRequested.emit(order.id);
+  }
   print(order: SalesOrderHeaderRow): void { this.printRequested.emit(order.id); }
 
   async remove(order: SalesOrderHeaderRow): Promise<void> {
@@ -60,7 +63,13 @@ export class OrdersConsultationPageComponent implements OnInit {
   }
 
   createInvoice(order: SalesOrderHeaderRow): void {
+    if (order.numero_factura) return;
     void this.router.navigate(['/transacciones/facturacion'], { queryParams: { orden: order.id } });
+  }
+
+  createDeliveryNote(order: SalesOrderHeaderRow): void {
+    if (order.estado === 'Anulada') return;
+    void this.router.navigate(['/transacciones/conduce'], { queryParams: { orden: order.id } });
   }
 
   date(value: string): string { return value ? new Intl.DateTimeFormat('es-DO').format(new Date(`${value}T12:00:00`)) : '—'; }

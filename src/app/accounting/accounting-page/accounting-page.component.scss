@@ -386,3 +386,14 @@
 @media (max-width: 600px) {
   .credit-page-header, .purchase606, .e41 { margin-left: -9px; margin-right: -9px; }
 }
+
+.proforma-conversion-confirmation-backdrop { align-items: center; background: rgba(15, 23, 42, .72); display: flex; inset: 0; justify-content: center; padding: 22px; position: fixed; z-index: 1600; }
+.proforma-conversion-confirmation { background: #fff; border-radius: 16px; box-shadow: 0 28px 80px rgba(15, 23, 42, .4); max-width: 520px; padding: 30px; text-align: center; width: 100%; }
+.proforma-conversion-confirmation__icon { align-items: center; border: 3px solid #f59e0b; border-radius: 50%; color: #d97706; display: flex; font-size: 35px; font-weight: 900; height: 64px; justify-content: center; margin: 0 auto 14px; width: 64px; }
+.proforma-conversion-confirmation h2 { color: #1e3a5f; font-size: 25px; margin: 0 0 12px; }
+.proforma-conversion-confirmation p { color: #51657e; font-size: 17px; line-height: 1.5; margin: 0; }
+.proforma-conversion-confirmation__note { color: #1d6a9f !important; font-size: 15px !important; font-weight: 700; margin-top: 12px !important; }
+.proforma-conversion-confirmation footer { display: flex; gap: 12px; justify-content: center; margin-top: 25px; }
+.proforma-conversion-confirmation button { border: 0; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 800; min-height: 44px; padding: 0 20px; }
+.proforma-conversion-confirmation__cancel { background: #e7edf5; color: #334e68; }
+.proforma-conversion-confirmation__accept { background: #087b58; color: #fff; }

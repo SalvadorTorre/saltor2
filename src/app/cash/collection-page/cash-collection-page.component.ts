@@ -143,7 +143,7 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
 
     if (dgiiProblem) {
       if (isConsumerInvoice) {
-        try { await this.printService.print(invoice.id, invoice.seller); }
+        try { await this.printService.print(invoice.id, invoice.seller, true); }
         catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }
         await Swal.fire({
           icon: 'warning', title: `Factura ${invoice.number} cobrada e impresa`,
@@ -156,7 +156,7 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
         });
       }
     } else {
-      try { await this.printService.print(invoice.id, invoice.seller); }
+      try { await this.printService.print(invoice.id, invoice.seller, true); }
       catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }
       void Swal.fire({
         icon: 'success', title: queued ? `Factura ${invoice.number} cobrada y en cola` : `Factura ${invoice.number} cobrada`,

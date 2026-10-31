@@ -120,7 +120,16 @@ export class QzPrintService {
     this.signingConfigured = true;
   }
 
-  async printHtml(html: string, title: string, popupSize = 'width=850,height=700'): Promise<PrintResult> {
+  /** Copias configuradas por la empresa para las facturas nuevas. */
+  invoiceCopies(): Promise<number> {
+    return this.companyPrintSettings.getInvoiceCopies();
+  }
+
+  /**
+   * Imprime un documento.  `copies` solo aplica con QZ Tray; en la impresión del
+   * navegador el usuario elige las copias en el diálogo de Windows.
+   */
+  async printHtml(html: string, title: string, popupSize = 'width=850,height=700', copies = 1): Promise<PrintResult> {
     const paper = await this.companyPrintSettings.getPaper();
     const documentHtml = this.applyPaperLayout(html, paper);
 
@@ -135,7 +144,7 @@ export class QzPrintService {
         // El tipo de papel configurado puede ser 80 mm aunque el usuario cambie
         // temporalmente a una impresora convencional. En ese caso no debemos
         // enviarle un rollo de 80 mm: el controlador de Windows decide su papel.
-        const configOptions: Record<string, unknown> = { jobName: title };
+        const configOptions: Record<string, unknown> = { jobName: title, copies: Math.min(5, Math.max(1, Math.round(copies) || 1)) };
         if (this.isThermalPrinter(printer) && (paper === '80mm' || paper === '90mm')) {
           configOptions['units'] = 'mm';
           configOptions['size'] = this.qzPaperSize(paper);

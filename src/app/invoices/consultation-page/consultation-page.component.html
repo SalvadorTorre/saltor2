@@ -55,6 +55,7 @@
           <button class="invoice-consultation-view invoice-consultation-view--view" type="button" title="Ver factura" aria-label="Ver factura" (click)="selectInvoice(invoice)"><img src="assets/icons/invoice-view.svg" alt="" /></button>
           <button class="invoice-consultation-view invoice-consultation-view--edit" type="button" title="Editar factura" aria-label="Editar factura" [disabled]="!canEdit(invoice)" (click)="requestEdit(invoice)"><img src="assets/icons/invoice-edit.svg" alt="" /></button>
           <button class="invoice-consultation-view invoice-consultation-view--print" type="button" title="Imprimir factura" aria-label="Imprimir factura" (click)="printInvoice(invoice)"><img src="assets/icons/invoice-print.svg" alt="" /></button>
+          <button class="invoice-consultation-view invoice-consultation-view--delivery" type="button" title="Crear conduce" aria-label="Crear conduce" [disabled]="invoice.status === 'Anulada'" (click)="createDeliveryNote(invoice)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h11v9H3zM14 9h4l3 3v3h-7zM7 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM17 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg></button>
           <button class="invoice-consultation-view invoice-consultation-view--cancel" type="button" title="Anular factura" aria-label="Anular factura" [disabled]="invoice.status === 'Anulada' || isDgiiLocked(invoice)" (click)="cancelInvoice(invoice)"><img src="assets/icons/line-trash-red.svg" alt="" /></button>
         </span>
       </div>

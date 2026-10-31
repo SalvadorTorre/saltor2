@@ -151,3 +151,17 @@
 .invoice-ncf-type--special { background: #fff5dc; border-color: #f5d484; color: #986000; }
 .invoice-ncf-type--adjustment { background: #f6ecff; border-color: #d8b5f0; color: #7541a4; }
 .invoice-ncf-type--default { background: #eef2f7; border-color: #ccd6e1; color: #4c6178; }
+
+.invoice-consultation-view--delivery {
+  background: #e0f2fe;
+  border-color: #7cc4f0;
+}
+
+.invoice-consultation-view--delivery svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: #0369a1;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}

@@ -190,7 +190,7 @@ export class Rep607Service {
 
   async getProformaPeriodSales(
     companyId: number,
-    filters: Pick<Rep607Filters, 'branchId' | 'from' | 'to'>
+    filters: Pick<Rep607Filters, 'branchId' | 'invoice' | 'from' | 'to'>
   ): Promise<ProformaPeriodSummary[]> {
     let query = this.supabase.client
       .from('facturas')
@@ -200,6 +200,7 @@ export class Rep607Service {
       .order('fecha_factura', { ascending: true });
 
     if (filters.branchId !== 'Todas') query = query.eq('idsucursal', Number(filters.branchId));
+    if (filters.invoice.trim()) query = query.ilike('numero_factura', `%${filters.invoice.trim()}%`);
     if (filters.from) query = query.gte('fecha_factura', filters.from);
     if (filters.to) query = query.lte('fecha_factura', filters.to);
 
@@ -241,19 +242,24 @@ export class Rep607Service {
     return [...groups.values()];
   }
 
-  async getProformaCandidates(companyId: number, branchId: string, from: string, to: string): Promise<ProformaPeriodCandidate[]> {
+  async getProformaCandidates(companyId: number, branchId: string, from: string, to: string, invoice = ''): Promise<ProformaPeriodCandidate[]> {
     let query = this.supabase.client.from('facturas').select('id, numero_factura, fecha_factura, total')
       .eq('idempres', companyId).eq('estado', 'PROFORMA').gte('fecha_factura', from).lte('fecha_factura', to)
       .order('fecha_factura', { ascending: true }).order('id', { ascending: true });
     if (branchId !== 'Todas') query = query.eq('idsucursal', Number(branchId));
+    if (invoice.trim()) query = query.ilike('numero_factura', `%${invoice.trim()}%`);
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map((row: { id: number; numero_factura: string; fecha_factura: string; total: number | string }) => ({ id: row.id, number: row.numero_factura, date: row.fecha_factura, total: Number(row.total ?? 0) }));
   }
 
-  async convertProformasToDeliveryNotes(from: string, to: string, branchId: string, amount: number): Promise<{ count: number; total: number; queuedCount: number; queuedTotal: number }> {
+  async convertProformasToDeliveryNotes(from: string, to: string, branchId: string, amount: number, invoiceIds: number[]): Promise<{ count: number; total: number; queuedCount: number; queuedTotal: number }> {
     const { data, error } = await this.supabase.client.rpc('convertir_proformas_a_conduce', {
-      p_desde: from, p_hasta: to, p_sucursal_id: branchId === 'Todas' ? null : Number(branchId), p_monto: amount
+      p_desde: from,
+      p_hasta: to,
+      p_sucursal_id: branchId === 'Todas' ? null : Number(branchId),
+      p_monto: amount,
+      p_factura_ids: invoiceIds
     });
     if (error) throw error;
     return { count: Number(data?.cantidad ?? 0), total: Number(data?.monto ?? 0), queuedCount: Number(data?.facturas_pendientes ?? 0), queuedTotal: Number(data?.monto_pendiente ?? 0) };

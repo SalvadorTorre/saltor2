@@ -23,20 +23,20 @@
     </div>
     <div class="table-shell">
       <table>
-        <thead><tr><th>Numero</th><th>Orden de venta</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="amount">Total</th><th class="actions-column"></th></tr></thead>
+        <thead><tr><th>Numero</th><th>Orden de venta</th><th>Factura</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="amount">Total</th><th class="actions-column"></th></tr></thead>
         <tbody>
           <tr *ngFor="let item of filtered">
-            <td class="folio">{{ item.number }}</td><td class="folio">{{ item.orderNumber || '-' }}</td><td class="customer">{{ item.customer }}</td><td>{{ item.date | date: 'dd MMM y' }}</td>
+            <td class="folio">{{ item.number }}</td><td class="folio">{{ item.orderNumber || '-' }}</td><td class="folio">{{ item.invoiceNumber || '-' }}</td><td class="customer">{{ item.customer }}</td><td>{{ item.date | date: 'dd MMM y' }}</td>
             <td><span class="status" [ngClass]="statusClass(item.status)">{{ displayStatus(item.status) }}</span></td><td class="amount">RD${{ item.total | number: '1.2-2' }}</td>
             <td class="row-actions">
               <button type="button" class="action-button action-button--view" title="Consultar cotización" aria-label="Consultar cotización" (click)="view(item)"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></button>
-              <button type="button" class="action-button action-button--edit" title="Editar cotización" aria-label="Editar cotización" (click)="edit(item)"><svg viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m13.8 7.2 3 3"/></svg></button>
+              <button type="button" class="action-button action-button--edit" [title]="isLocked(item) ? 'Ya convertida: solo consulta' : 'Editar cotización'" aria-label="Editar cotización" [disabled]="isLocked(item)" (click)="edit(item)"><svg viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m13.8 7.2 3 3"/></svg></button>
               <button type="button" class="action-button action-button--convert" [title]="transactionQuotation ? 'Crear orden de venta' : 'Convertir en factura'" [attr.aria-label]="transactionQuotation ? 'Crear orden de venta' : 'Convertir en factura'" [disabled]="transactionQuotation ? !!item.orderNumber : displayStatus(item.status) === 'Facturada'" (click)="convert(item)"><svg viewBox="0 0 24 24"><path d="M4 7h10a4 4 0 0 1 0 8H8"/><path d="m8 11-4 4 4 4"/><path d="M16 5h4v4"/></svg></button>
               <button type="button" class="action-button action-button--print" title="Imprimir cotización" aria-label="Imprimir cotización" (click)="print(item)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/></svg></button>
               <button type="button" class="action-button action-button--pdf" title="Descargar PDF" aria-label="Descargar PDF" (click)="pdf(item)">PDF</button>
             </td>
           </tr>
-          <tr *ngIf="!filtered.length"><td colspan="7" class="empty-state">No hay cotizaciones que coincidan con la búsqueda.</td></tr>
+          <tr *ngIf="!filtered.length"><td colspan="8" class="empty-state">No hay cotizaciones que coincidan con la búsqueda.</td></tr>
         </tbody>
       </table>
     </div>

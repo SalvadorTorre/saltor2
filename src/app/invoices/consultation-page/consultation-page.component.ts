@@ -3,8 +3,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject, EventEmitter, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { DgiiInvoiceStatus, EditableInvoiceData, InvoicesService } from '../../core/services/invoices/invoices.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { InvoicePrintService } from '../../core/services/printing/invoice-print.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { CompaniesService } from '../../core/services/companies/companies.service';
 import { CANCELLATION_TYPES } from '../../core/services/invoices/cancellation-types';
@@ -57,8 +59,10 @@ export class InvoiceConsultationPageComponent implements OnInit {
   constructor(
     private readonly invoicesService: InvoicesService,
     private readonly qzPrintService: QzPrintService,
+    private readonly invoicePrint: InvoicePrintService,
     private readonly auth: AuthService,
-    private readonly companiesService: CompaniesService
+    private readonly companiesService: CompaniesService,
+    private readonly router: Router
   ) {}
 
   ngOnInit(): void {
@@ -90,6 +94,11 @@ export class InvoiceConsultationPageComponent implements OnInit {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  createDeliveryNote(invoice: InvoiceConsultationRow): void {
+    if (invoice.status === 'Anulada') return;
+    void this.router.navigate(['/transacciones/conduce'], { queryParams: { factura: invoice.id } });
   }
 
   async selectInvoice(invoice: InvoiceConsultationRow): Promise<void> {
@@ -190,6 +199,12 @@ export class InvoiceConsultationPageComponent implements OnInit {
 
   async printInvoice(invoice: InvoiceConsultationRow): Promise<void> {
     try {
+      // Media carta: formato de factura en columnas; las reimpresiones salen en una copia.
+      if (await this.invoicePrint.isHalfLetter()) {
+        const halfLetterSession = await this.auth.restoreSession();
+        await this.invoicePrint.print(invoice.id, invoice.seller || halfLetterSession?.fullName || 'N/D');
+        return;
+      }
       const detail = await this.invoicesService.getInvoiceForEditing(invoice.id);
       const session = await this.auth.restoreSession();
       // Vendedor guardado en la factura; las facturas anteriores al cambio no lo tienen.

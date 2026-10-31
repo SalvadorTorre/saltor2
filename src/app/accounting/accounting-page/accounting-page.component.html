@@ -525,6 +525,18 @@
             <footer><button type="button" class="proforma-period-modal__convert" [disabled]="dialog.loading || dialog.applying || !simulatedConvertedCount" (click)="convertProformaPeriod()">{{ dialog.applying ? 'Convirtiendo…' : 'Convertir a conduce' }}</button><button type="button" class="proforma-period-modal__close" (click)="closeProformaPeriodDialog()">Cerrar</button></footer>
           </section>
         </div>
+        <div *ngIf="proformaConversionConfirmation as confirmation" class="proforma-conversion-confirmation-backdrop" role="presentation">
+          <section class="proforma-conversion-confirmation" role="dialog" aria-modal="true" aria-label="Confirmar conversión a conduce">
+            <div class="proforma-conversion-confirmation__icon">!</div>
+            <h2>Confirmar conversión</h2>
+            <p>Se convertirá{{ confirmation.count === 1 ? '' : 'n' }} {{ confirmation.count }} proforma{{ confirmation.count === 1 ? '' : 's' }} seleccionada{{ confirmation.count === 1 ? '' : 's' }} por <strong>RD$ {{ confirmation.amount | number:'1.2-2' }}</strong> a conduce.</p>
+            <p class="proforma-conversion-confirmation__note">Solo se modificarán las facturas que aparecen en este detalle.</p>
+            <footer>
+              <button type="button" class="proforma-conversion-confirmation__cancel" (click)="proformaConversionConfirmation = null">Cancelar</button>
+              <button type="button" class="proforma-conversion-confirmation__accept" (click)="confirmProformaPeriodConversion()">Confirmar conversión</button>
+            </footer>
+          </section>
+        </div>
       </ng-template></ng-container
     >
     <ng-container *ngSwitchCase="'encf'"

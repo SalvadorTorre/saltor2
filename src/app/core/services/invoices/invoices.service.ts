@@ -88,6 +88,7 @@ interface InvoiceConsultationDatabaseRow {
 interface InvoiceDetailDatabaseRow {
   id: number;
   producto_id: number;
+  codigo_producto?: string | null;
   descripcion: string;
   cantidad: number | string;
   precio_unitario: number | string;
@@ -195,7 +196,7 @@ export class InvoicesService {
 
     const { data: details, error: detailsError } = await this.supabase.client
       .from('factura_detalles')
-      .select('id, producto_id, descripcion, cantidad, precio_unitario, tasa_itbis, monto_itbis, total_linea')
+      .select('id, producto_id, codigo_producto, descripcion, cantidad, precio_unitario, tasa_itbis, monto_itbis, total_linea')
       .eq('factura_id', invoiceId)
       .order('id');
     if (detailsError) throw detailsError;
@@ -242,7 +243,7 @@ export class InvoicesService {
         taxRate: Number(detail.tasa_itbis),
         taxAmount: Number(detail.monto_itbis),
         lineTotal: Number(detail.total_linea),
-        productCode: ''
+        productCode: detail.codigo_producto ?? ''
       }))
     };
   }

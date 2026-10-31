@@ -15,6 +15,7 @@ import { ClientsService } from '../../core/services/clients/clients.service';
 import { PaymentMethod, PaymentMethodsService } from '../../core/services/payment-methods/payment-methods.service';
 import { EcfService } from '../../core/services/ecf/ecf.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { InvoicePrintService } from '../../core/services/printing/invoice-print.service';
 import { BillingMode, CompanyBillingModeService } from '../../core/services/printing/company-billing-mode.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { CompaniesService } from '../../core/services/companies/companies.service';
@@ -245,6 +246,7 @@ export class InvoiceNewPageComponent implements OnInit {
     private readonly paymentMethodsService: PaymentMethodsService,
     private readonly ecfService: EcfService,
     private readonly qzPrintService: QzPrintService,
+    private readonly invoicePrint: InvoicePrintService,
     private readonly auth: AuthService,
     private readonly companiesService: CompaniesService,
     private readonly receivablesService: ReceivablesService,
@@ -941,6 +943,7 @@ export class InvoiceNewPageComponent implements OnInit {
 
   clearInvoice(silent = false): void {
     this.isClearConfirmationVisible = false;
+    this.sourceOrderId = null;
     this.selectedClient = null as any;
     this.savedAsProforma = false;
     this.invoiceForm = {
@@ -1407,6 +1410,14 @@ export class InvoiceNewPageComponent implements OnInit {
           ? await this.invoicesService.updateInvoice(this.editingExistingInvoiceId, invoiceData)
           : await this.invoicesService.createInvoice(invoiceData);
       this.invoiceForm.invoiceNumber = savedInvoice.numero_factura;
+      if (!this.saleOrder && !this.editingExistingInvoiceId && this.sourceOrderId) {
+        const orderId = this.sourceOrderId;
+        this.sourceOrderId = null;
+        try { await this.salesOrdersService.linkInvoice(savedInvoice.id, orderId); }
+        catch (linkError) {
+          void Swal.fire({ icon: 'warning', title: 'Factura guardada', text: `No se pudo anotar la factura en la orden de venta: ${this.formatSupabaseError(linkError, '')}` });
+        }
+      }
       if (!this.saleOrder) {
         this.savedAsProforma = isProformaInvoice;
         this.invoiceForm.ncfType = usesFiscalNcf ? this.getNcfOptionByStoredType(storedNcfType) : this.consumerNcfType;
@@ -1531,10 +1542,14 @@ export class InvoiceNewPageComponent implements OnInit {
     this.invoiceMessage = `Editando ${this.documentName.toLowerCase()} ${invoice.number}. Guarda los cambios para actualizarla.`;
   }
 
+  /** Orden de venta de la que sale la factura nueva (se vincula al guardarla). */
+  private sourceOrderId: number | null = null;
+
   private async prepareInvoiceFromOrder(orderId: number): Promise<void> {
     try {
       const order = await this.salesOrdersService.getOrderForEditing(orderId);
       this.loadInvoiceForEditing(order);
+      this.sourceOrderId = orderId;
       this.editingExistingInvoiceId = null;
       this.savedInvoice = null;
       this.invoiceForm.invoiceNumber = '';
@@ -1601,6 +1616,21 @@ export class InvoiceNewPageComponent implements OnInit {
 
     const savedInvoiceId = this.savedInvoice.id;
 
+    // Media carta: formato en columnas (factura igual que Caja y Consulta; orden de venta sin datos fiscales ni QR).
+    if (await this.invoicePrint.isHalfLetter()) {
+      const halfLetterSession = await this.auth.restoreSession();
+      const halfLetterSeller = halfLetterSession?.fullName ?? this.data.userName;
+      try {
+        if (this.saleOrder) await this.invoicePrint.printSalesOrder(savedInvoiceId, halfLetterSeller, true);
+        else await this.invoicePrint.print(savedInvoiceId, halfLetterSeller, true);
+      } catch (error) {
+        this.invoiceMessage = error instanceof Error ? error.message : 'No se pudo imprimir la factura.';
+        return;
+      }
+      this.clearInvoice(true);
+      return;
+    }
+
     const isAcceptedByDgii = this.dgiiStatus === 'Aceptado';
     const documentTitle = this.saleOrder
       ? 'Orden de venta'
@@ -1636,7 +1666,8 @@ export class InvoiceNewPageComponent implements OnInit {
       <div class="total"><div><span>Subtotal</span><span>${money(this.invoiceSubtotal)}</span></div><div><span>ITBIS</span><span>${money(this.invoiceTaxTotal)}</span></div><div><strong>Total</strong><strong>${money(this.invoiceGrandTotal)}</strong></div></div>
       <div class="fiscal">${fiscalCodes.qr ? `<img class="qr" src="${fiscalCodes.qr}" alt="Código QR">` : ''}<p><b>Código de seguridad:</b> ${escape(printDetail.securityCode || 'Pendiente')}</p><p><b>Fecha firma digital:</b> ${escape(printDetail.signatureDate || 'Pendiente')}</p>${fiscalCodes.barcode ? `<img class="barcode" src="${fiscalCodes.barcode}" alt="Código de barras"><p>${escape(this.savedInvoice.numero_factura)}</p>` : ''}</div>
       <script>window.onload=function(){window.print();};<\/script></body></html>`;
-    const result = await this.qzPrintService.printHtml(html, `${documentTitle} ${this.savedInvoice.numero_factura}`);
+    const copies = await this.qzPrintService.invoiceCopies();
+    const result = await this.qzPrintService.printHtml(html, `${documentTitle} ${this.savedInvoice.numero_factura}`, undefined, copies);
     if (result === 'unavailable') {
       this.invoiceMessage = 'No fue posible abrir la impresión. Permite las ventanas emergentes e intenta otra vez.';
       return;

@@ -212,6 +212,18 @@
         </label>
         <p class="field-help">Define el formato de las facturas, cotizaciones y tickets de esta empresa.</p>
 
+        <label class="field">
+          <span>Copias al generar una factura</span>
+          <select name="invoiceCopies" [(ngModel)]="preferences.invoiceCopies">
+            <option [ngValue]="1">1 copia</option>
+            <option [ngValue]="2">2 copias</option>
+            <option [ngValue]="3">3 copias</option>
+            <option [ngValue]="4">4 copias</option>
+            <option [ngValue]="5">5 copias</option>
+          </select>
+        </label>
+        <p class="field-help">Para toda la empresa. Se aplica al guardar una factura en Facturación y al cobrarla en Caja. Las reimpresiones desde Consulta de facturas salen en una copia.</p>
+
         <label class="field checkbox-field field--full">
           <input type="checkbox" name="useWindowsDefaultPrinter" [(ngModel)]="preferences.useWindowsDefaultPrinter" />
           <span>Usar la impresora predeterminada de Windows en este equipo</span>

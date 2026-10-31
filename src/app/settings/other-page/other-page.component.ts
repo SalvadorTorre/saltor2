@@ -45,6 +45,7 @@ export interface OtherPreferences {
   defaultNcfType: string;
   defaultPaymentMethod: string;
   printPaper: PrintPaper;
+  invoiceCopies: number;
   useWindowsDefaultPrinter: boolean;
   printerName: string;
   billingMode: BillingMode;
@@ -137,6 +138,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
     defaultNcfType: '02 - Consumo',
     defaultPaymentMethod: 'Contado',
     printPaper: 'carta',
+    invoiceCopies: 1,
     useWindowsDefaultPrinter: true,
     printerName: '',
     billingMode: 'Directo',
@@ -194,6 +196,10 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       try { await this.companyPrintSettings.savePaper(this.preferences.printPaper); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el tipo de papel.'); this.preferences.printPaper = this.originalPreferences.printPaper; }
     }
+    if (Number(this.preferences.invoiceCopies) !== Number(this.originalPreferences.invoiceCopies)) {
+      try { await this.companyPrintSettings.saveInvoiceCopies(Number(this.preferences.invoiceCopies)); }
+      catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudieron guardar las copias.'); this.preferences.invoiceCopies = this.originalPreferences.invoiceCopies; }
+    }
     if (this.preferences.billingMode !== this.originalPreferences.billingMode) {
       try { await this.billingModeService.saveMode(this.preferences.billingMode); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el modo de facturación.'); this.preferences.billingMode = this.originalPreferences.billingMode; }
@@ -240,6 +246,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       defaultNcfType: '02 - Consumo',
       defaultPaymentMethod: 'Contado',
       printPaper: 'carta',
+      invoiceCopies: 1,
       useWindowsDefaultPrinter: true,
       printerName: '',
       billingMode: this.preferences.billingMode,
@@ -384,6 +391,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
   private async loadPrintPaper(): Promise<void> {
     try {
       this.preferences.printPaper = await this.companyPrintSettings.getPaper();
+      this.preferences.invoiceCopies = await this.companyPrintSettings.getInvoiceCopies();
       this.preferences.billingMode = await this.billingModeService.getMode();
       this.originalPreferences = { ...this.preferences };
     } catch {

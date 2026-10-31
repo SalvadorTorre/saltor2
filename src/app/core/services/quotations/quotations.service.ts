@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { SupabaseService } from '../supabase/supabase.service';
 
 export interface QuotationLine { code: string; description: string; quantity: number; price: number; itbis: number; total: number; }
-export interface Quotation { id: number; number: string; orderNumber?: string; date: string; validUntil: string; customer: string; rnc: string; phone: string; email: string; address: string; notes: string; subtotal: number; itbis: number; total: number; status: string; lines: QuotationLine[]; }
+export interface Quotation { id: number; number: string; orderNumber?: string; invoiceNumber?: string; date: string; validUntil: string; customer: string; rnc: string; phone: string; email: string; address: string; notes: string; subtotal: number; itbis: number; total: number; status: string; lines: QuotationLine[]; }
 
 @Injectable({ providedIn: 'root' })
 export class QuotationsService {
@@ -17,9 +17,9 @@ export class QuotationsService {
   }
 
   async list(): Promise<Quotation[]> {
-    const { data, error } = await this.supabase.client.from('cotizaciones').select('id,numero_cotizacion,numero_orden_venta,fecha,vigencia_hasta,cliente_nombre,cliente_rnc,cliente_telefono,cliente_correo,cliente_direccion,notas,subtotal,itbis,total,estado').order('id', { ascending: false });
+    const { data, error } = await this.supabase.client.from('cotizaciones').select('id,numero_cotizacion,numero_orden_venta,numero_factura,fecha,vigencia_hasta,cliente_nombre,cliente_rnc,cliente_telefono,cliente_correo,cliente_direccion,notas,subtotal,itbis,total,estado').order('id', { ascending: false });
     if (error) throw error;
-    return (data ?? []).map((row: any) => ({ id: Number(row.id), number: row.numero_cotizacion, orderNumber: row.numero_orden_venta ?? '', date: row.fecha, validUntil: row.vigencia_hasta ?? '', customer: row.cliente_nombre, rnc: row.cliente_rnc ?? '', phone: row.cliente_telefono ?? '', email: row.cliente_correo ?? '', address: row.cliente_direccion ?? '', notes: row.notas ?? '', subtotal: Number(row.subtotal), itbis: Number(row.itbis), total: Number(row.total), status: row.estado, lines: [] }));
+    return (data ?? []).map((row: any) => ({ id: Number(row.id), number: row.numero_cotizacion, orderNumber: row.numero_orden_venta ?? '', invoiceNumber: row.numero_factura ?? '', date: row.fecha, validUntil: row.vigencia_hasta ?? '', customer: row.cliente_nombre, rnc: row.cliente_rnc ?? '', phone: row.cliente_telefono ?? '', email: row.cliente_correo ?? '', address: row.cliente_direccion ?? '', notes: row.notas ?? '', subtotal: Number(row.subtotal), itbis: Number(row.itbis), total: Number(row.total), status: row.estado, lines: [] }));
   }
 
   async get(id: number): Promise<Quotation | null> {

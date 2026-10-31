@@ -2,14 +2,121 @@
   <header class="dashboard-header company-header">
     <div>
       <p class="dashboard-header__eyebrow">Transacciones</p>
-      <h2>Conduce</h2>
-      <p class="company-header__copy">Documento de despacho para entregar mercancías de una orden de venta.</p>
+      <h2>Conduce de despacho</h2>
+      <p class="company-header__copy">Despacha la mercancía de una orden de venta o de una factura. Permite despachos parciales.</p>
     </div>
   </header>
 
-  <section class="panel delivery-note__empty">
-    <div class="delivery-note__icon" aria-hidden="true">↗</div>
-    <h3>Conduce disponible en Transacciones</h3>
-    <p>La pantalla de emisión de conduce se agregará sobre las órdenes de venta guardadas, para mantener su despacho separado de la facturación fiscal.</p>
+  <nav class="delivery-tabs" role="tablist" aria-label="Opciones de conduce">
+    <button type="button" role="tab" class="delivery-tabs__button" [class.delivery-tabs__button--active]="tab === 'create'" [attr.aria-selected]="tab === 'create'" (click)="showCreate()">Nuevo conduce</button>
+    <button type="button" role="tab" class="delivery-tabs__button" [class.delivery-tabs__button--active]="tab === 'consult'" [attr.aria-selected]="tab === 'consult'" (click)="showConsult()">Consulta de conduces</button>
+  </nav>
+
+  <!-- Nuevo conduce -->
+  <section class="panel delivery-panel" *ngIf="tab === 'create'">
+    <div class="delivery-source">
+      <div class="delivery-origin" role="radiogroup" aria-label="Documento de origen">
+        <button type="button" [class.active]="origin === 'Orden de venta'" [disabled]="!!document" (click)="origin = 'Orden de venta'">Orden de venta</button>
+        <button type="button" [class.active]="origin === 'Factura'" [disabled]="!!document" (click)="origin = 'Factura'">Factura</button>
+      </div>
+      <label class="delivery-field delivery-field--number">
+        <span>No. {{ origin === 'Factura' ? 'factura' : 'orden de venta' }}</span>
+        <input type="text" [(ngModel)]="documentNumber" [disabled]="!!document" (keyup.enter)="searchDocument()" placeholder="Ej. 20260100087">
+      </label>
+      <button type="button" class="delivery-btn" *ngIf="!document" [disabled]="isSearching" (click)="searchDocument()">{{ isSearching ? 'Buscando...' : 'Buscar' }}</button>
+      <button type="button" class="delivery-btn delivery-btn--ghost" *ngIf="document" (click)="clearForm()">Cambiar documento</button>
+    </div>
+
+    <p class="delivery-error" *ngIf="formError">{{ formError }}</p>
+
+    <ng-container *ngIf="document">
+      <div class="delivery-customer">
+        <div><span>Cliente</span><strong>{{ document.cliente }}</strong><small *ngIf="document.rnc">RNC/Cédula: {{ document.rnc }}</small></div>
+        <div><span>{{ document.origen }}</span><strong>{{ document.numero }}</strong><small>{{ formatDate(document.fecha) }}<ng-container *ngIf="document.ncf"> · {{ document.ncf }}</ng-container></small></div>
+        <div><span>Teléfono</span><strong>{{ document.telefono || 'N/D' }}</strong></div>
+      </div>
+
+      <div class="delivery-grid">
+        <label class="delivery-field delivery-field--wide"><span>Dirección de entrega</span><input type="text" [(ngModel)]="address" maxlength="250"></label>
+        <label class="delivery-field"><span>Fecha</span><input type="date" [(ngModel)]="date"></label>
+        <label class="delivery-field"><span>Chofer / mensajero</span><input type="text" [(ngModel)]="driver" maxlength="120"></label>
+        <label class="delivery-field"><span>Vehículo / placa</span><input type="text" [(ngModel)]="vehicle" maxlength="60"></label>
+      </div>
+
+      <div class="delivery-lines-head">
+        <h3>Productos a despachar</h3>
+        <div>
+          <button type="button" class="delivery-link" (click)="dispatchAll()">Despachar todo lo pendiente</button>
+          <button type="button" class="delivery-link" (click)="dispatchNone()">Poner en cero</button>
+        </div>
+      </div>
+      <div class="delivery-table-wrap">
+        <table class="delivery-table">
+          <thead><tr><th>Código</th><th>Descripción</th><th>Unidad</th><th class="num">Cantidad</th><th class="num">Ya despachado</th><th class="num">Pendiente</th><th class="num">A despachar</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let line of lines" [class.is-complete]="line.pendiente <= 0">
+              <td class="mono">{{ line.codigo || '—' }}</td>
+              <td>{{ line.descripcion }}</td>
+              <td>{{ line.unidad }}</td>
+              <td class="num">{{ qty(line.cantidad) }}</td>
+              <td class="num">{{ qty(line.despachado) }}</td>
+              <td class="num"><strong>{{ qty(line.pendiente) }}</strong></td>
+              <td class="num">
+                <input type="number" min="0" step="0.01" [max]="line.pendiente" [(ngModel)]="line.aDespachar" [disabled]="line.pendiente <= 0" (blur)="fixQuantity(line)" aria-label="Cantidad a despachar">
+              </td>
+            </tr>
+          </tbody>
+          <tfoot><tr><td colspan="6" class="num">Total a despachar</td><td class="num"><strong>{{ qty(totalToDispatch) }}</strong></td></tr></tfoot>
+        </table>
+      </div>
+
+      <label class="delivery-field delivery-field--notes"><span>Notas</span><textarea rows="2" [(ngModel)]="notes" maxlength="500"></textarea></label>
+
+      <div class="delivery-actions">
+        <button type="button" class="delivery-btn delivery-btn--ghost" (click)="clearForm()">Cancelar</button>
+        <button type="button" class="delivery-btn" [disabled]="isSaving || !hasPending || totalToDispatch <= 0" (click)="save()">{{ isSaving ? 'Guardando...' : 'Guardar conduce' }}</button>
+      </div>
+    </ng-container>
+
+    <p class="delivery-hint" *ngIf="!document && !formError">Busque la orden de venta o la factura, o use el botón <strong>Crear conduce</strong> desde su consulta.</p>
+  </section>
+
+  <!-- Consulta -->
+  <section class="panel delivery-panel" *ngIf="tab === 'consult'">
+    <div class="delivery-filters">
+      <label class="delivery-field delivery-field--search"><span>Buscar</span><input type="search" [(ngModel)]="search" placeholder="Conduce, documento, cliente o chofer"></label>
+      <label class="delivery-field"><span>Estado</span>
+        <select [(ngModel)]="statusFilter"><option value="">Todos</option><option value="Despachado">Despachados</option><option value="Entregado">Entregados</option><option value="Anulado">Anulados</option></select>
+      </label>
+      <label class="delivery-field"><span>Desde</span><input type="date" [(ngModel)]="from"></label>
+      <label class="delivery-field"><span>Hasta</span><input type="date" [(ngModel)]="to"></label>
+      <button type="button" class="delivery-btn" [disabled]="isLoading" (click)="loadList()">{{ isLoading ? 'Consultando...' : 'Actualizar' }}</button>
+    </div>
+    <p class="delivery-error" *ngIf="listError">{{ listError }}</p>
+    <div class="delivery-table-wrap">
+      <table class="delivery-table">
+        <thead><tr><th>No. conduce</th><th>Fecha</th><th>Origen</th><th>Cliente</th><th>Chofer</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let note of filteredNotes">
+            <td class="mono"><strong>{{ note.numero }}</strong></td>
+            <td>{{ formatDate(note.fecha) }}</td>
+            <td>{{ note.origen_tipo }} <span class="mono">{{ note.numero_origen }}</span></td>
+            <td>{{ note.cliente_nombre }}<small *ngIf="note.direccion_entrega">{{ note.direccion_entrega }}</small></td>
+            <td>{{ note.chofer || '—' }}</td>
+            <td>
+              <span class="delivery-status" [ngClass]="statusClass(note.estado)">{{ note.estado }}</span>
+              <small *ngIf="note.estado === 'Entregado' && note.recibido_por">Recibió: {{ note.recibido_por }}</small>
+              <small *ngIf="note.estado === 'Anulado' && note.motivo_anulacion">{{ note.motivo_anulacion }}</small>
+            </td>
+            <td class="delivery-row-actions">
+              <button type="button" class="delivery-icon is-print" title="Imprimir conduce" aria-label="Imprimir conduce" (click)="printNote(note.id)"><img src="assets/icons/invoice-print.svg" alt=""></button>
+              <button type="button" class="delivery-icon is-done" title="Marcar entregado" aria-label="Marcar entregado" [disabled]="note.estado !== 'Despachado'" (click)="markDelivered(note)">✓</button>
+              <button type="button" class="delivery-icon is-void" title="Anular conduce" aria-label="Anular conduce" [disabled]="note.estado === 'Anulado'" (click)="cancelNote(note)"><img src="assets/icons/line-trash-red.svg" alt=""></button>
+            </td>
+          </tr>
+          <tr *ngIf="!isLoading && !filteredNotes.length"><td colspan="7" class="delivery-empty">No hay conduces para mostrar.</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 </section>

@@ -2,31 +2,44 @@
   <header class="sales-report__header"><div class="sales-report__header-icon">↗</div><div><h2>{{ title }}</h2><p>{{ subtitle }}</p></div></header>
   <section class="sales-report__filters">
     <div class="sales-report__filter-heading"><span>⌕</span><div><h3>Filtros de búsqueda</h3><p>{{ mode === 'invoices' ? 'Selecciona un período y opcionalmente filtra por cliente.' : 'Selecciona un período y opcionalmente filtra por categoría, producto o cliente.' }}</p></div></div>
+    <div class="sales-report__period" *ngIf="mode === 'invoices'"><label>Tipo de reporte</label><div class="sales-report__period-buttons"><button type="button" [class.is-active]="invoiceView === 'facturas'" (click)="setInvoiceView('facturas')">Por factura</button><button type="button" [class.is-active]="invoiceView === 'utilidad'" (click)="setInvoiceView('utilidad')">Venta por utilidad</button></div></div>
     <div class="sales-report__period"><label>Período</label><div class="sales-report__period-buttons"><button *ngFor="let option of periods" type="button" [class.is-active]="period === option.value" (click)="setPeriod(option.value)">{{ option.label }}</button></div></div>
     <div class="sales-report__fields">
       <label *ngIf="mode === 'products'">Categoría<select [(ngModel)]="category"><option value="all">Todas las categorías</option><option *ngFor="let item of categories" [value]="item">{{ item }}</option></select></label>
       <label class="sales-report__product-field" *ngIf="mode === 'products' && period === 'custom'">Descripción del producto<input [(ngModel)]="productDescription" type="search" autocomplete="off" placeholder="Escriba para buscar producto..."><div class="sales-report__suggestions" *ngIf="productSuggestions.length"><button type="button" *ngFor="let product of productSuggestions" (click)="selectProduct(product)">{{ product }}</button></div></label>
       <label [class.sales-report__client-field]="period === 'custom'">Cliente<input [(ngModel)]="client" type="search" placeholder="Nombre del cliente..."></label>
+      <label *ngIf="period === 'custom'">Vendedor<select [(ngModel)]="seller"><option value="all">Todos los vendedores</option><option *ngFor="let item of sellers" [value]="item">{{ item }}</option></select></label>
       <label *ngIf="period === 'custom'">Desde<input [(ngModel)]="dateFrom" type="date"></label>
       <label *ngIf="period === 'custom'">Hasta<input [(ngModel)]="dateTo" type="date"></label>
     </div>
     <div class="sales-report__actions"><button class="sales-report__query" type="button" (click)="loadReport()">⌕ Consultar ventas</button><button class="sales-report__clear" type="button" (click)="clearFilters()">↻ Limpiar</button></div>
   </section>
   <p class="sales-report__error" *ngIf="errorMessage">{{ errorMessage }}</p>
-  <section class="sales-report__metrics">
+  <section class="sales-report__metrics" *ngIf="isProfitView">
+    <article><span>Venta (con ITBIS)</span><strong>{{ formatMoney(profitTotals.sale) }}</strong><i class="income">$</i></article>
+    <article><span>Costo</span><strong>{{ formatMoney(profitTotals.cost) }}</strong><i class="units">□</i></article>
+    <article><span>Utilidad</span><strong>{{ formatMoney(profitTotals.profit) }}</strong><i class="average">↗</i></article>
+    <article><span>% Margen</span><strong>{{ profitTotals.margin | number:'1.2-2' }}%</strong><i class="transactions">%</i></article>
+  </section>
+  <section class="sales-report__metrics" *ngIf="!isProfitView">
     <article><span>Ingresos totales</span><strong>{{ formatMoney(totalRevenue) }}</strong><i class="income">$</i></article>
     <article><span>Unidades vendidas</span><strong>{{ totalUnits | number:'1.0-2' }}</strong><i class="units">□</i></article>
     <article><span>Venta promedio</span><strong>{{ formatMoney(averageSale) }}</strong><i class="average">↗</i></article>
     <article><span>Transacciones</span><strong>{{ transactions }}</strong><i class="transactions">≡</i></article>
   </section>
   <section class="sales-report__results">
-    <div class="sales-report__results-header"><h3>Resultados <span>({{ mode === 'invoices' ? invoiceRows.length : filteredRows.length }} registros)</span></h3><div class="sales-report__export-actions"><button type="button" (click)="exportPdf()" [disabled]="!filteredRows.length">⇩ Exportar PDF</button><button type="button" (click)="exportExcel()" [disabled]="!filteredRows.length">⇩ Exportar Excel</button></div></div>
+    <div class="sales-report__results-header"><h3>Resultados <span>({{ isProfitView ? profitRows.length : mode === 'invoices' ? invoiceRows.length : filteredRows.length }} registros)</span></h3><div class="sales-report__export-actions"><button type="button" (click)="exportPdf()" [disabled]="!filteredRows.length">⇩ Exportar PDF</button><button type="button" (click)="exportExcel()" [disabled]="!filteredRows.length">⇩ Exportar Excel</button></div></div>
     <div class="sales-report__table-wrap">
       <table *ngIf="mode === 'products'"><thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Categoría</th><th class="numeric">Cant.</th><th class="numeric">Precio unit.</th><th class="numeric">Total</th></tr></thead><tbody>
         <tr *ngFor="let row of filteredRows"><td>{{ formatDate(row.date) }}</td><td class="product">{{ row.product }}</td><td>{{ row.client }}</td><td><span class="category">{{ row.category }}</span></td><td class="numeric">{{ row.quantity | number:'1.0-2' }}</td><td class="numeric">{{ formatMoney(row.unitPrice) }}</td><td class="numeric total">{{ formatMoney(row.total) }}</td></tr>
         <tr *ngIf="isLoading"><td colspan="7" class="empty">Cargando ventas...</td></tr><tr *ngIf="!isLoading && !filteredRows.length"><td colspan="7" class="empty">No hay ventas para los filtros seleccionados.</td></tr>
       </tbody></table>
-      <table *ngIf="mode === 'invoices'"><thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th class="numeric">Productos</th><th class="numeric">Cant.</th><th class="numeric">Total</th></tr></thead><tbody>
+      <table *ngIf="isProfitView"><thead><tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th class="numeric">Valor factura</th><th class="numeric">Costo factura</th><th class="numeric">% Margen</th><th class="numeric">Utilidad</th></tr></thead><tbody>
+        <tr *ngFor="let row of profitRows"><td class="product">{{ row.invoiceNumber }}</td><td>{{ formatDate(row.date) }}</td><td>{{ row.client }}</td><td>{{ row.seller }}</td><td class="numeric">{{ formatMoney(row.sale) }}</td><td class="numeric">{{ formatMoney(row.cost) }}</td><td class="numeric" [style.color]="row.profit < 0 ? '#b42318' : null">{{ row.margin | number:'1.2-2' }}%</td><td class="numeric total" [style.color]="row.profit < 0 ? '#b42318' : null">{{ formatMoney(row.profit) }}</td></tr>
+        <tr *ngIf="profitRows.length" class="sales-report__total-row"><td colspan="4"><b>TOTAL</b></td><td class="numeric"><b>{{ formatMoney(profitTotals.sale) }}</b></td><td class="numeric"><b>{{ formatMoney(profitTotals.cost) }}</b></td><td class="numeric"><b>{{ profitTotals.margin | number:'1.2-2' }}%</b></td><td class="numeric total"><b>{{ formatMoney(profitTotals.profit) }}</b></td></tr>
+        <tr *ngIf="isLoading"><td colspan="8" class="empty">Cargando ventas...</td></tr><tr *ngIf="!isLoading && !profitRows.length"><td colspan="8" class="empty">No hay facturas para los filtros seleccionados.</td></tr>
+      </tbody></table>
+      <table *ngIf="mode === 'invoices' && !isProfitView"><thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th class="numeric">Productos</th><th class="numeric">Cant.</th><th class="numeric">Total</th></tr></thead><tbody>
         <tr *ngFor="let row of invoiceRows"><td>{{ formatDate(row.date) }}</td><td class="product">{{ row.invoiceNumber }}</td><td>{{ row.client }}</td><td class="numeric">{{ row.products }}</td><td class="numeric">{{ row.quantity | number:'1.0-2' }}</td><td class="numeric total">{{ formatMoney(row.total) }}</td></tr>
         <tr *ngIf="isLoading"><td colspan="6" class="empty">Cargando ventas...</td></tr><tr *ngIf="!isLoading && !invoiceRows.length"><td colspan="6" class="empty">No hay facturas para los filtros seleccionados.</td></tr>
       </tbody></table>

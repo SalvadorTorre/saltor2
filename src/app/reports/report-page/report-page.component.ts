@@ -5,6 +5,9 @@ import { SalesReportRow, SalesReportService } from '../../core/services/reports/
 
 type PeriodOption = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all' | 'custom';
 interface InvoiceReportRow { invoiceId: number; invoiceNumber: string; date: string; client: string; products: number; quantity: number; total: number; }
+/** Venta por utilidad: una fila por factura, valores con ITBIS incluido. */
+interface ProfitReportRow { invoiceId: number; invoiceNumber: string; date: string; client: string; seller: string; sale: number; cost: number; profit: number; margin: number; }
+type InvoiceView = 'facturas' | 'utilidad';
 
 @Component({
   selector: 'app-report-page',
@@ -27,6 +30,9 @@ export class ReportPageComponent implements OnInit {
   category = 'all';
   productDescription = '';
   client = '';
+  seller = 'all';
+  /** Reporte de ventas: por factura o por utilidad. */
+  invoiceView: InvoiceView = 'facturas';
   rows: SalesReportRow[] = [];
   isLoading = false;
   errorMessage = '';
@@ -34,6 +40,8 @@ export class ReportPageComponent implements OnInit {
   constructor(private readonly salesReport: SalesReportService) {}
 
   ngOnInit(): void { void this.loadReport(); }
+  get sellers(): string[] { return [...new Set(this.rows.map((row) => row.seller).filter(Boolean))].sort((a, b) => a.localeCompare(b)); }
+  get isProfitView(): boolean { return this.mode === 'invoices' && this.invoiceView === 'utilidad'; }
   get categories(): string[] { return [...new Set(this.rows.map((row) => row.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)); }
   get filteredRows(): SalesReportRow[] {
     const term = this.client.trim().toLocaleLowerCase();
@@ -41,7 +49,8 @@ export class ReportPageComponent implements OnInit {
     return this.rows.filter((row) =>
       (this.category === 'all' || row.category === this.category) &&
       (!productTerm || row.product.toLocaleLowerCase().includes(productTerm)) &&
-      (!term || row.client.toLocaleLowerCase().includes(term))
+      (!term || row.client.toLocaleLowerCase().includes(term)) &&
+      (this.seller === 'all' || row.seller === this.seller)
     );
   }
   get productSuggestions(): string[] {
@@ -53,8 +62,32 @@ export class ReportPageComponent implements OnInit {
   get totalUnits(): number { return this.filteredRows.reduce((sum, row) => sum + row.quantity, 0); }
   get transactions(): number { return new Set(this.filteredRows.map((row) => row.invoiceId)).size; }
   get averageSale(): number { return this.transactions ? this.totalRevenue / this.transactions : 0; }
-  get title(): string { return this.mode === 'invoices' ? 'Reporte de Ventas' : 'Consulta de Ventas'; }
-  get subtitle(): string { return this.mode === 'invoices' ? 'Ventas agrupadas por factura' : 'Reportes por período'; }
+  get title(): string { return this.isProfitView ? 'Venta por Utilidad' : this.mode === 'invoices' ? 'Reporte de Ventas' : 'Consulta de Ventas'; }
+  get subtitle(): string { return this.isProfitView ? 'Venta, costo y utilidad por factura (valores con ITBIS incluido)' : this.mode === 'invoices' ? 'Ventas agrupadas por factura' : 'Reportes por período'; }
+
+  get profitRows(): ProfitReportRow[] {
+    const grouped = new Map<number, ProfitReportRow>();
+    this.filteredRows.forEach((row) => {
+      const current = grouped.get(row.invoiceId) ?? { invoiceId: row.invoiceId, invoiceNumber: row.invoiceNumber, date: row.date, client: row.client, seller: row.seller, sale: 0, cost: 0, profit: 0, margin: 0 };
+      current.sale += row.netTotal;
+      current.cost += row.cost;
+      grouped.set(row.invoiceId, current);
+    });
+    return [...grouped.values()].map((row) => {
+      const sale = this.round(row.sale);
+      const cost = this.round(row.cost);
+      const profit = this.round(sale - cost);
+      return { ...row, sale, cost, profit, margin: sale ? profit / sale * 100 : 0 };
+    });
+  }
+  get profitTotals(): { sale: number; cost: number; profit: number; margin: number } {
+    const sale = this.round(this.profitRows.reduce((sum, row) => sum + row.sale, 0));
+    const cost = this.round(this.profitRows.reduce((sum, row) => sum + row.cost, 0));
+    const profit = this.round(sale - cost);
+    return { sale, cost, profit, margin: sale ? profit / sale * 100 : 0 };
+  }
+  setInvoiceView(view: InvoiceView): void { this.invoiceView = view; }
+  private round(value: number): number { return Math.round((value + Number.EPSILON) * 100) / 100; }
   get invoiceRows(): InvoiceReportRow[] {
     const grouped = new Map<number, InvoiceReportRow>();
     this.filteredRows.forEach((row) => {
@@ -67,6 +100,8 @@ export class ReportPageComponent implements OnInit {
 
   setPeriod(period: PeriodOption): void {
     this.period = period;
+    // El filtro de vendedor solo se ve en Personalizado: fuera de ahí no debe quedar aplicado sin verse.
+    if (period !== 'custom') this.seller = 'all';
     const today = new Date();
     if (period === 'all') { this.dateFrom = ''; this.dateTo = ''; }
     else if (period !== 'custom') {
@@ -90,7 +125,7 @@ export class ReportPageComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.period = 'all'; this.dateFrom = ''; this.dateTo = ''; this.category = 'all'; this.productDescription = ''; this.client = '';
+    this.period = 'all'; this.dateFrom = ''; this.dateTo = ''; this.category = 'all'; this.productDescription = ''; this.client = ''; this.seller = 'all';
     void this.loadReport();
   }
 
@@ -138,18 +173,26 @@ export class ReportPageComponent implements OnInit {
   }
 
   private get exportHeading(): string[] {
+    if (this.isProfitView) return ['Factura', 'Fecha', 'Cliente', 'Vendedor', 'Valor factura', 'Costo factura', '% Margen', 'Utilidad'];
     return this.mode === 'invoices'
       ? ['Fecha', 'Factura', 'Cliente', 'Productos', 'Cantidad', 'Total']
       : ['Fecha', 'Producto', 'Cliente', 'Categoría', 'Cantidad', 'Precio unitario', 'Total'];
   }
 
   private get exportValues(): string[][] {
+    if (this.isProfitView) {
+      const t = this.profitTotals;
+      return [
+        ...this.profitRows.map((row) => [row.invoiceNumber, this.formatDate(row.date), row.client, row.seller, row.sale.toFixed(2), row.cost.toFixed(2), `${row.margin.toFixed(2)}%`, row.profit.toFixed(2)]),
+        ['TOTAL', '', '', '', t.sale.toFixed(2), t.cost.toFixed(2), `${t.margin.toFixed(2)}%`, t.profit.toFixed(2)]
+      ];
+    }
     return this.mode === 'invoices'
       ? this.invoiceRows.map((row) => [this.formatDate(row.date), row.invoiceNumber, row.client, row.products.toString(), row.quantity.toString(), row.total.toFixed(2)])
       : this.filteredRows.map((row) => [this.formatDate(row.date), row.product, row.client, row.category, row.quantity.toString(), row.unitPrice.toFixed(2), row.total.toFixed(2)]);
   }
 
-  private get exportFileName(): string { return `${this.mode === 'invoices' ? 'reporte-ventas' : 'ventas-por-producto'}-${this.toDateInput(new Date())}`; }
+  private get exportFileName(): string { return `${this.isProfitView ? 'venta-por-utilidad' : this.mode === 'invoices' ? 'reporte-ventas' : 'ventas-por-producto'}-${this.toDateInput(new Date())}`; }
   private pdfValue(value: string): string { return String(value).length > 29 ? `${String(value).slice(0, 28)}…` : String(value); }
   private escapeXml(value: string): string { return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;'); }
   private downloadFile(content: string, type: string, fileName: string): void {
