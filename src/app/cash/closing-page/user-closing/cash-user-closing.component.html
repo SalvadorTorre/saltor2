@@ -1,0 +1,173 @@
+<section class="user-closing">
+  <header class="uc-header">
+    <div>
+      <h2>Cierre de Caja</h2>
+      <p>Cobro en la venta: cada usuario cuadra sus facturas, las veces que necesite en el día. <span>{{ branch }}</span></p>
+    </div>
+  </header>
+
+  <nav class="uc-tabs" role="tablist" aria-label="Opciones de cierre">
+    <button type="button" role="tab" class="uc-tabs__button" [class.uc-tabs__button--active]="tab === 'mine'" [attr.aria-selected]="tab === 'mine'" (click)="tab = 'mine'">{{ isAdmin ? 'Cierre por usuario' : 'Mi cierre' }}</button>
+    <button type="button" role="tab" class="uc-tabs__button" *ngIf="isAdmin" [class.uc-tabs__button--active]="tab === 'general'" [attr.aria-selected]="tab === 'general'" (click)="showGeneral()">Cierre general del día</button>
+  </nav>
+
+  <!-- ================= Mi cierre / por usuario ================= -->
+  <ng-container *ngIf="tab === 'mine'">
+    <div class="uc-toolbar">
+      <label class="uc-field" *ngIf="isAdmin">Usuario
+        <select [(ngModel)]="selectedUser" (ngModelChange)="changeUser()">
+          <option [ngValue]="null">{{ myName }} (yo)</option>
+          <option *ngFor="let user of otherUsers" [ngValue]="user.usuarioId">{{ user.usuario }} — {{ user.cantidad }} pend.</option>
+        </select>
+      </label>
+      <div class="uc-who" *ngIf="!isAdmin">Usuario: <b>{{ myName }}</b></div>
+      <div class="uc-toolbar__actions">
+        <button type="button" class="uc-btn uc-btn--ghost" [disabled]="isLoading" (click)="refreshMine()">{{ isLoading ? 'Consultando...' : 'Actualizar' }}</button>
+        <button type="button" class="uc-btn uc-btn--confirm" [disabled]="isLoading || !pending.length" (click)="openConfirmation()">Realizar cierre</button>
+      </div>
+    </div>
+
+    <section class="uc-totals">
+      <article class="uc-card uc-card--cash"><span>Efectivo</span><strong>{{ money(pendingTotals.cash) }}</strong></article>
+      <article class="uc-card uc-card--cards"><span>Tarjetas</span><strong>{{ money(pendingTotals.cards) }}</strong></article>
+      <article class="uc-card uc-card--transfer"><span>Depósito/transferencia</span><strong>{{ money(pendingTotals.deposits) }}</strong></article>
+      <article class="uc-card uc-card--credit"><span>Crédito</span><strong>{{ money(pendingTotals.credit) }}</strong></article>
+      <article class="uc-card uc-card--total"><span>Total</span><strong>{{ money(pendingTotals.total) }}</strong></article>
+    </section>
+
+    <p class="uc-feedback uc-feedback--error" *ngIf="errorMessage">{{ errorMessage }}</p>
+    <p class="uc-feedback" *ngIf="message">{{ message }}</p>
+
+    <div class="uc-heading"><h3>Facturas pendientes de cierre — {{ selectedUserName }}</h3><span>{{ pending.length }} facturas</span></div>
+    <div class="uc-table-wrap">
+      <table>
+        <thead><tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Forma de pago</th><th class="num">Valor</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let item of pending">
+            <td><b>{{ item.invoice }}</b></td><td>{{ formatDate(item.date) }}</td><td>{{ item.client }}</td>
+            <td><span class="uc-badge">{{ item.type }}</span></td><td class="uc-pay">{{ item.payment }}</td><td class="num"><b>{{ money(item.value) }}</b></td>
+          </tr>
+          <tr *ngIf="!isLoading && !pending.length"><td class="uc-empty" colspan="6">No hay facturas pendientes de cierre.</td></tr>
+          <tr *ngIf="isLoading"><td class="uc-empty" colspan="6">Consultando facturas...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="uc-heading"><h3>Cierres realizados hoy — {{ selectedUserName }}</h3><span>{{ closingsForSelected.length }} cierres</span></div>
+    <div class="uc-table-wrap">
+      <table>
+        <thead><tr><th>No.</th><th>Hora</th><th>Facturas</th><th>Rango</th><th class="num">Efectivo</th><th class="num">Tarjetas</th><th class="num">Transf.</th><th class="num">Crédito</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let c of closingsForSelected">
+            <td><b>#{{ c.id }}</b></td><td>{{ time(c.cerradoEn) }}</td><td>{{ c.cantidad }}</td><td class="uc-mono">{{ c.desde }} – {{ c.hasta }}</td>
+            <td class="num">{{ money(c.efectivo) }}</td><td class="num">{{ money(c.tarjetas) }}</td><td class="num">{{ money(c.depositos) }}</td><td class="num">{{ money(c.credito) }}</td>
+            <td class="num"><b>{{ money(c.total) }}</b></td>
+            <td><button type="button" class="uc-icon" title="Reimprimir cierre" aria-label="Reimprimir cierre" (click)="reprint(c)"><img src="assets/icons/invoice-print.svg" alt=""></button></td>
+          </tr>
+          <tr *ngIf="!closingsForSelected.length"><td class="uc-empty" colspan="10">Aún no hay cierres hoy.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+
+  <!-- ================= Cierre general (administrador) ================= -->
+  <ng-container *ngIf="tab === 'general' && isAdmin">
+    <div class="uc-toolbar">
+      <label class="uc-field">Fecha<input type="date" [(ngModel)]="generalDate" (change)="loadGeneral()"></label>
+      <label class="uc-field" *ngIf="branches.length > 1">Sucursal
+        <select [(ngModel)]="branchFilter"><option value="">Todas</option><option *ngFor="let b of branches" [value]="b">{{ b }}</option></select>
+      </label>
+      <div class="uc-toolbar__actions">
+        <button type="button" class="uc-btn uc-btn--ghost" [disabled]="isLoadingGeneral" (click)="loadGeneral()">{{ isLoadingGeneral ? 'Consultando...' : 'Actualizar' }}</button>
+        <button type="button" class="uc-btn" [disabled]="isLoadingGeneral || !general" (click)="printGeneral()">Imprimir cierre general</button>
+      </div>
+    </div>
+
+    <section class="uc-totals">
+      <article class="uc-card uc-card--cash"><span>Efectivo</span><strong>{{ money(generalTotals.cash) }}</strong></article>
+      <article class="uc-card uc-card--cards"><span>Tarjetas</span><strong>{{ money(generalTotals.cards) }}</strong></article>
+      <article class="uc-card uc-card--transfer"><span>Depósito/transferencia</span><strong>{{ money(generalTotals.deposits) }}</strong></article>
+      <article class="uc-card uc-card--credit"><span>Crédito</span><strong>{{ money(generalTotals.credit) }}</strong></article>
+      <article class="uc-card uc-card--total"><span>Total general</span><strong>{{ money(generalTotals.total) }}</strong></article>
+    </section>
+    <p class="uc-sub">{{ generalClosings.length }} cierres · {{ generalTotals.count }} facturas · cobrado RD${{ money(generalTotals.collected) }}</p>
+    <p class="uc-feedback uc-feedback--error" *ngIf="generalError">{{ generalError }}</p>
+
+    <div class="uc-table-wrap">
+      <table class="uc-general">
+        <thead><tr><th>Cierre</th><th>Hora</th><th>Sucursal</th><th>Facturas</th><th>Rango</th><th class="num">Efectivo</th><th class="num">Tarjetas</th><th class="num">Transf.</th><th class="num">Crédito</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody>
+          <ng-container *ngFor="let group of groups">
+            <tr class="uc-group"><td colspan="11">{{ group.seller }} <small>{{ group.closings.length }} {{ group.closings.length === 1 ? 'cierre' : 'cierres' }}</small></td></tr>
+            <ng-container *ngFor="let c of group.closings">
+              <tr class="uc-closing-row" (click)="toggle(c.id)">
+                <td><span class="uc-caret">{{ expanded.has(c.id) ? '▾' : '▸' }}</span> <b>#{{ c.id }}</b><small *ngIf="c.cajero && c.cajero !== c.vendedor">por {{ c.cajero }}</small></td>
+                <td>{{ time(c.cerradoEn) }}</td><td>{{ c.sucursal || 'Principal' }}</td><td>{{ c.cantidad }}</td><td class="uc-mono">{{ c.desde }} – {{ c.hasta }}</td>
+                <td class="num">{{ money(c.efectivo) }}</td><td class="num">{{ money(c.tarjetas) }}</td><td class="num">{{ money(c.depositos) }}</td><td class="num">{{ money(c.credito) }}</td>
+                <td class="num"><b>{{ money(c.total) }}</b></td>
+                <td><button type="button" class="uc-icon" title="Reimprimir cierre" aria-label="Reimprimir cierre" (click)="$event.stopPropagation(); reprint(c)"><img src="assets/icons/invoice-print.svg" alt=""></button></td>
+              </tr>
+              <tr class="uc-detail" *ngIf="expanded.has(c.id)">
+                <td colspan="11">
+                  <table class="uc-invoices">
+                    <thead><tr><th>Factura</th><th>Cliente</th><th>Tipo</th><th>Forma de pago</th><th class="num">Valor</th></tr></thead>
+                    <tbody><tr *ngFor="let f of c.facturas"><td>{{ f.numero }}</td><td>{{ f.cliente }}</td><td>{{ f.tipo || 'Factura' }}</td><td>{{ paymentLabel(f.formaPago, f.condicion) }}</td><td class="num">{{ money(f.total) }}</td></tr></tbody>
+                  </table>
+                  <p class="uc-note" *ngIf="c.nota"><b>Nota:</b> {{ c.nota }}</p>
+                </td>
+              </tr>
+            </ng-container>
+            <tr class="uc-subtotal">
+              <td colspan="3">Total {{ group.seller }}</td><td>{{ group.totals.count }}</td><td></td>
+              <td class="num">{{ money(group.totals.cash) }}</td><td class="num">{{ money(group.totals.cards) }}</td><td class="num">{{ money(group.totals.deposits) }}</td><td class="num">{{ money(group.totals.credit) }}</td>
+              <td class="num"><b>{{ money(group.totals.total) }}</b></td><td></td>
+            </tr>
+          </ng-container>
+          <tr *ngIf="!isLoadingGeneral && !groups.length"><td class="uc-empty" colspan="11">No hay cierres en esta fecha.</td></tr>
+        </tbody>
+        <tfoot *ngIf="groups.length">
+          <tr><td colspan="3">TOTAL GENERAL</td><td>{{ generalTotals.count }}</td><td></td>
+            <td class="num">{{ money(generalTotals.cash) }}</td><td class="num">{{ money(generalTotals.cards) }}</td><td class="num">{{ money(generalTotals.deposits) }}</td><td class="num">{{ money(generalTotals.credit) }}</td>
+            <td class="num">{{ money(generalTotals.total) }}</td><td></td></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <ng-container *ngIf="general?.pendientes?.length">
+      <div class="uc-heading"><h3>Pendiente por cerrar (todavía no cuadrado)</h3><span>RD${{ money(pendingGeneralTotal) }}</span></div>
+      <div class="uc-table-wrap">
+        <table>
+          <thead><tr><th>Usuario</th><th>Facturas</th><th class="num">Total</th><th></th></tr></thead>
+          <tbody>
+            <tr *ngFor="let p of general?.pendientes">
+              <td>{{ p.usuario }}</td><td>{{ p.cantidad }}</td><td class="num"><b>{{ money(p.total) }}</b></td>
+              <td class="num"><button type="button" class="uc-btn uc-btn--small" (click)="closeFor(p)">Cerrar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
+  </ng-container>
+
+  <!-- Confirmación -->
+  <div class="uc-modal-backdrop" *ngIf="showConfirmation" (click)="cancelConfirmation()">
+    <section class="uc-modal" role="dialog" aria-modal="true" aria-labelledby="uc-modal-title" (click)="$event.stopPropagation()">
+      <h2 id="uc-modal-title">Confirmar cierre de {{ selectedUserName }}</h2>
+      <div class="uc-modal__grid">
+        <p><span>Facturas</span><b>{{ pendingTotals.count }}</b></p>
+        <p><span>Rango</span><b>{{ pending[0].invoice }} – {{ pending[pending.length - 1].invoice }}</b></p>
+        <p><span>Efectivo</span><b>RD${{ money(pendingTotals.cash) }}</b></p>
+        <p><span>Tarjetas</span><b>RD${{ money(pendingTotals.cards) }}</b></p>
+        <p><span>Depósito/transferencia</span><b>RD${{ money(pendingTotals.deposits) }}</b></p>
+        <p><span>Crédito</span><b>RD${{ money(pendingTotals.credit) }}</b></p>
+        <p><span>Valores cobrados</span><b>RD${{ money(pendingTotals.collected) }}</b></p>
+      </div>
+      <div class="uc-modal__total"><b>Total del cierre</b><strong>RD${{ money(pendingTotals.total) }}</strong></div>
+      <label class="uc-modal__note">Nota del cierre<textarea [(ngModel)]="note" maxlength="255" placeholder="Escriba una nota (opcional)"></textarea></label>
+      <div class="uc-modal__actions">
+        <button type="button" class="uc-btn uc-btn--confirm" [disabled]="isSaving" (click)="completeClosing()">{{ isSaving ? 'Guardando...' : 'Confirmar e imprimir' }}</button>
+        <button type="button" class="uc-btn uc-btn--ghost" [disabled]="isSaving" (click)="cancelConfirmation()">Cancelar</button>
+      </div>
+    </section>
+  </div>
+</section>

@@ -3,16 +3,20 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CashClosingInvoice, CashClosingRecord, CashClosingsService } from '../../core/services/cash/cash-closings.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
+import { BillingMode, CompanyBillingModeService } from '../../core/services/printing/company-billing-mode.service';
+import { CashUserClosingComponent } from './user-closing/cash-user-closing.component';
 
 @Component({
   selector: 'app-cash-closing-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CashUserClosingComponent],
   templateUrl: './cash-closing-page.component.html',
   styleUrls: ['./cash-closing-page.component.scss']
 })
 export class CashClosingPageComponent implements OnInit {
   readonly viewMode = 'cash_closing';
+  /** Caja: cierre de caja de siempre. Directo (cobro en la venta): cierre por usuario. */
+  billingMode: BillingMode | null = null;
   lastClosing = '';
   fromInvoice = '';
   toInvoice = '';
@@ -24,9 +28,12 @@ export class CashClosingPageComponent implements OnInit {
   isSaving = false;
   errorMessage = '';
 
-  constructor(private readonly cashClosings: CashClosingsService, private readonly printer: QzPrintService) {}
+  constructor(private readonly cashClosings: CashClosingsService, private readonly printer: QzPrintService, private readonly billing: CompanyBillingModeService) {}
 
-  async ngOnInit(): Promise<void> { await this.prepareClosing(); }
+  async ngOnInit(): Promise<void> {
+    this.billingMode = await this.billing.getMode();
+    if (this.billingMode === 'Caja') await this.prepareClosing();
+  }
 
   get cashTotal(): number { return this.totalByPayment(1); }
   get cardsTotal(): number { return this.totalByPayment(3); }

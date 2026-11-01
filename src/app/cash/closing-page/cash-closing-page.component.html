@@ -1,3 +1,5 @@
+<app-cash-user-closing *ngIf="billingMode === 'Directo'"></app-cash-user-closing>
+<ng-container *ngIf="billingMode === 'Caja'">
 <section class="cash-closing">
   <header class="closing-header"><div><h2>Cierre de Caja</h2><p>Ultimo cierre: <b>{{ lastClosing }}</b><span>{{ branch }}</span></p></div><div class="closing-actions"><label>Desde<input [(ngModel)]="fromInvoice" (change)="loadPendingInvoices()" name="fromInvoice"></label><label>Hasta<input [(ngModel)]="toInvoice" (change)="loadPendingInvoices()" name="toInvoice"></label><button class="closing-actions__pdf" type="button" (click)="exportPdf()">PDF</button><button class="closing-actions__confirm" type="button" [disabled]="isLoading" (click)="confirmClosing()">Confirmar Cierre</button></div></header>
   <section class="closing-totals"><article class="total-card total-card--cash"><span>Efectivo</span><strong>{{ money(cashTotal) }}</strong></article><article class="total-card total-card--cards"><span>Tarjetas de credito/debito</span><strong>{{ money(cardsTotal) }}</strong></article><article class="total-card total-card--transfer"><span>Deposito transferencia/cheques</span><strong>{{ money(depositsTotal) }}</strong></article><article class="total-card total-card--pending"><span>Pendiente de pago</span><strong>{{ money(pendingTotal) }}</strong></article><article class="total-card total-card--credit"><span>Credito</span><strong>{{ money(creditTotal) }}</strong></article><article class="total-card total-card--total"><span>Total</span><strong>{{ money(total) }}</strong></article></section>
@@ -13,3 +15,4 @@
     </section>
   </div>
 </section>
+</ng-container>
