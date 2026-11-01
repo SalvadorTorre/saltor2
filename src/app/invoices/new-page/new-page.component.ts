@@ -1681,6 +1681,9 @@ export class InvoiceNewPageComponent implements OnInit {
         const readyToPrint = ['Aceptado', 'Aceptado condicional', 'Firmada', 'En cola', 'Enviando DGII', 'En proceso DGII'];
         if (readyToPrint.includes(result.dgii_estado ?? '')) await this.printInvoice();
       }
+      // Firmada o ya en la cola: la ventana se cierra sola. Si hubo error se queda abierta para leerlo.
+      const dialogState = this.dgiiDialog as string | null;
+      if (dialogState && dialogState !== 'error') this.autoCloseDgiiDialog();
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo enviar la factura a DGII.');
       this.dgiiDialog = 'error';
@@ -1703,7 +1706,19 @@ export class InvoiceNewPageComponent implements OnInit {
   }
 
   closeDgiiDialog(): void {
+    if (this.dgiiDialogTimer) { clearTimeout(this.dgiiDialogTimer); this.dgiiDialogTimer = null; }
     this.dgiiDialog = null;
+  }
+
+  private dgiiDialogTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Deja ver el resultado un momento y cierra la ventana sin tener que pulsar OK. */
+  private autoCloseDgiiDialog(): void {
+    if (this.dgiiDialogTimer) clearTimeout(this.dgiiDialogTimer);
+    this.dgiiDialogTimer = setTimeout(() => {
+      this.dgiiDialogTimer = null;
+      if (this.dgiiDialog !== 'error') this.dgiiDialog = null;
+    }, 1200);
   }
 
   async printInvoice(): Promise<void> {
@@ -1759,7 +1774,7 @@ export class InvoiceNewPageComponent implements OnInit {
       return `<tr><td>${escape(this.getInvoiceProductCode(line.productId))} &nbsp; ${escape(line.quantity)} x ${money(priceWithoutTax)}<br><b>${escape(line.description)}</b></td><td>${money(line.taxAmount)}</td><td>${money(line.lineTotal)}</td></tr>`;
     }).join('');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(documentTitle)} ${escape(this.savedInvoice.numero_factura)}</title><style>
-      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px;table-layout:fixed}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(1),td:nth-child(1){width:43%}th:nth-child(2),td:nth-child(2){width:19%;text-align:right}th:nth-child(3),td:nth-child(3){width:38%;text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:28mm;height:28mm;display:block;margin:0 auto 5px}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
+      body{font-family:Arial,sans-serif;color:#111;margin:0}.head{text-align:center;padding-bottom:7px}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.customer{margin:10px 0;line-height:1.5;font-size:11px}.document-data{margin:8px 0;font-size:11px;line-height:1.45}.document-data span{display:inline-block;min-width:76px}table{border-collapse:collapse;width:100%;margin-top:8px;table-layout:fixed}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;font-size:10px;vertical-align:top}th:nth-child(1),td:nth-child(1){width:43%}th:nth-child(2),td:nth-child(2){width:19%;text-align:right}th:nth-child(3),td:nth-child(3){width:38%;text-align:right}small{font-size:10px}.total{margin-left:auto;margin-top:10px;width:100%;font-size:11px}.total div{display:flex;justify-content:space-between;padding:3px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:36mm;height:36mm;display:block;margin:0 auto 5px;image-rendering:pixelated;image-rendering:crisp-edges}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body>
       <div class="head">${company?.logoUrl ? `<img class="logo" src="${escape(company.logoUrl)}" alt="">` : ''}<div class="company">${escape(company?.legalName || company?.tradeName || session?.companyName || this.data.companyName)}</div><div class="muted">RNC: ${escape(company?.rnc || 'N/D')}</div><div class="muted">${escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${escape(company?.phone || 'N/D')}</div></div>
       <div class="document-data"><div><span>No. Factura:</span>${escape(this.savedInvoice.numero_factura)}</div><div><span>Fecha:</span>${escape(this.invoiceForm.invoiceDate)}</div><div><span>e-NCF:</span>${escape(this.invoiceForm.ncf || 'N/A')}</div></div>
       <div class="receipt-type">${escape(this.receiptDocumentType(this.invoiceForm.ncfType || documentTitle))}</div>
@@ -1981,7 +1996,7 @@ export class InvoiceNewPageComponent implements OnInit {
       const barcode = (JsBarcodeModule as any).default ?? JsBarcodeModule;
       barcode(canvas, barcodeValue, { format: 'CODE128', displayValue: false, margin: 0, width: 1.25, height: 42 });
       return {
-        qr: await QRCode.toDataURL(qrValue, { width: 150, margin: 1 }),
+        qr: await QRCode.toDataURL(qrValue, { errorCorrectionLevel: 'L', margin: 4, scale: 8 }),
         barcode: canvas.toDataURL('image/png')
       };
     } catch {
