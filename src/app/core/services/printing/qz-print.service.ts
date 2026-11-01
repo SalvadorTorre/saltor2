@@ -131,7 +131,10 @@ export class QzPrintService {
    */
   async printHtml(html: string, title: string, popupSize = 'width=850,height=700', copies = 1): Promise<PrintResult> {
     const paper = await this.companyPrintSettings.getPaper();
-    const documentHtml = this.applyPaperLayout(html, paper);
+    // Las imágenes grandes (p. ej. un logo de 400 px) hacen lenta la impresión en QZ Tray;
+    // en rollo se reducen al ancho que la térmica realmente imprime.
+    const lightHtml = paper === '80mm' || paper === '90mm' ? await this.shrinkEmbeddedImages(html, 320) : html;
+    const documentHtml = this.applyPaperLayout(lightHtml, paper);
 
     if (await this.connectIfAvailable()) {
       try {
@@ -171,6 +174,43 @@ export class QzPrintService {
     fallback.document.write(documentHtml);
     fallback.document.close();
     return 'browser';
+  }
+
+  private readonly shrunkImages = new Map<string, string>();
+
+  /** Reduce las imágenes data: muy pesadas a un ancho máximo (se guarda el resultado para las siguientes impresiones). */
+  private async shrinkEmbeddedImages(html: string, maxWidth: number): Promise<string> {
+    if (typeof document === 'undefined') return html;
+    const sources = [...new Set(html.match(/data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+/g) ?? [])].filter((src) => src.length > 30000);
+    for (const src of sources) {
+      const key = `${src.length}:${src.slice(-64)}`;
+      let small = this.shrunkImages.get(key);
+      if (!small) {
+        small = await new Promise<string>((resolve) => {
+          const image = new Image();
+          image.onload = () => {
+            try {
+              const scale = Math.min(1, maxWidth / (image.naturalWidth || maxWidth));
+              if (scale >= 1) { resolve(src); return; }
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(image.naturalWidth * scale);
+              canvas.height = Math.round(image.naturalHeight * scale);
+              const context = canvas.getContext('2d');
+              if (!context) { resolve(src); return; }
+              context.fillStyle = '#fff';
+              context.fillRect(0, 0, canvas.width, canvas.height);
+              context.drawImage(image, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', 0.85));
+            } catch { resolve(src); }
+          };
+          image.onerror = () => resolve(src);
+          image.src = src;
+        });
+        this.shrunkImages.set(key, small);
+      }
+      if (small !== src) html = html.split(src).join(small);
+    }
+    return html;
   }
 
   private qzPaperSize(paper: PrintPaper): { width: number; height: number | null; custom?: boolean } {
