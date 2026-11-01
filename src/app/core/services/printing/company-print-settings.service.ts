@@ -79,6 +79,28 @@ export class CompanyPrintSettingsService {
     return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 1;
   }
 
+  private cachedOrderSlip: boolean | null = null;
+
+  /** Orden de venta con volante: al grabarla se imprime solo un volante con código de barras. */
+  async getOrderSlip(): Promise<boolean> {
+    if (this.cachedOrderSlip !== null) return this.cachedOrderSlip;
+    const companyId = this.companyId();
+    if (!companyId) return false;
+    const { data, error } = await this.supabase.client.from('empresas').select('orden_volante').eq('id', companyId).maybeSingle();
+    if (error) return false;
+    this.cachedOrderSlip = !!(data as { orden_volante?: boolean } | null)?.orden_volante;
+    return this.cachedOrderSlip;
+  }
+
+  async saveOrderSlip(enabled: boolean): Promise<void> {
+    const companyId = this.companyId();
+    if (!companyId) throw new Error('No se identificó la empresa activa.');
+    const { data, error } = await this.supabase.client.from('empresas').update({ orden_volante: !!enabled }).eq('id', companyId).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('No se guardó el volante de la orden de venta: solo un administrador de la empresa puede cambiarlo.');
+    this.cachedOrderSlip = !!enabled;
+  }
+
   private companyId(): number {
     try {
       const value = localStorage.getItem('saltor.activeUser');

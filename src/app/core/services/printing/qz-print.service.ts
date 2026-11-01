@@ -144,13 +144,20 @@ export class QzPrintService {
         // El tipo de papel configurado puede ser 80 mm aunque el usuario cambie
         // temporalmente a una impresora convencional. En ese caso no debemos
         // enviarle un rollo de 80 mm: el controlador de Windows decide su papel.
-        const configOptions: Record<string, unknown> = { jobName: title, copies: Math.min(5, Math.max(1, Math.round(copies) || 1)) };
-        if (this.isThermalPrinter(printer) && (paper === '80mm' || paper === '90mm')) {
+        const totalCopies = Math.min(5, Math.max(1, Math.round(copies) || 1));
+        const thermalRoll = this.isThermalPrinter(printer) && (paper === '80mm' || paper === '90mm');
+        // La impresora térmica corta el papel al terminar cada trabajo: con "copies"
+        // las copias salen pegadas en un solo trabajo. En rollo se manda una por trabajo.
+        const configOptions: Record<string, unknown> = { jobName: title, copies: thermalRoll ? 1 : totalCopies };
+        if (thermalRoll) {
           configOptions['units'] = 'mm';
           configOptions['size'] = this.qzPaperSize(paper);
         }
         const config = this.qz.configs.create(printer, configOptions);
-        await this.qz.print(config, [{ type: 'pixel', format: 'html', flavor: 'plain', data: documentHtml.replace(/<script[\s\S]*?<\/script>/gi, '') }]);
+        const data = [{ type: 'pixel', format: 'html', flavor: 'plain', data: documentHtml.replace(/<script[\s\S]*?<\/script>/gi, '') }];
+        for (let copy = 0; copy < (thermalRoll ? totalCopies : 1); copy++) {
+          await this.qz.print(config, data);
+        }
         return 'qz';
       } catch {
         // A live tray without an available default printer still falls back to browser printing.

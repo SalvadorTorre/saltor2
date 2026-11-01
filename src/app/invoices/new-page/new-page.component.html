@@ -6,6 +6,10 @@
     </div>
     <div class="company-header__actions" *ngIf="billingTab === 'create'">
       <div class="dashboard-header__pill">{{ isDocumentReadOnly ? 'Consultando orden de venta' : isEditingExistingInvoice ? ('Editando ' + documentName.toLowerCase()) : (saleOrder ? 'Nueva orden de venta' : 'Nueva Factura') }}</div>
+      <label *ngIf="!saleOrder && orderSlipMode" class="order-scan" title="Escanee el código de barras del volante de la orden de venta">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14M6 5v14M9 5v14M13 5v14M15 5v14M18 5v14M21 5v14"/></svg>
+        <input type="text" name="scannedOrderCode" [(ngModel)]="scannedOrderCode" (keydown.enter)="$event.preventDefault(); loadScannedOrder()" [disabled]="isLoadingScannedOrder" placeholder="Escanear orden de venta" autocomplete="off" aria-label="Escanear orden de venta">
+      </label>
       <button *ngIf="!isDocumentReadOnly" class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
       <button *ngIf="!invoiceSaved && !isDocumentReadOnly" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
       <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
@@ -182,6 +186,10 @@
         <div class="invoice-lines">
           <div class="invoice-lines__header">
             <strong>Detalle de productos</strong>
+            <button *ngIf="!isDocumentReadOnly" type="button" class="quick-scan-toggle" [class.quick-scan-toggle--on]="quickScanMode" [attr.aria-pressed]="quickScanMode" (click)="toggleQuickScanMode()" title="Al leer el código se agrega el producto con cantidad 1 y su precio">
+              <span class="quick-scan-toggle__dot" aria-hidden="true"></span>
+              Venta rápida (supermercado): {{ quickScanMode ? 'ACTIVA' : 'apagada' }}
+            </button>
           </div>
                     
           <div class="invoice-lines__body">

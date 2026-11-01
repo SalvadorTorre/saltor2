@@ -58,3 +58,15 @@
 .invoice-content--sale-order .invoice-summary__card { border-top-color: #ea580c; }
 .invoice-content--read-only .invoice-main { pointer-events: none; opacity: .82; }
 .invoice-content--read-only .invoice-summary__actions { pointer-events: auto; opacity: 1; }
+
+.order-scan { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 10px; border: 2px dashed #0867ed; border-radius: 10px; background: #f0f6ff; }
+.order-scan svg { width: 20px; height: 20px; fill: none; stroke: #0867ed; stroke-width: 1.6; flex: none; }
+.order-scan input { width: 200px; border: 0; outline: 0; background: transparent; font: 700 15px inherit; color: #0b2a55; }
+.order-scan input::placeholder { color: #5b7ba8; font-weight: 600; }
+@media (max-width: 700px) { .order-scan { width: 100%; } .order-scan input { width: 100%; } }
+
+.invoice-lines__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.quick-scan-toggle { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 1px solid #c7d2e0; border-radius: 999px; background: #fff; color: #475467; font: 700 13px inherit; cursor: pointer; }
+.quick-scan-toggle__dot { width: 12px; height: 12px; border-radius: 50%; background: #98a2b3; }
+.quick-scan-toggle--on { background: #e8f8ef; border-color: #36b37e; color: #067647; }
+.quick-scan-toggle--on .quick-scan-toggle__dot { background: #12b76a; box-shadow: 0 0 0 3px rgba(18, 183, 106, .25); }

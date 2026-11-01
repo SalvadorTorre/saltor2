@@ -16,6 +16,8 @@ import { PaymentMethod, PaymentMethodsService } from '../../core/services/paymen
 import { EcfService } from '../../core/services/ecf/ecf.service';
 import { QzPrintService } from '../../core/services/printing/qz-print.service';
 import { InvoicePrintService } from '../../core/services/printing/invoice-print.service';
+import { SalesOrderSlipService } from '../../core/services/printing/sales-order-slip.service';
+import { CompanyPrintSettingsService } from '../../core/services/printing/company-print-settings.service';
 import { BillingMode, CompanyBillingModeService } from '../../core/services/printing/company-billing-mode.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { CompaniesService } from '../../core/services/companies/companies.service';
@@ -252,7 +254,9 @@ export class InvoiceNewPageComponent implements OnInit {
     private readonly receivablesService: ReceivablesService,
     private readonly billingModeService: CompanyBillingModeService,
     private readonly salesOrdersService: SalesOrdersService,
-    private readonly route: ActivatedRoute
+    private readonly route: ActivatedRoute,
+    private readonly orderSlip: SalesOrderSlipService,
+    private readonly printSettings: CompanyPrintSettingsService
   ) {
     this.ncfTypes = this.toNcfOptions(this.data.ncfTypeList);
     this.startNewInvoice();
@@ -274,6 +278,7 @@ export class InvoiceNewPageComponent implements OnInit {
     void this.loadClients();
     void this.loadPaymentMethods();
     void this.billingModeService.getMode().then((mode) => this.billingMode = mode);
+    void this.printSettings.getOrderSlip().then((enabled) => this.orderSlipMode = enabled);
     this.startNewInvoice();
     this.restoreQuotationDraft();
     this.focusRncField();
@@ -377,6 +382,11 @@ export class InvoiceNewPageComponent implements OnInit {
 
   /** Modo de la empresa: en "Caja" la factura se guarda pendiente y se cobra en Caja → Cobro de facturas. */
   billingMode: BillingMode = 'Directo';
+  /** La empresa usa volante con código de barras para las órdenes de venta. */
+  orderSlipMode = false;
+  /** Lo que lee el escáner en Facturación (número de la orden del volante). */
+  scannedOrderCode = '';
+  isLoadingScannedOrder = false;
   get isCashierMode(): boolean { return !this.saleOrder && this.billingMode === 'Caja'; }
 
   get isProforma(): boolean { return !this.saleOrder && (this.savedAsProforma || /(?:^|\D)332(?:\D|$)/.test(this.invoiceForm.ncfType)); }
@@ -538,8 +548,60 @@ export class InvoiceNewPageComponent implements OnInit {
     this.recalcLineEditorTotal();
   }
 
+  /** Venta rápida tipo supermercado: al leer el código se agrega el producto con cantidad 1. Lo decide cada vendedor en su equipo. */
+  quickScanMode = this.readQuickScanMode();
+
+  toggleQuickScanMode(): void {
+    this.quickScanMode = !this.quickScanMode;
+    try { localStorage.setItem('saltor.ventaRapida', this.quickScanMode ? '1' : '0'); } catch { /* sin almacenamiento */ }
+    this.invoiceMessage = this.quickScanMode
+      ? 'Venta rápida activa: lea el código y el producto se agrega con cantidad 1.'
+      : 'Venta rápida apagada: código, cantidad y precio como siempre.';
+    this.resetLineEditor();
+    setTimeout(() => this.focusLineEditorCode());
+  }
+
+  private readQuickScanMode(): boolean {
+    try { return localStorage.getItem('saltor.ventaRapida') === '1'; } catch { return false; }
+  }
+
+  /** Agrega 1 del producto leído; si ya está en la factura, le suma 1 a esa línea. */
+  private quickAddScannedProduct(): boolean {
+    const code = this.lineEditorForm.code.trim().toLowerCase();
+    const product = this.products.find((p) => p.code.trim().toLowerCase() === code)
+      ?? this.products.find((p) => (p.replacementCode ?? '').trim().toLowerCase() === code && !!code);
+    if (!product) return false;
+    this.closeProductSuggestions();
+    if (product.status === 'Inactivo') {
+      this.lineEditorMessage = `El producto "${product.description}" está inactivo y no se puede facturar.`;
+      this.focusLineEditorCode();
+      return true;
+    }
+
+    const existing = this.invoiceLines.find((line) => line.productId === product.id);
+    this.lineEditorForm = { code: product.code, productName: this.getProductFullDescription(product), productId: product.id, quantity: 1, unitPrice: 0, total: 0 };
+    if (existing) {
+      this.editingLineId = existing.id;
+      this.lineEditorForm.quantity = existing.quantity + 1;
+    }
+    this.applyProductPriceForQuantity(product);
+    this.recalcLineEditorTotal();
+    const added = this.saveEditorLineToInvoice();
+    if (added) {
+      this.editingLineId = null;
+      this.invoiceMessage = existing
+        ? `${product.description}: ${existing.quantity + 1} unidades.`
+        : `${product.description} agregado.`;
+    } else {
+      this.editingLineId = null;
+    }
+    setTimeout(() => this.focusLineEditorCode());
+    return true;
+  }
+
   onLineEditorCodeEnter(event: Event): void {
     event.preventDefault();
+    if (this.quickScanMode && this.editingLineId === null && this.lineEditorForm.code.trim() && this.quickAddScannedProduct()) return;
     if (!this.lineEditorForm.code.trim()) {
       this.closeProductSuggestions();
       this.focusLineEditorProductName();
@@ -1424,6 +1486,15 @@ export class InvoiceNewPageComponent implements OnInit {
       }
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
+      if (this.saleOrder && this.orderSlipMode) {
+        // La orden no se imprime: sale solo el volante con el número en código de barras.
+        const number = savedInvoice.numero_factura;
+        try { await this.orderSlip.print(savedInvoice.id); }
+        catch (printError) { void Swal.fire({ icon: 'warning', title: `Orden ${number} guardada`, text: `No se pudo imprimir el volante: ${this.formatSupabaseError(printError, '')}` }); }
+        this.clearInvoice(true);
+        this.invoiceMessage = `Orden de venta ${number} guardada. Entregue el volante al cliente para facturar en caja.`;
+        return;
+      }
       if (this.saleOrder) {
         this.invoiceMessage = this.editingExistingInvoiceId
           ? `Orden de venta ${savedInvoice.numero_factura} actualizada correctamente.`
@@ -1542,6 +1613,30 @@ export class InvoiceNewPageComponent implements OnInit {
     this.invoiceMessage = `Editando ${this.documentName.toLowerCase()} ${invoice.number}. Guarda los cambios para actualizarla.`;
   }
 
+  /** El escáner leyó el volante: carga esa orden como factura nueva (se puede editar antes de guardar). */
+  async loadScannedOrder(): Promise<void> {
+    const code = this.scannedOrderCode.trim();
+    if (!code || this.isLoadingScannedOrder) return;
+    if (this.invoiceSaved || this.isEditingExistingInvoice || this.invoiceLines.some((line) => line.productId)) {
+      const answer = await Swal.fire({ icon: 'question', title: 'Cargar la orden', text: 'Se reemplaza lo que hay en la factura actual por la orden escaneada.', showCancelButton: true, confirmButtonText: 'Cargar orden', cancelButtonText: 'Cancelar' });
+      if (!answer.isConfirmed) { this.scannedOrderCode = ''; return; }
+      this.clearInvoice(true);
+    }
+    this.isLoadingScannedOrder = true;
+    try {
+      const order = await this.salesOrdersService.findOrderByNumber(code);
+      if (!order) { this.invoiceMessage = `No se encontró la orden de venta ${code}.`; return; }
+      if (order.estado === 'Anulada') { this.invoiceMessage = `La orden ${order.numero_orden} está anulada.`; return; }
+      if (order.numero_factura) { this.invoiceMessage = `La orden ${order.numero_orden} ya fue facturada en la factura ${order.numero_factura}.`; return; }
+      await this.prepareInvoiceFromOrder(order.id);
+    } catch (error) {
+      this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo cargar la orden escaneada.');
+    } finally {
+      this.scannedOrderCode = '';
+      this.isLoadingScannedOrder = false;
+    }
+  }
+
   /** Orden de venta de la que sale la factura nueva (se vincula al guardarla). */
   private sourceOrderId: number | null = null;
 
@@ -1615,6 +1710,13 @@ export class InvoiceNewPageComponent implements OnInit {
     if (!this.savedInvoice) return;
 
     const savedInvoiceId = this.savedInvoice.id;
+
+    // Empresa con volante: la orden de venta solo imprime el volante con código de barras.
+    if (this.saleOrder && this.orderSlipMode) {
+      try { await this.orderSlip.print(savedInvoiceId); }
+      catch (error) { this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo imprimir el volante.'); }
+      return;
+    }
 
     // Media carta: formato en columnas (factura igual que Caja y Consulta; orden de venta sin datos fiscales ni QR).
     if (await this.invoicePrint.isHalfLetter()) {

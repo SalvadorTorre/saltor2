@@ -60,7 +60,7 @@ Deno.serve(async (request) => {
       user = currentUser;
     }
 
-    let invoiceQuery = admin.from('facturas').select('id, idempres, idsucursal, fecha_factura, tipo_ncf, cliente_rnc, cliente_nombre, cliente_direccion, subtotal, itbis, total, forma_pago_codigo, dgii_estado, estado, dgii_intentos, ecf_queue_status').eq('id', invoiceId);
+    let invoiceQuery = admin.from('facturas').select('id, idempres, idsucursal, fecha_factura, tipo_ncf, cliente_id, cliente_rnc, cliente_nombre, cliente_direccion, subtotal, itbis, total, forma_pago_codigo, dgii_estado, estado, dgii_intentos, ecf_queue_status').eq('id', invoiceId);
     if (user) invoiceQuery = invoiceQuery.eq('idempres', user.empresa_id).eq('idsucursal', user.sucursal_id);
     const { data: invoice } = await invoiceQuery.single();
     if (!invoice) return json({ error: 'No se encontró la factura de la empresa y sucursal actual.' }, 404);
@@ -94,10 +94,28 @@ Deno.serve(async (request) => {
     const sequenceExpiry = operation.fecha_vencimiento;
 
 
+    // TipoPago del e-CF: 1 = contado, 2 = crédito, 3 = gratuito. La forma de pago del sistema
+    // (1 efectivo, 2 depósito, 3 tarjeta, 4 crédito...) NO es el TipoPago: solo la 4 es crédito.
+    const creditSale = Number(invoice.forma_pago_codigo ?? 1) === 4;
+    let creditLimitDate = '';
+    if (creditSale) {
+      let days = 30;
+      if (invoice.cliente_id) {
+        const { data: client } = await admin.from('clients').select('dias_credito').eq('id', invoice.cliente_id).maybeSingle();
+        if (Number(client?.dias_credito) > 0) days = Number(client?.dias_credito);
+      }
+      const limit = new Date(`${invoice.fecha_factura}T12:00:00`);
+      limit.setDate(limit.getDate() + days);
+      creditLimitDate = limit.toLocaleDateString('en-GB').replaceAll('/', '-');
+    }
     const issueDate = new Date(`${invoice.fecha_factura}T12:00:00`).toLocaleDateString('en-GB').replaceAll('/', '-');
     const sequenceExpiryDate = new Date(`${sequenceExpiry ?? invoice.fecha_factura}T12:00:00`).toLocaleDateString('en-GB').replaceAll('/', '-');
-    const scenario: Record<string, string> = { Version: '1.0', TipoeCF: tipoEcf, ENCF: encf, FechaVencimientoSecuencia: sequenceExpiryDate, RNCEmisor: company.rnc, RazonSocialEmisor: company.razon_social, DireccionEmisor: company.direccion ?? '', FechaEmision: issueDate, TipoIngresos: config.tipo_ingreso, TipoPago: String(invoice.forma_pago_codigo ?? 1), RNCComprador: invoice.cliente_rnc ?? '', RazonSocialComprador: invoice.cliente_nombre ?? '', ...taxTotals(taxLines), MontoTotal: decimal(invoice.total) };
+    const scenario: Record<string, string> = { Version: '1.0', TipoeCF: tipoEcf, ENCF: encf, FechaVencimientoSecuencia: sequenceExpiryDate, RNCEmisor: company.rnc, RazonSocialEmisor: company.razon_social, DireccionEmisor: company.direccion ?? '', FechaEmision: issueDate, TipoIngresos: config.tipo_ingreso, TipoPago: creditSale ? '2' : '1', RNCComprador: invoice.cliente_rnc ?? '', RazonSocialComprador: invoice.cliente_nombre ?? '', ...taxTotals(taxLines), MontoTotal: decimal(invoice.total) };
     if (proforma) delete scenario.FechaVencimientoSecuencia;
+    if (creditSale) scenario.FechaLimitePago = creditLimitDate;
+    // La DGII exige IndicadorMontoGravado cuando hay ítems gravados (error 176 si falta).
+    // 0 = los montos de los ítems se envían sin ITBIS, que es como se calculan arriba.
+    if (taxLines.some((line) => line.rate > 0)) scenario.IndicadorMontoGravado = '0';
     if (config.ambiente === 'TEST') scenario.CasoPrueba = `${company.rnc}${encf}`;
     lines.forEach((line: Record<string, unknown>, index: number) => {
       const n = index + 1;

@@ -225,6 +225,12 @@
         <p class="field-help">Para toda la empresa. Se aplica al guardar una factura en Facturación y al cobrarla en Caja. Las reimpresiones desde Consulta de facturas salen en una copia.</p>
 
         <label class="field checkbox-field field--full">
+          <input type="checkbox" name="orderSlip" [(ngModel)]="preferences.orderSlip" />
+          <span>Orden de venta con volante (código de barras)</span>
+        </label>
+        <p class="field-help">Al grabar una orden de venta no se imprime la orden: sale un volante con su número en código de barras. Quien factura lo escanea en Facturación, la orden se carga como factura y se puede editar antes de cobrar.</p>
+
+        <label class="field checkbox-field field--full">
           <input type="checkbox" name="useWindowsDefaultPrinter" [(ngModel)]="preferences.useWindowsDefaultPrinter" />
           <span>Usar la impresora predeterminada de Windows en este equipo</span>
         </label>

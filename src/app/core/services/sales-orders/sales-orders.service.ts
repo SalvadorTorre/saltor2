@@ -91,6 +91,17 @@ export class SalesOrdersService {
   }
 
   /** Anota en la orden (y en su cotización) la factura que se creó a partir de ella. */
+  /** Orden por su número (lo que lee el escáner del volante). */
+  async findOrderByNumber(number: string): Promise<{ id: number; numero_orden: string; numero_factura: string | null; estado: string } | null> {
+    const { data, error } = await this.supabase.client
+      .from('ordenventa')
+      .select('id, numero_orden, numero_factura, estado')
+      .eq('numero_orden', number.trim())
+      .maybeSingle();
+    if (error) throw error;
+    return data as { id: number; numero_orden: string; numero_factura: string | null; estado: string } | null;
+  }
+
   async linkInvoice(invoiceId: number, orderId: number): Promise<void> {
     const { error } = await this.supabase.client.rpc('vincular_factura_orden', { p_factura_id: invoiceId, p_orden_id: orderId });
     if (error) throw error;
