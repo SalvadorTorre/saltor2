@@ -51,18 +51,45 @@ export class AuthService {
   }
 
   private async loadStoredSession(): Promise<ActiveUserSession | null> {
-    const { data, error } = await this.supabase.client.auth.getSession();
+    // Si la sesión guardada en este navegador quedó trabada (token viejo, renovación
+    // colgada), getSession() puede no responder nunca y la pantalla se queda en blanco.
+    // Con un tiempo límite se descarta esa sesión y se muestra el inicio de sesión.
+    let result: { data: { session: { user: { id: string } } | null }; error: unknown };
+    try {
+      result = await this.withTimeout(this.supabase.client.auth.getSession(), 12000);
+    } catch {
+      this.discardBrowserSession();
+      return null;
+    }
+    const { data, error } = result;
     if (error || !data.session?.user) {
       this.clearStoredUser();
       return null;
     }
 
     try {
-      return await this.loadActiveUser(data.session.user.id);
+      return await this.withTimeout(this.loadActiveUser(data.session.user.id), 15000);
     } catch {
-      await this.signOut();
+      this.discardBrowserSession();
       return null;
     }
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('timeout')), ms);
+      promise.then((value) => { clearTimeout(timer); resolve(value); }, (err) => { clearTimeout(timer); reject(err); });
+    });
+  }
+
+  /** Borra la sesión de Supabase guardada en este navegador sin esperar al servidor. */
+  private discardBrowserSession(): void {
+    this.currentUser = null;
+    try {
+      Object.keys(localStorage).filter((key) => key.startsWith('sb-') && key.includes('auth-token')).forEach((key) => localStorage.removeItem(key));
+    } catch { /* sin almacenamiento */ }
+    this.clearStoredUser();
+    void this.supabase.client.auth.signOut({ scope: 'local' }).catch(() => undefined);
   }
 
   async signIn(username: string, password: string): Promise<ActiveUserSession> {

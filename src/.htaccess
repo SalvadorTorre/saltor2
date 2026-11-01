@@ -1,12 +1,29 @@
 Options -MultiViews
 
+# index.html y config.js nunca se guardan en caché: así cada PC carga la versión
+# nueva después de subir un build (los .js llevan un código distinto en cada build).
+<IfModule mod_headers.c>
+  <FilesMatch "^(index\.html|config\.js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+  <FilesMatch "\.[0-9a-f]{16}\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Serve existing files and directories normally; send Angular routes to index.html.
+  # Serve existing files and directories normally.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
+  # Un .js/.css que ya no existe (de un build viejo) responde 404 en vez de index.html.
+  RewriteRule \.(js|css|map)$ - [R=404,L]
+
+  # Send Angular routes to index.html.
   RewriteRule ^ index.html [L]
 </IfModule>
