@@ -657,6 +657,275 @@ if errorlevel 1 (
 pause
 `);
 
+/** Restaura solo los DATOS de un respaldo (.dump) sobre la estructura de esta instalación. Corre dentro del contenedor db. */
+const RESTORE_SH = `#!/bin/bash
+# SaltorSystem: restaura SOLO LOS DATOS de un respaldo (.dump) en esta instalación.
+# La estructura (tablas, funciones, versión) se queda la de esta instalación.
+# Todo se hace en una sola transacción: si algo falla, no se cambia nada.
+set -euo pipefail
+
+ARCHIVO="\${1:-}"
+PSQL="psql -X -q -U supabase_admin -d postgres -v ON_ERROR_STOP=1"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+if [ ! -f "$ARCHIVO" ]; then echo "No se encontró el respaldo $ARCHIVO"; exit 1; fi
+if ! pg_restore -l "$ARCHIVO" > "$WORK/todo.lst" 2>/dev/null; then
+  echo "El archivo no es un respaldo válido de SaltorSystem."; exit 1
+fi
+if ! grep -q " TABLE DATA myappdb empresas " "$WORK/todo.lst"; then
+  echo "El respaldo no tiene los datos de las empresas de SaltorSystem."; exit 1
+fi
+
+# Tablas que existen en esta instalación.
+$PSQL -tA -c "select n.nspname || ' ' || c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+              where c.relkind in ('r', 'p') and n.nspname in ('myappdb', 'private', 'auth')" > "$WORK/existen.txt"
+
+# Solo los datos de las tablas de SaltorSystem y de los usuarios de acceso.
+awk -v ex="$WORK/existen.txt" -v om="$WORK/omitidas.txt" '
+  BEGIN { while ((getline l < ex) > 0) ok[l] = 1 }
+  / TABLE DATA / {
+    for (i = 1; i <= NF; i++) if ($i == "DATA") { s = $(i + 1); t = $(i + 2) }
+    if (s == "auth" && t != "users" && t != "identities") next
+    if (s == "private" && t == "instalacion_local") next
+    if (!((s " " t) in ok)) { print s "." t > om; next }
+    print
+  }' "$WORK/todo.lst" > "$WORK/restaurar.lst"
+
+TABLAS=$(wc -l < "$WORK/restaurar.lst" | tr -d ' ')
+echo "Tablas con datos en el respaldo: $TABLAS"
+if [ -s "$WORK/omitidas.txt" ]; then
+  echo "Estas tablas del respaldo ya no existen en esta versión y se omiten:"
+  sed 's/^/  - /' "$WORK/omitidas.txt"
+fi
+
+cat > "$WORK/antes.sql" <<'SQL'
+\\o /dev/null
+set client_min_messages = warning;
+begin;
+set session_replication_role = replica;
+set statement_timeout = 0;
+
+-- Catálogos generales de esta versión (planes, tipos, etc.): se guardan para
+-- devolver después las filas nuevas que el respaldo viejo no tenga.
+create temp table _hold_reg (tabla regclass, hold text, cols text) on commit drop;
+do $$
+declare r record; v_cols text; i integer := 0;
+begin
+  for r in
+    select c.oid::regclass as t from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where c.relkind = 'r' and n.nspname in ('myappdb', 'private')
+       and not (n.nspname = 'private' and c.relname in ('instalacion_local', 'duenos_sistema'))
+       and not (n.nspname = 'myappdb' and c.relname in ('empresas', 'sucursales', 'usuarios', 'plataforma_suscripciones', 'usuario_permisos'))
+       and not exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+                         and a.attname in ('empresa_id', 'idempresa', 'id_empres', 'empresa', 'auth_usuario_id'))
+       and exists (select 1 from pg_index x where x.indrelid = c.oid and (x.indisprimary or x.indisunique))
+  loop
+    select string_agg(quote_ident(attname), ', ' order by attnum) into v_cols
+      from pg_attribute where attrelid = r.t and attnum > 0 and not attisdropped and attgenerated = '';
+    i := i + 1;
+    execute format('create temp table %I on commit drop as select * from %s', '_hold_' || i, r.t);
+    insert into _hold_reg values (r.t, '_hold_' || i, v_cols);
+  end loop;
+end $$;
+
+-- Vaciar los datos actuales (los de la instalación nueva).
+do $$
+declare v text;
+begin
+  select string_agg(c.oid::regclass::text, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where c.relkind in ('r', 'p')
+     and ((n.nspname in ('myappdb', 'private') and not (n.nspname = 'private' and c.relname = 'instalacion_local'))
+          or (n.nspname = 'auth' and c.relname in ('users', 'identities')));
+  execute 'truncate table ' || v || ' restart identity cascade';
+end $$;
+SQL
+
+cat > "$WORK/despues.sql" <<'SQL'
+-- Devolver las filas de catálogo de esta versión que el respaldo no tenía.
+do $$
+declare r record;
+begin
+  for r in select * from _hold_reg loop
+    execute format('insert into %s (%s) overriding system value select %s from %I on conflict do nothing', r.tabla, r.cols, r.cols, r.hold);
+  end loop;
+end $$;
+
+-- Contadores (id automáticos) al siguiente número libre.
+do $$
+declare r record;
+begin
+  for r in
+    select a.attrelid::regclass as t, a.attname,
+           coalesce(pg_get_serial_sequence(a.attrelid::regclass::text, a.attname),
+                    substring(pg_get_expr(d.adbin, d.adrelid) from 'nextval\\(''([^'']+)''')) as s
+      from pg_attribute a
+      join pg_class c on c.oid = a.attrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+     where n.nspname in ('myappdb', 'private') and c.relkind in ('r', 'p') and a.attnum > 0 and not a.attisdropped
+       and a.atttypid in ('int2'::regtype, 'int4'::regtype, 'int8'::regtype, 'numeric'::regtype)
+  loop
+    continue when r.s is null;
+    execute format('select setval(%L, coalesce((select max(%I) from %s), 0) + 1, false)', r.s, r.attname, r.t);
+  end loop;
+end $$;
+
+\\o
+\\pset tuples_only on
+\\echo 'Datos restaurados:'
+select format('  Empresas: %s  Usuarios: %s  Clientes: %s  Productos: %s',
+              (select count(*) from myappdb.empresas), (select count(*) from myappdb.usuarios),
+              (select count(*) from myappdb.clients), (select count(*) from myappdb.products));
+commit;
+notify pgrst, 'reload schema';
+SQL
+
+echo "Restaurando los datos (no cierres esta ventana)..."
+{
+  cat "$WORK/antes.sql"
+  pg_restore --data-only --no-owner --no-acl -L "$WORK/restaurar.lst" -f - "$ARCHIVO"
+  cat "$WORK/despues.sql"
+} | $PSQL
+
+echo "Restauración terminada."
+`;
+
+const RESTORE_BAT = crlf(`@echo off
+chcp 65001 >nul
+setlocal EnableDelayedExpansion
+cd /d "%~dp0"
+title SaltorSystem - Restaurar respaldo
+
+echo.
+echo  ==============================================
+echo   SaltorSystem - Restaurar datos de un respaldo
+echo  ==============================================
+echo.
+echo  Reemplaza TODOS los datos de esta instalacion por los del respaldo.
+echo  La version del sistema (estructura) se queda la de esta instalacion.
+echo  Copia antes el respaldo (.dump) a la carpeta "respaldos" de esta instalacion.
+echo.
+
+docker version >nul 2>&1
+if errorlevel 1 (
+  echo  Docker Desktop no esta abierto. Abrelo y vuelve a ejecutar este archivo.
+  pause
+  exit /b 1
+)
+if not exist "respaldos\\*.dump" (
+  echo  No hay respaldos .dump en la carpeta "respaldos".
+  pause
+  exit /b 1
+)
+
+set N=0
+for /f "delims=" %%f in ('dir /b /o-d "respaldos\\*.dump"') do (
+  set /a N+=1
+  set "F!N!=%%f"
+  echo   !N!^) %%f
+)
+echo.
+set "OPC=1"
+set /p "OPC=  Numero del respaldo a restaurar [1]: "
+set "ARCHIVO=!F%OPC%!"
+if "!ARCHIVO!"=="" (
+  echo  Opcion no valida.
+  pause
+  exit /b 1
+)
+
+echo.
+echo  Se va a restaurar: !ARCHIVO!
+echo  Los datos actuales de esta instalacion se reemplazan (antes se guarda una copia).
+set "OK="
+set /p "OK=  Escribe SI para continuar: "
+if /i not "!OK!"=="SI" (
+  echo  Cancelado. No se cambio nada.
+  pause
+  exit /b 0
+)
+
+echo.
+echo  Iniciando la base de datos...
+docker compose up -d db
+if errorlevel 1 ( pause & exit /b 1 )
+set INTENTOS=0
+:espera
+docker compose exec -T db pg_isready -U postgres -h localhost -q >nul 2>&1
+if not errorlevel 1 goto lista
+set /a INTENTOS+=1
+if !INTENTOS! geq 60 (
+  echo  La base de datos no responde.
+  pause
+  exit /b 1
+)
+timeout /t 2 /nobreak >nul
+goto espera
+:lista
+
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmm"') do set FECHA=%%i
+echo  Guardando copia de los datos actuales: respaldos\\antes-de-restaurar-!FECHA!.dump
+docker compose exec -T db pg_dump -U supabase_admin -d postgres -Fc -n myappdb -n private -n auth -f /respaldos/antes-de-restaurar-!FECHA!.dump
+if errorlevel 1 (
+  echo  No se pudo guardar la copia de seguridad. No se cambio nada.
+  pause
+  exit /b 1
+)
+
+echo  Deteniendo el sistema mientras se restaura...
+docker compose stop web rest functions auth >nul 2>&1
+
+docker compose exec -T db bash -s -- "/respaldos/!ARCHIVO!" < db\\restaurar.sh
+set CODE=!errorlevel!
+
+echo.
+echo  Iniciando SaltorSystem...
+docker compose up -d >nul 2>&1
+docker compose restart rest auth >nul 2>&1
+
+echo.
+if not "!CODE!"=="0" (
+  echo  ==============================================
+  echo   La restauracion fallo y NO se cambio nada.
+  echo   Envia a soporte el texto de arriba.
+  echo  ==============================================
+) else (
+  echo  ==============================================
+  echo   Restauracion lista. Los usuarios entran con
+  echo   las contrasenas que tenian en el respaldo.
+  echo  ==============================================
+)
+pause
+`);
+
+const RESTORE_UNIX_SH = `#!/bin/sh
+# SaltorSystem - restaurar los datos de un respaldo (Linux / macOS)
+# Uso: ./restaurar.sh saltor-AAAAMMDD-HHMM.dump   (el archivo debe estar en la carpeta respaldos)
+set -e
+cd "$(dirname "$0")"
+ARCHIVO="$1"
+if [ -z "$ARCHIVO" ]; then echo "Respaldos disponibles:"; ls -1t respaldos/*.dump 2>/dev/null | sed 's#respaldos/#  #'; echo "Uso: ./restaurar.sh NOMBRE.dump"; exit 1; fi
+ARCHIVO=$(basename "$ARCHIVO")
+[ -f "respaldos/$ARCHIVO" ] || { echo "No existe respaldos/$ARCHIVO"; exit 1; }
+printf "Se reemplazan TODOS los datos por los de %s. Escribe SI para continuar: " "$ARCHIVO"
+read OK
+[ "$OK" = "SI" ] || [ "$OK" = "si" ] || { echo "Cancelado."; exit 0; }
+docker compose up -d db
+until docker compose exec -T db pg_isready -U postgres -h localhost -q >/dev/null 2>&1; do sleep 2; done
+FECHA=$(date +%Y%m%d-%H%M)
+docker compose exec -T db pg_dump -U supabase_admin -d postgres -Fc -n myappdb -n private -n auth -f "/respaldos/antes-de-restaurar-$FECHA.dump"
+echo "Copia de los datos actuales: respaldos/antes-de-restaurar-$FECHA.dump"
+docker compose stop web rest functions auth >/dev/null 2>&1 || true
+CODE=0
+docker compose exec -T db bash -s -- "/respaldos/$ARCHIVO" < db/restaurar.sh || CODE=$?
+docker compose up -d >/dev/null 2>&1
+docker compose restart rest auth >/dev/null 2>&1 || true
+if [ "$CODE" != "0" ]; then echo "La restauración falló y NO se cambió nada."; exit 1; fi
+echo "Restauración lista."
+`;
+
 function installSh(o: LocalInstallerOptions): string {
   return `#!/bin/sh
 # SaltorSystem - instalación local (Linux / macOS)
@@ -717,6 +986,22 @@ USO DIARIO
 - detener.bat   lo detiene sin borrar datos.
 - respaldo.bat  crea un respaldo en la carpeta "respaldos". Hazlo a diario y
                 copia el archivo fuera de la PC.
+- restaurar.bat pone en esta instalación los datos de un respaldo (.dump).
+
+ACTUALIZAR A UNA VERSIÓN NUEVA (reinstalando)
+1. En la instalación actual ejecuta respaldo.bat y copia el .dump fuera de la PC.
+2. Ejecuta detener.bat.
+3. Genera un paquete nuevo en Plataforma > Instalador local, SIN marcar
+   "Llevar los datos de empresas", y descomprímelo en otra carpeta.
+4. Si es en la misma PC, el puerto web debe estar libre: no vuelvas a iniciar la
+   instalación vieja. Ejecuta instalar.bat del paquete nuevo.
+5. Copia el .dump a la carpeta "respaldos" del paquete nuevo y ejecuta restaurar.bat.
+   - Solo se restauran los DATOS: la estructura queda la de la versión nueva.
+   - Antes de restaurar se guarda una copia (antes-de-restaurar-...dump).
+   - Si algo falla no se cambia nada y se muestra el error.
+   - Los usuarios (incluido el ROOT) entran con las contraseñas del respaldo.
+6. Cuando compruebes que todo está bien, borra la carpeta vieja y sus volúmenes
+   (docker compose down -v dentro de la carpeta vieja).
 - En Docker Desktop > Settings > General activa "Start Docker Desktop when you
   sign in" para que SaltorSystem arranque solo al encender la PC.
 
@@ -837,19 +1122,24 @@ export async function buildInstallerPackage(o: LocalInstallerOptions, src: Insta
 
   const text: [string, string][] = [
     ['LEEME.txt', readme(o, src.version)],
-    ['docker-compose.yml', dockerCompose(o, `saltor-${slug}`)],
+    // Nombre único por paquete: una reinstalación en otra carpeta usa volúmenes nuevos
+    // y no se monta sobre la base de la instalación anterior.
+    ['docker-compose.yml', dockerCompose(o, `saltor-${slug}-${Date.now().toString(36)}`)],
     ['.env', envFile(o, { jwtSecret, anonKey, serviceKey, ecfKey }, src.version)],
     ['instalar.bat', installBat(o)],
     ['instalar.sh', installSh(o)],
     ['iniciar.bat', START_BAT(o.puertoWeb)],
     ['detener.bat', STOP_BAT],
     ['respaldo.bat', BACKUP_BAT],
+    ['restaurar.bat', RESTORE_BAT],
+    ['restaurar.sh', RESTORE_UNIX_SH],
     ['respaldos/.gitkeep', ''],
     ['nginx/default.conf', NGINX_CONF],
     ['db/roles.sql', ROLES_SQL],
     ['db/jwt.sql', JWT_SQL],
     ['db/auth-owner.sql', AUTH_OWNER_SQL],
     ['db/instalar.sh', INSTALL_SH],
+    ['db/restaurar.sh', RESTORE_SH],
     ['db/esquema.sql', src.esquemaSql],
     ['db/semilla.sql', semillaSql(o)],
     ['db/datos.sql', src.datosSql ?? ''],
