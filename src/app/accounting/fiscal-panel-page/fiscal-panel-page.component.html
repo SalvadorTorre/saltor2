@@ -15,6 +15,11 @@
   <p class="fp__error" *ngIf="errorMessage">{{ errorMessage }}</p>
   <p class="fp__loading" *ngIf="isLoading && !data">Cargando…</p>
 
+  <!-- Certificado digital: se ve aunque el resto del panel no cargue, para poder subirlo -->
+  <section class="fp__card fp__cert" id="certificado-digital">
+    <app-certificate-upload (uploaded)="load()"></app-certificate-upload>
+  </section>
+
   <ng-container *ngIf="data as d">
     <div [class.fp__dim]="isLoading">
       <!-- Alertas -->
@@ -31,6 +36,7 @@
             <i>{{ alert.severity === 'danger' ? '!' : alert.severity === 'warn' ? '▲' : 'i' }}</i>
             <div><strong>{{ alert.title }}</strong><span>{{ alert.detail }}</span></div>
             <a *ngIf="alert.link" [routerLink]="alert.link">Ir</a>
+            <a *ngIf="alert.certificate" href="javascript:void(0)" (click)="goToCertificate()">Subir</a>
           </li>
         </ul>
         <ng-template #allGood><p class="fp__ok">✓ Todo en orden: secuencias, certificado y envíos a la DGII sin pendientes.</p></ng-template>

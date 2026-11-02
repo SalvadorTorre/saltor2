@@ -13,6 +13,7 @@ import { SESSION_EXPIRED_EVENT } from './core/services/supabase/supabase.service
 import Swal from 'sweetalert2';
 import { PlatformNotice, PlatformService, SubscriptionNotice } from './core/services/platform/platform.service';
 import { CompanyModule, CompanyModulesService } from './core/services/company-modules/company-modules.service';
+import { PermissionsService } from './core/services/permissions/permissions.service';
 
 const HIDDEN_NOTICES_KEY = 'saltor-avisos-ocultos';
 
@@ -23,6 +24,8 @@ export interface MenuLink {
   adminOnly?: boolean;
   /** Solo en empresas con modo de facturación "Cobro en caja". */
   cashierModeOnly?: boolean;
+  /** Solo empresas que cobran en la venta (modo Directo). */
+  directModeOnly?: boolean;
   /** Módulo que la empresa debe tener contratado. */
   module?: CompanyModule;
 }
@@ -133,6 +136,7 @@ export class AppComponent implements OnInit {
         {
           title: 'Operación de caja', icon: 'cash', color: '#10b981', links: [
             { label: 'Cobro de facturas', path: '/caja/cobro', cashierModeOnly: true },
+            { label: 'Facturar órdenes', path: '/caja/facturar-ordenes', cashierModeOnly: true, module: 'transacciones' },
             { label: 'Apertura', path: '/caja/apertura' },
             { label: 'Cierre', path: '/caja/cierre' },
             { label: 'Histórico', path: '/caja/historico' }
@@ -214,7 +218,8 @@ export class AppComponent implements OnInit {
     private readonly companies: CompaniesService,
     private readonly platform: PlatformService,
     private readonly billingMode: CompanyBillingModeService,
-    private readonly companyModules: CompanyModulesService
+    private readonly companyModules: CompanyModulesService,
+    private readonly permissions: PermissionsService
   ) {}
 
   /** La empresa cobra en caja: se muestra Caja → Cobro de facturas. */
@@ -248,6 +253,10 @@ export class AppComponent implements OnInit {
     return this.sections.filter((section) =>
       (!section.ownerOnly || this.isPlatformOwner)
       && (!section.module || this.activeModules.includes(section.module))
+      // Accesos del usuario: la sección se ve si puede abrir su pantalla o alguna de sus opciones.
+      && (section.groups?.length
+        ? section.groups.some((group) => this.visibleLinks(group.links).length > 0)
+        : !section.path || this.permissions.canOpen(section.path))
     );
   }
 
@@ -260,6 +269,7 @@ export class AppComponent implements OnInit {
 
   private async loadSessionExtras(): Promise<void> {
     if (!this.activeUser) { this.isPlatformOwner = false; this.activeModules = []; this.subscriptionNotice = null; this.platformNotices = []; return; }
+    void this.permissions.reload();
     const [owner, notice, notices, mode, modules] = await Promise.all([this.companies.isPlatformOwner(), this.platform.getNotice(), this.platform.getActiveNotices(), this.billingMode.getMode(), this.companyModules.getActiveModules(this.activeUser.companyId)]);
     this.isCashierMode = mode === 'Caja';
     this.isPlatformOwner = owner;
@@ -324,7 +334,9 @@ export class AppComponent implements OnInit {
     return links.filter((link) =>
       (this.isAdmin || !link.adminOnly)
       && (!link.cashierModeOnly || this.isCashierMode)
+      && (!link.directModeOnly || !this.isCashierMode)
       && (!link.module || this.activeModules.includes(link.module))
+      && this.permissions.canOpen(link.path)
     );
   }
 

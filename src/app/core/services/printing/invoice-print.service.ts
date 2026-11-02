@@ -9,6 +9,13 @@ import { QzPrintService } from './qz-print.service';
 import { CompanyPrintSettingsService } from './company-print-settings.service';
 import { SupabaseService } from '../supabase/supabase.service';
 
+/** Código QR como SVG (vector): nítido en la térmica, sin el suavizado de una imagen reducida. */
+async function qrSvgDataUrl(value: string): Promise<string> {
+  const svg: string = await (QRCode as any).toString(value, { type: 'svg', errorCorrectionLevel: 'L', margin: 4 });
+  const crisp = svg.includes('shape-rendering') ? svg : svg.replace('<svg ', '<svg shape-rendering="crispEdges" ');
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(crisp)));
+}
+
 /** Imprime una factura ya guardada (Consulta de facturas, Cobro en caja). */
 @Injectable({ providedIn: 'root' })
 export class InvoicePrintService {
@@ -189,7 +196,7 @@ ${detail.notes ? `<div class="notes"><b>Notas:</b> ${e(detail.notes)}</div>` : '
       const canvas = document.createElement('canvas');
       const barcode = (JsBarcodeModule as any).default ?? JsBarcodeModule;
       barcode(canvas, barcodeValue, { format: 'CODE128', displayValue: false, margin: 0, width: 1.25, height: 42 });
-      return { qr: await QRCode.toDataURL(qrValue, { errorCorrectionLevel: 'L', margin: 4, scale: 8 }), barcode: canvas.toDataURL('image/png') };
+      return { qr: await qrSvgDataUrl(qrValue), barcode: canvas.toDataURL('image/png') };
     } catch {
       return { qr: '', barcode: '' };
     }

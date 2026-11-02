@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit } from '@angular/core';
+import { Component, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupplierRecord, SupplierFormModel } from '../../app.models';
@@ -6,6 +6,7 @@ import { AppDataService } from '../../app-data.service';
 import { SuppliersService } from '../../core/services/suppliers/suppliers.service';
 import { MaintenanceTabsComponent } from '../../shared/maintenance-tabs.component';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
 @Component({
   selector: 'app-suppliers-page',
   standalone: true,
@@ -14,6 +15,8 @@ import { MaintenanceTabsComponent } from '../../shared/maintenance-tabs.componen
   styleUrls: ['./suppliers-page.component.scss']
 })
 export class SuppliersPageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
 
   supplierEditorMode: 'create' | 'edit' = 'create';
   supplierMessage = 'Gestiona suplidores, contactos, balances y condiciones de compra desde una sola pantalla.';
@@ -95,6 +98,7 @@ export class SuppliersPageComponent implements OnInit {
   }
 
   editSupplier(supplier: SupplierRecord, event?: Event): void {
+    if (!this.perms.ensure('suplidores.editar')) return;
     event?.stopPropagation();
     this.openSupplierOptionsId = null;
     this.selectedSupplierId = supplier.id;
@@ -108,6 +112,7 @@ export class SuppliersPageComponent implements OnInit {
   }
 
   startCreateSupplier(): void {
+    if (!this.perms.ensure('suplidores.crear')) return;
     this.openSupplierOptionsId = null;
     this.supplierEditorMode = 'create';
     this.supplierForm = {
@@ -134,6 +139,7 @@ export class SuppliersPageComponent implements OnInit {
   }
 
   async saveSupplier(): Promise<void> {
+    if (!this.perms.ensure(this.supplierEditorMode === 'create' ? 'suplidores.crear' : 'suplidores.editar')) return;
     if (!this.supplierForm.code.trim() || !this.supplierForm.companyName.trim() || !this.supplierForm.documentNumber.trim()) {
       this.supplierMessage = 'Completa codigo, nombre comercial y documento antes de guardar.';
       return;
@@ -171,6 +177,7 @@ export class SuppliersPageComponent implements OnInit {
   }
 
   async deleteSupplier(supplier: SupplierRecord): Promise<void> {
+    if (!this.perms.ensure('suplidores.eliminar')) return;
     try {
       await this.suppliersService.deleteSupplier(supplier.id);
       this.suppliers = this.suppliers.filter((item) => item.id !== supplier.id);
@@ -181,7 +188,7 @@ export class SuppliersPageComponent implements OnInit {
         this.loadSupplierIntoForm(remaining, 'edit');
       } else {
         this.selectedSupplierId = null;
-        this.startCreateSupplier();
+        if (this.perms.can('suplidores.crear')) this.startCreateSupplier();
       }
       this.supplierMessage = `Suplidor ${supplier.companyName} eliminado correctamente.`;
     } catch (error) {
@@ -227,7 +234,7 @@ export class SuppliersPageComponent implements OnInit {
         this.supplierMessage = 'Suplidores cargados desde Supabase.';
       } else {
         this.selectedSupplierId = null;
-        this.startCreateSupplier();
+        if (this.perms.can('suplidores.crear')) this.startCreateSupplier();
         this.supplierMessage = 'No hay suplidores registrados. Puedes crear el primero.';
       }
     } catch (error) {

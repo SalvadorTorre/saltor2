@@ -1,0 +1,51 @@
+<div class="ua-backdrop" (click)="close()">
+  <section class="ua" role="dialog" aria-modal="true" aria-labelledby="ua-title" (click)="$event.stopPropagation()">
+    <header class="ua__head">
+      <div>
+        <h2 id="ua-title">Accesos por módulo</h2>
+        <p><strong>{{ user.fullName }}</strong> · Rol: {{ user.role }}
+          <span class="ua__tag" *ngIf="!isAdminUser">{{ customized ? 'Personalizado' : 'Accesos del rol' }}</span>
+        </p>
+        <small *ngIf="customized && updatedBy">Último cambio: {{ updatedBy }}{{ updatedAt ? ' · ' + updatedAt : '' }}</small>
+      </div>
+      <button type="button" class="ua__x" aria-label="Cerrar" (click)="close()">×</button>
+    </header>
+
+    <p class="ua__info" *ngIf="isAdminUser">El administrador siempre tiene acceso a todo. Para limitarle accesos, cámbiale el rol.</p>
+    <p class="ua__error" *ngIf="error">{{ error }}</p>
+    <p class="ua__loading" *ngIf="isLoading">Cargando accesos…</p>
+
+    <div class="ua__body" *ngIf="!isLoading">
+      <article class="ua__module" *ngFor="let module of modules" [class.ua__module--off]="moduleState(module) === 'none'">
+        <label class="ua__module-head">
+          <input type="checkbox" [checked]="moduleState(module) === 'all'" [indeterminate]="moduleState(module) === 'some'" [disabled]="isAdminUser" (change)="toggleModule(module)">
+          <span>{{ module.label }}</span>
+        </label>
+        <div class="ua__cols">
+          <div>
+            <h4>Pantallas</h4>
+            <label class="ua__opt" *ngFor="let screen of module.screens" [class.ua__opt--locked]="isScreenLocked(screen.path)">
+              <input type="checkbox" [checked]="screens.has(screen.path) || isAdminUser" [disabled]="isScreenLocked(screen.path)" (change)="toggleScreen(screen.path)">
+              <span>{{ screen.label }}</span>
+            </label>
+          </div>
+          <div *ngIf="module.actions.length">
+            <h4>Acciones</h4>
+            <label class="ua__opt" *ngFor="let action of module.actions">
+              <input type="checkbox" [checked]="actions.has(action.key) || isAdminUser" [disabled]="isAdminUser" (change)="toggleAction(action.key)">
+              <span>{{ action.label }}</span>
+            </label>
+          </div>
+        </div>
+      </article>
+      <p class="ua__note">Consultar los documentos es parte de abrir la pantalla. Las acciones se aplican en todas las pantallas donde aparece ese documento (por ejemplo, anular facturas en Facturación y en Transacciones).</p>
+    </div>
+
+    <footer class="ua__foot">
+      <button *ngIf="!isAdminUser && customized" type="button" class="ua__btn ua__btn--ghost" [disabled]="isSaving" (click)="resetToRole()">Volver a los del rol</button>
+      <span class="ua__spacer"></span>
+      <button type="button" class="ua__btn ua__btn--ghost" [disabled]="isSaving" (click)="close()">{{ isAdminUser ? 'Cerrar' : 'Cancelar' }}</button>
+      <button *ngIf="!isAdminUser" type="button" class="ua__btn" [disabled]="isSaving || isLoading" (click)="save()">{{ isSaving ? 'Guardando…' : 'Guardar accesos' }}</button>
+    </footer>
+  </section>
+</div>

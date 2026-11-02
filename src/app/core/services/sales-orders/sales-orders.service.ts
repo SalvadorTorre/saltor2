@@ -30,6 +30,7 @@ export interface SalesOrderHeaderRow {
 interface SalesOrderDetailRow {
   id: number;
   producto_id: number | null;
+  codigo_producto?: string | null;
   descripcion: string;
   cantidad: number | string;
   precio_unitario: number | string;
@@ -122,7 +123,7 @@ export class SalesOrdersService {
 
     const { data: details, error: detailsError } = await this.supabase.client
       .from('ordenventa_detalle')
-      .select('id, producto_id, descripcion, cantidad, precio_unitario, tasa_itbis, monto_itbis, total_linea')
+      .select('id, producto_id, codigo_producto, descripcion, cantidad, precio_unitario, tasa_itbis, monto_itbis, total_linea')
       .eq('ordenventa_id', orderId)
       .order('id');
     if (detailsError) throw detailsError;
@@ -187,7 +188,7 @@ export class SalesOrdersService {
       taxRate: Number(detail.tasa_itbis),
       taxAmount: Number(detail.monto_itbis),
       lineTotal: Number(detail.total_linea),
-      productCode: ''
+      productCode: detail.codigo_producto ?? ''
     };
   }
 }

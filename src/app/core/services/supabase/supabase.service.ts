@@ -62,7 +62,8 @@ export class SupabaseService {
     if (response.status !== 401 || url.includes('/auth/v1/')) return response;
 
     const body = await response.clone().text().catch(() => '');
-    if (!/jwt expired|invalid jwt|token is expired/i.test(body)) return response;
+    // "Sesión no válida" lo responden las funciones cuando la sesión ya no existe en el servidor.
+    if (!/jwt expired|invalid jwt|token is expired|sesi[oó]n no v[aá]lida/i.test(body)) return response;
 
     const token = await this.refreshToken();
     if (!token) {

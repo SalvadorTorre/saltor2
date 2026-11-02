@@ -1,0 +1,31 @@
+:host { display: block; }
+.cu__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.cu__head h3 { margin: 0 0 3px; font-size: 18px; }
+.cu__head p { margin: 0; color: #667085; font-size: 14px; }
+.cu__status { padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; background: #f2f4f7; color: #475467; }
+.cu__status--ok { background: #e8f8ef; color: #067647; }
+.cu__status--soon { background: #fff4e5; color: #b54708; }
+.cu__status--expired, .cu__status--none { background: #fee4e2; color: #b42318; }
+.cu__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; margin: 14px 0 6px; }
+.cu__details div { min-width: 0; }
+.cu__details dt { color: #667085; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+.cu__details dd { margin: 2px 0 0; font-weight: 600; color: #101828; overflow-wrap: anywhere; }
+.cu__bad { color: #b42318 !important; }
+.cu__link { border: 0; background: none; color: #1d4ed8; font: 700 14px inherit; padding: 4px 0; cursor: pointer; }
+.cu__form { display: grid; grid-template-columns: 1.3fr 1fr auto; gap: 12px; align-items: end; margin-top: 12px; }
+.cu__field { display: grid; gap: 5px; font-size: 13px; font-weight: 600; color: #475467; min-width: 0; }
+.cu__field input { height: 40px; border: 1px solid #d0d5dd; border-radius: 9px; padding: 0 10px; font: 14px inherit; background: #fff; min-width: 0; }
+.cu__field input[type='file'] { padding: 7px 8px; }
+.cu__actions { display: flex; gap: 8px; }
+.cu__btn { height: 40px; padding: 0 16px; border: 1px solid #171717; border-radius: 9px; background: #171717; color: #fff; font: 700 14px inherit; cursor: pointer; white-space: nowrap; }
+.cu__btn:disabled { opacity: .55; cursor: not-allowed; }
+.cu__btn--ghost { background: #fff; color: #171717; }
+.cu__msg { margin: 10px 0 0; color: #067647; font-weight: 600; font-size: 14px; }
+.cu__msg--error { color: #b42318; }
+.cu__note { margin: 8px 0 0; color: #98a2b3; font-size: 12px; }
+@media (max-width: 800px) {
+  .cu__details { grid-template-columns: 1fr 1fr; }
+  .cu__form { grid-template-columns: 1fr; }
+  .cu__actions .cu__btn { flex: 1; }
+}
+@media (max-width: 480px) { .cu__details { grid-template-columns: 1fr; } }

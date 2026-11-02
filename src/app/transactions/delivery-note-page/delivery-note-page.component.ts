@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import Swal from 'sweetalert2';
@@ -8,6 +8,7 @@ import {
 } from '../../core/services/delivery-notes/delivery-notes.service';
 import { DeliveryNotePrintService } from '../../core/services/printing/delivery-note-print.service';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
 interface DispatchLine extends DeliverySourceLine {
   aDespachar: number;
 }
@@ -20,6 +21,8 @@ interface DispatchLine extends DeliverySourceLine {
   styleUrls: ['./delivery-note-page.component.scss']
 })
 export class DeliveryNotePageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   tab: 'create' | 'consult' = 'create';
 
   // Nuevo conduce
@@ -142,6 +145,7 @@ export class DeliveryNotePageComponent implements OnInit {
   }
 
   async save(): Promise<void> {
+    if (!this.perms.ensure('conduces.crear')) return;
     if (!this.document || this.isSaving) return;
     this.lines.forEach((line) => this.fixQuantity(line));
     if (this.totalToDispatch <= 0) { this.formError = 'Indique la cantidad a despachar de al menos un producto.'; return; }
@@ -196,6 +200,7 @@ export class DeliveryNotePageComponent implements OnInit {
   }
 
   async markDelivered(note: DeliveryNoteRow): Promise<void> {
+    if (!this.perms.ensure('conduces.entregar')) return;
     const result = await Swal.fire({
       title: `Entregar conduce ${note.numero}`,
       input: 'text',
@@ -215,6 +220,7 @@ export class DeliveryNotePageComponent implements OnInit {
   }
 
   async cancelNote(note: DeliveryNoteRow): Promise<void> {
+    if (!this.perms.ensure('conduces.anular')) return;
     const result = await Swal.fire({
       title: `Anular conduce ${note.numero}`,
       text: 'Lo despachado vuelve a quedar pendiente en el documento de origen.',

@@ -1,6 +1,6 @@
 import { ProformaService } from '../../core/services/proforma/proforma.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, DestroyRef, inject, ElementRef, Input, OnInit } from '@angular/core';
+import { Component, DestroyRef, inject, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -28,6 +28,14 @@ import Swal from 'sweetalert2';
 import * as QRCode from 'qrcode';
 import * as JsBarcodeModule from 'jsbarcode';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
+/** Código QR como SVG (vector): nítido en la térmica, sin el suavizado de una imagen reducida. */
+async function qrSvgDataUrl(value: string): Promise<string> {
+  const svg: string = await (QRCode as any).toString(value, { type: 'svg', errorCorrectionLevel: 'L', margin: 4 });
+  const crisp = svg.includes('shape-rendering') ? svg : svg.replace('<svg ', '<svg shape-rendering="crispEdges" ');
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(crisp)));
+}
+
 interface InvoiceFormModelExtended extends InvoiceFormModel {
   customerPhone: string;
   customerEmail: string;
@@ -42,9 +50,16 @@ interface InvoiceFormModelExtended extends InvoiceFormModel {
   templateUrl: './new-page.component.html',
   styleUrls: ['./new-page.component.scss']
 })
-export class InvoiceNewPageComponent implements OnInit {
+export class InvoiceNewPageComponent implements OnInit, OnChanges {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   /** La ruta Transacciones → Orden de venta reutiliza el formulario sin tocar Facturación. */
   @Input() saleOrder = false;
+  /** Caja › Facturar órdenes: el formulario va incrustado (sin pestañas) y factura la orden elegida. */
+  @Input() embedded = false;
+  @Input() embeddedOrderId: number | null = null;
+  /** Avisa cuando se guardó una factura (para refrescar la lista de órdenes pendientes). */
+  @Output() invoiceCompleted = new EventEmitter<string>();
   quotationNumber = '';
   private readonly proforma = inject(ProformaService);
   proformaEnabled = false;
@@ -285,7 +300,16 @@ export class InvoiceNewPageComponent implements OnInit {
     const orderToInvoice = Number(this.route.snapshot.queryParamMap.get('orden'));
     if (!this.saleOrder && Number.isInteger(orderToInvoice) && orderToInvoice > 0) {
       void this.prepareInvoiceFromOrder(orderToInvoice);
+    } else if (!this.saleOrder && this.embeddedOrderId) {
+      void this.prepareInvoiceFromOrder(this.embeddedOrderId);
     }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    const change = changes['embeddedOrderId'];
+    if (!change || change.firstChange || this.saleOrder) return;
+    this.clearInvoice(true);
+    if (this.embeddedOrderId) void this.prepareInvoiceFromOrder(this.embeddedOrderId);
   }
 
   private focusRncField(): void {
@@ -1279,6 +1303,8 @@ export class InvoiceNewPageComponent implements OnInit {
 
   async saveInvoice(): Promise<void> {
     if (this.isSavingInvoice || this.isDocumentReadOnly) return;
+    const editing = this.editingExistingInvoiceId !== null;
+    if (!this.perms.ensure(this.saleOrder ? (editing ? 'ordenes.editar' : 'ordenes.crear') : (editing ? 'facturas.editar' : 'facturas.crear'))) return;
     if (this.invoiceSaved) {
       this.invoiceMessage = `La factura ${this.savedInvoice?.numero_factura} ya fue guardada. Usa Enviar a DGII, Imprimir o Limpiar para continuar.`;
       return;
@@ -1480,6 +1506,7 @@ export class InvoiceNewPageComponent implements OnInit {
           void Swal.fire({ icon: 'warning', title: 'Factura guardada', text: `No se pudo anotar la factura en la orden de venta: ${this.formatSupabaseError(linkError, '')}` });
         }
       }
+      if (!this.saleOrder && !this.editingExistingInvoiceId) this.invoiceCompleted.emit(savedInvoice.numero_factura);
       if (!this.saleOrder) {
         this.savedAsProforma = isProformaInvoice;
         this.invoiceForm.ncfType = usesFiscalNcf ? this.getNcfOptionByStoredType(storedNcfType) : this.consumerNcfType;
@@ -1996,7 +2023,7 @@ export class InvoiceNewPageComponent implements OnInit {
       const barcode = (JsBarcodeModule as any).default ?? JsBarcodeModule;
       barcode(canvas, barcodeValue, { format: 'CODE128', displayValue: false, margin: 0, width: 1.25, height: 42 });
       return {
-        qr: await QRCode.toDataURL(qrValue, { errorCorrectionLevel: 'L', margin: 4, scale: 8 }),
+        qr: await qrSvgDataUrl(qrValue),
         barcode: canvas.toDataURL('image/png')
       };
     } catch {

@@ -2,11 +2,11 @@
   <div class="invoice-sticky-header">
   <div class="dashboard-header company-header">
     <div>
-      <h2>{{ saleOrder ? 'Orden de venta' : 'Facturacion' }}</h2>
+      <h2>{{ embedded ? 'Factura de la orden' : saleOrder ? 'Orden de venta' : 'Facturacion' }}</h2>
     </div>
     <div class="company-header__actions" *ngIf="billingTab === 'create'">
       <div class="dashboard-header__pill">{{ isDocumentReadOnly ? 'Consultando orden de venta' : isEditingExistingInvoice ? ('Editando ' + documentName.toLowerCase()) : (saleOrder ? 'Nueva orden de venta' : 'Nueva Factura') }}</div>
-      <label *ngIf="!saleOrder && orderSlipMode" class="order-scan" title="Escanee el código de barras del volante de la orden de venta">
+      <label *ngIf="!saleOrder && orderSlipMode && !embedded" class="order-scan" title="Escanee el código de barras del volante de la orden de venta">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14M6 5v14M9 5v14M13 5v14M15 5v14M18 5v14M21 5v14"/></svg>
         <input type="text" name="scannedOrderCode" [(ngModel)]="scannedOrderCode" (keydown.enter)="$event.preventDefault(); loadScannedOrder()" [disabled]="isLoadingScannedOrder" placeholder="Escanear orden de venta" autocomplete="off" aria-label="Escanear orden de venta">
       </label>
@@ -17,7 +17,7 @@
     </div>
   </div>
 
-  <div class="invoice-module-tabs" role="tablist" [attr.aria-label]="saleOrder ? 'Opciones de orden de venta' : 'Opciones de facturación'">
+  <div *ngIf="!embedded" class="invoice-module-tabs" role="tablist" [attr.aria-label]="saleOrder ? 'Opciones de orden de venta' : 'Opciones de facturación'">
     <button type="button" role="tab" [attr.aria-selected]="billingTab === 'create'" [class.invoice-module-tabs__button--active]="billingTab === 'create'" class="invoice-module-tabs__button" (click)="billingTab = 'create'">{{ saleOrder ? 'Nueva orden de venta' : 'Nueva factura' }}</button>
     <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="billingTab = 'consultation'">{{ saleOrder ? 'Consulta de órdenes' : 'Consulta de facturas' }}</button>
   </div>

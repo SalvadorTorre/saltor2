@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
 import { SalesOrderHeaderRow, SalesOrdersService } from '../../core/services/sales-orders/sales-orders.service';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
 @Component({
   selector: 'app-orders-consultation-page',
   standalone: true,
@@ -13,6 +14,8 @@ import { SalesOrderHeaderRow, SalesOrdersService } from '../../core/services/sal
   styleUrls: ['./orders-consultation-page.component.scss']
 })
 export class OrdersConsultationPageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   @Output() editRequested = new EventEmitter<number>();
   @Output() viewRequested = new EventEmitter<number>();
   @Output() printRequested = new EventEmitter<number>();
@@ -47,12 +50,14 @@ export class OrdersConsultationPageComponent implements OnInit {
   view(order: SalesOrderHeaderRow): void { this.viewRequested.emit(order.id); }
 
   edit(order: SalesOrderHeaderRow): void {
+    if (!this.perms.ensure('ordenes.editar')) return;
     if (order.numero_factura) { this.view(order); return; }
     this.editRequested.emit(order.id);
   }
   print(order: SalesOrderHeaderRow): void { this.printRequested.emit(order.id); }
 
   async remove(order: SalesOrderHeaderRow): Promise<void> {
+    if (!this.perms.ensure('ordenes.eliminar')) return;
     const result = await Swal.fire({ icon: 'warning', title: `¿Borrar ${order.numero_orden}?`, text: 'La orden y sus productos serán eliminados.', showCancelButton: true, confirmButtonText: 'Borrar', cancelButtonText: 'Cancelar', confirmButtonColor: '#b42318' });
     if (!result.isConfirmed) return;
     try {
@@ -63,11 +68,13 @@ export class OrdersConsultationPageComponent implements OnInit {
   }
 
   createInvoice(order: SalesOrderHeaderRow): void {
+    if (!this.perms.ensure('facturas.crear')) return;
     if (order.numero_factura) return;
     void this.router.navigate(['/transacciones/facturacion'], { queryParams: { orden: order.id } });
   }
 
   createDeliveryNote(order: SalesOrderHeaderRow): void {
+    if (!this.perms.ensure('conduces.crear')) return;
     if (order.estado === 'Anulada') return;
     void this.router.navigate(['/transacciones/conduce'], { queryParams: { orden: order.id } });
   }

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnInit } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
@@ -6,6 +6,7 @@ import { ClientRecord, ClientFormModel } from '../../app.models';
 import { ClientsService } from '../../core/services/clients/clients.service';
 import { MaintenanceTabsComponent } from '../../shared/maintenance-tabs.component';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
 @Component({
   selector: 'app-clients-page',
   standalone: true,
@@ -14,6 +15,8 @@ import { MaintenanceTabsComponent } from '../../shared/maintenance-tabs.componen
   styleUrls: ['./clients-page.component.scss']
 })
 export class ClientsPageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   clientSearch = '';
   clientCategoryFilter = 'all';
   clientStatusFilter = 'all';
@@ -127,6 +130,7 @@ export class ClientsPageComponent implements OnInit {
   }
 
   startCreateClient(): void {
+    if (!this.perms.ensure('clientes.crear')) return;
     this.openClientOptionsId = null;
     this.clientEditorMode = 'create';
     this.clientForm = {
@@ -162,6 +166,7 @@ export class ClientsPageComponent implements OnInit {
   }
 
   editClientFromOptions(client: ClientRecord, event?: Event): void {
+    if (!this.perms.ensure('clientes.editar')) return;
     event?.stopPropagation();
     this.editClientInternal(client);
   }
@@ -171,6 +176,7 @@ export class ClientsPageComponent implements OnInit {
   }
 
   async saveClient(): Promise<void> {
+    if (!this.perms.ensure(this.clientEditorMode === 'create' ? 'clientes.crear' : 'clientes.editar')) return;
     if (!this.clientForm.code.trim() || !this.clientForm.fullName.trim() || !this.clientForm.documentNumber.trim()) {
       this.clientMessage = 'Completa codigo, nombre y documento antes de guardar.';
       return;
@@ -212,6 +218,7 @@ export class ClientsPageComponent implements OnInit {
   }
 
   async deleteClient(client: ClientRecord): Promise<void> {
+    if (!this.perms.ensure('clientes.eliminar')) return;
     if (!this.canDeleteClient(client)) {
       this.clientMessage = `No se puede eliminar ${client.fullName} porque tiene balance pendiente de RD$${client.balance.toFixed(2)}.`;
       this.openClientOptionsId = null;
@@ -228,7 +235,7 @@ export class ClientsPageComponent implements OnInit {
         this.loadClientIntoForm(firstRemaining, 'edit');
       } else {
         this.selectedClientId = null;
-        this.startCreateClient();
+        if (this.perms.can('clientes.crear')) this.startCreateClient();
       }
       this.clientMessage = `Cliente ${client.fullName} eliminado correctamente.`;
     } catch (error) {
@@ -286,7 +293,7 @@ export class ClientsPageComponent implements OnInit {
         this.clientMessage = 'Clientes cargados desde Supabase.';
       } else {
         this.selectedClientId = null;
-        this.startCreateClient();
+        if (this.perms.can('clientes.crear')) this.startCreateClient();
         this.clientMessage = 'No hay clientes registrados. Puedes crear el primero.';
       }
     } catch (error) {

@@ -1,0 +1,124 @@
+<section class="co">
+  <aside class="co__list">
+    <header class="co__head">
+      <div>
+        <span class="co__eyebrow">Caja</span>
+        <h2>Facturar órdenes</h2>
+      </div>
+      <button type="button" class="co__refresh" [class.co__refresh--spin]="isLoading" [disabled]="isLoading" (click)="load()" title="Actualizar" aria-label="Actualizar">⟳</button>
+    </header>
+
+    <div class="co__stats">
+      <div><span>Pendientes</span><strong>{{ filteredOrders.length }}</strong></div>
+      <div><span>Por cobrar</span><strong>{{ money(pendingTotal) }}</strong></div>
+    </div>
+
+    <label class="co__scan" title="Escanee el volante de la orden">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14M6 5v14M9 5v14M13 5v14M15 5v14M18 5v14M21 5v14"/></svg>
+      <input type="text" [(ngModel)]="scanCode" (keydown.enter)="$event.preventDefault(); scan()" placeholder="Escanear volante" autocomplete="off" aria-label="Escanear volante de la orden">
+    </label>
+    <label class="co__search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" [(ngModel)]="search" placeholder="Buscar número, cliente o RNC" aria-label="Buscar orden">
+    </label>
+
+    <p class="co__msg" *ngIf="message" [class.co__msg--error]="isError">{{ message }}</p>
+    <p class="co__msg co__msg--error" *ngIf="!isCashierMode">Esta opción es para empresas que cobran en caja.</p>
+
+    <div class="co__cols" *ngIf="filteredOrders.length"><span>Orden</span><span>Fecha</span><span>Cliente</span><span>Valor</span></div>
+    <div class="co__items">
+      <button type="button" class="co__item" *ngFor="let order of filteredOrders" [class.co__item--active]="order.id === selected?.id" [disabled]="isWorking"
+        [title]="date(order.fecha_orden) + ' ' + time(order.creado_en) + ' · ' + (order.cliente_nombre || 'CLIENTE CONTADO')" (click)="select(order)">
+        <b class="co__num">{{ order.numero_orden }}</b>
+        <span class="co__date">{{ date(order.fecha_orden) }}</span>
+        <span class="co__client-name">{{ order.cliente_nombre || 'CLIENTE CONTADO' }}</span>
+        <strong class="co__amount">{{ money(order.total) }}</strong>
+      </button>
+      <p class="co__empty" *ngIf="!isLoading && !filteredOrders.length">No hay órdenes pendientes de facturar.</p>
+      <p class="co__empty" *ngIf="isLoading && !orders.length">Cargando órdenes…</p>
+    </div>
+  </aside>
+
+  <main class="co__panel">
+    <div class="co__loading" *ngIf="isLoadingDetail"><span></span> Cargando la orden…</div>
+
+    <ng-container *ngIf="detail as d; else pick">
+      <header class="co__doc">
+        <div class="co__doc-id">
+          <span class="co__eyebrow">Orden de venta</span>
+          <h3>{{ d.number }}</h3>
+          <small>{{ date(d.invoiceDate) }}</small>
+        </div>
+        <div class="co__doc-client">
+          <div class="co__avatar" aria-hidden="true">{{ (d.customerName || 'C').charAt(0) }}</div>
+          <div>
+            <strong>{{ d.customerName || 'CLIENTE CONTADO' }}</strong>
+            <small>{{ d.rnc ? 'RNC/Cédula ' + d.rnc : 'Consumidor final' }}<ng-container *ngIf="d.customerPhone"> · {{ d.customerPhone }}</ng-container></small>
+          </div>
+        </div>
+      </header>
+
+      <section class="co__pay">
+        <div class="co__totals">
+          <div><span>Subtotal</span><b>{{ money(d.subtotal) }}</b></div>
+          <div><span>ITBIS</span><b>{{ money(d.taxTotal) }}</b></div>
+          <div class="co__grand"><span>Total</span><b>{{ money(d.grandTotal) }}</b></div>
+        </div>
+
+        <div class="co__fields">
+          <label class="co__field">Comprobante
+            <select [(ngModel)]="ncfType">
+              <option value="E32">Consumo (E32)</option>
+              <option value="E31" [disabled]="!canFiscalCredit">Crédito fiscal (E31){{ canFiscalCredit ? '' : ' — requiere RNC' }}</option>
+            </select>
+          </label>
+          <label class="co__field">Forma de pago
+            <select [(ngModel)]="paymentCode" (ngModelChange)="onMethodChange()">
+              <option *ngFor="let method of paymentMethods" [ngValue]="method.code">{{ method.description }}</option>
+              <option *ngIf="!paymentMethods.length" [ngValue]="1">Efectivo</option>
+            </select>
+          </label>
+          <label class="co__field" *ngIf="!isCredit">Monto recibido
+            <input id="coReceived" type="number" min="0" step="0.01" [(ngModel)]="received" (keydown.enter)="collect()">
+          </label>
+          <div class="co__change" *ngIf="!isCredit" [class.co__change--bad]="shortfall > 0">
+            <span>{{ shortfall > 0 ? 'Falta' : 'Devuelta' }}</span><b>{{ money(shortfall > 0 ? shortfall : change) }}</b>
+          </div>
+          <p class="co__warn" *ngIf="isCredit && !d.customerId">La venta a crédito requiere un cliente registrado.</p>
+        </div>
+
+        <button type="button" class="co__collect" [disabled]="!canCollect" (click)="collect()">
+          <span>{{ isWorking ? 'Procesando…' : 'Cobrar e imprimir' }}</span>
+          <small *ngIf="!isWorking">{{ money(d.grandTotal) }}</small>
+        </button>
+      </section>
+
+      <div class="co__table">
+        <table>
+          <thead><tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">ITBIS</th><th class="num">Total</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let line of d.lines">
+              <td>{{ line.description }}</td>
+              <td class="num"><span class="co__qty">{{ qty(line.quantity) }}</span></td>
+              <td class="num">{{ money(line.quantity ? line.lineTotal / line.quantity : line.unitPrice) }}</td>
+              <td class="num muted">{{ money(line.taxAmount) }}</td>
+              <td class="num"><b>{{ money(line.lineTotal) }}</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="co__notes" *ngIf="d.notes">📝 {{ d.notes }}</p>
+
+    </ng-container>
+
+    <ng-template #pick>
+      <div class="co__placeholder" *ngIf="!isLoadingDetail">
+        <div class="co__placeholder-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+        </div>
+        <h3>Elija una orden de venta</h3>
+        <p>Selecciónela en la lista o escanee el volante. Elija el comprobante y la forma de pago para cobrar e imprimir la factura.</p>
+      </div>
+    </ng-template>
+  </main>
+</section>

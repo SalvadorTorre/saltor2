@@ -37,6 +37,8 @@ export interface LocalInstallerOptions {
   qzLlave: string;
   /** Empresa de la nube cuyos datos maestros van en el paquete (null = instalación vacía). */
   empresaDatosId: number | null;
+  /** Otras empresas de la nube que también se llevan con sus datos (además de la principal). */
+  empresasExtraIds: number[];
 }
 
 export interface InstallerSources {
@@ -47,7 +49,7 @@ export interface InstallerSources {
   /** Funciones Edge (supabase/functions) y el enrutador main/index.ts. */
   funciones: { ruta: string; contenido: string }[];
   version: string;
-  /** SQL con los datos maestros de la empresa elegida (myappdb.plataforma_datos_maestros_instalador). */
+  /** SQL con los datos maestros de las empresas elegidas (myappdb.plataforma_datos_maestros_instalador). */
   datosSql?: string;
 }
 
@@ -445,6 +447,8 @@ declare
   c_hasta        constant date := date ${sqlText(o.licenciaHasta)};
   c_plan         constant text := ${sqlText(o.plan)};
   c_empresa_datos constant integer := ${o.empresaDatosId ?? 'null'};
+  c_empresas_extra constant integer[] := array[${(o.empresasExtraIds ?? []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0).join(', ')}]::integer[];
+  v_sus_empresa  integer;
   v_password     text := current_setting('saltor.root_password');
   v_uid          uuid;
   v_empresa_id   integer;
@@ -505,14 +509,18 @@ begin
   if v_plan_id is null then
     select id into v_plan_id from myappdb.plataforma_planes where activo order by orden, id limit 1;
   end if;
+  -- Licencia para la empresa principal y para cada empresa adicional traída de la nube.
+  foreach v_sus_empresa in array (array[v_empresa_id] || c_empresas_extra) loop
+  continue when not exists (select 1 from myappdb.empresas where id = v_sus_empresa);
   insert into myappdb.plataforma_suscripciones (empresa_id, plan_id, estado, fecha_inicio, prueba_hasta, pagado_hasta, notas)
-  values (v_empresa_id, v_plan_id, c_licencia, current_date,
+  values (v_sus_empresa, v_plan_id, c_licencia, current_date,
           case when c_licencia = 'Prueba' then c_hasta end, case when c_licencia = 'Activa' then c_hasta end, 'Instalación local')
   on conflict (empresa_id) do update
     set estado = excluded.estado, plan_id = coalesce(excluded.plan_id, myappdb.plataforma_suscripciones.plan_id),
         prueba_hasta = case when excluded.estado = 'Prueba' then excluded.prueba_hasta else myappdb.plataforma_suscripciones.prueba_hasta end,
         pagado_hasta = case when excluded.estado = 'Activa' then excluded.pagado_hasta else myappdb.plataforma_suscripciones.pagado_hasta end,
         notas = excluded.notas;
+  end loop;
 
   -- 3) Usuario del sistema y dueño de la plataforma
   if exists (select 1 from myappdb.usuarios where lower(correo) = c_correo) then
@@ -693,10 +701,12 @@ PRIMEROS PASOS DENTRO DEL SISTEMA
 - La empresa ${o.cliente.trim().toUpperCase()} ya está creada con su sucursal PRINCIPAL.
 - Licencia: ${o.licencia} hasta ${o.licenciaHasta}. Se extiende en Plataforma > Empresas y suscripciones.
 ${o.empresaDatosId
-  ? `- Se trajeron de la nube los usuarios (con sus mismas contraseñas), clientes con su saldo
+  ? `${o.empresasExtraIds?.length ? `- Se trajeron ${o.empresasExtraIds.length + 1} empresas de la nube, todas con la misma licencia.
+  El usuario dueño (ROOT) entra en ${o.cliente.trim().toUpperCase()} y cambia de empresa desde Plataforma.
+` : ''}- Se trajeron de la nube los usuarios (con sus mismas contraseñas), clientes con su saldo
   pendiente, suplidores, productos con su existencia, secuencias de NCF y configuración e-CF.
   No se trajo historial (facturas, cobros, cierres).
-- IMPORTANTE: desde ahora esta empresa debe facturar SOLO en este servidor. Si sigue
+- IMPORTANTE: desde ahora ${o.empresasExtraIds?.length ? 'estas empresas deben' : 'esta empresa debe'} facturar SOLO en este servidor. Si sigue
   facturando también en la nube, se repetirían los números de e-NCF.
 - Vuelve a cargar la firma digital (.p12) en Configuración > Firma Digital DGII.`
   : `- Crea los usuarios del cliente en Configuración > Usuarios.

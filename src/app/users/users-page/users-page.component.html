@@ -65,6 +65,7 @@
               </button>
               <div class="company-options__menu" *ngIf="openUserOptionsId === user.id">
                 <button class="company-options__item" type="button" (click)="selectUser(user)">Editar</button>
+                <button class="company-options__item" type="button" (click)="openAccess(user)">Accesos</button>
                 <button class="company-options__item" type="button" (click)="changeUserPassword(user)">Cambiar clave</button>
                 <button class="company-options__item company-options__item--danger" type="button" (click)="deleteUser(user)">Eliminar</button>
               </div>
@@ -283,6 +284,7 @@
 
         <div class="company-detail-card__actions">
           <button class="secondary-action" type="button" (click)="selectUser(selected)">Modificar datos</button>
+          <button class="secondary-action" type="button" (click)="openAccess(selected)">Accesos por módulo</button>
           <button class="secondary-action" type="button" (click)="changeUserPassword(selected)">Cambiar clave</button>
           <button class="ghost-action" type="button" (click)="toggleSelectedUserStatus()">
             {{ selected.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario' }}
@@ -292,3 +294,5 @@
     </section>
   </div>
 </section>
+
+<app-user-access-modal *ngIf="accessUser" [user]="accessUser" (closed)="accessUser = null"></app-user-access-modal>

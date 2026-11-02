@@ -13,6 +13,7 @@ export class CompanyPrintSettingsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async getPaper(): Promise<PrintPaper> {
+    this.resetCacheIfCompanyChanged();
     if (this.cachedPaper) return this.cachedPaper;
 
     const companyId = this.companyId();
@@ -47,6 +48,7 @@ export class CompanyPrintSettingsService {
 
   /** Copias que se imprimen al generar una factura (1 a 5). Las reimpresiones salen en una. */
   async getInvoiceCopies(): Promise<number> {
+    this.resetCacheIfCompanyChanged();
     if (this.cachedCopies) return this.cachedCopies;
     const companyId = this.companyId();
     if (!companyId) return 1;
@@ -80,9 +82,21 @@ export class CompanyPrintSettingsService {
   }
 
   private cachedOrderSlip: boolean | null = null;
+  /** Empresa de los valores guardados: al cambiar de empresa se vuelven a leer (papel, copias, volante). */
+  private cachedCompanyId = 0;
+
+  private resetCacheIfCompanyChanged(): void {
+    const companyId = this.companyId();
+    if (companyId === this.cachedCompanyId) return;
+    this.cachedCompanyId = companyId;
+    this.cachedPaper = null;
+    this.cachedCopies = null;
+    this.cachedOrderSlip = null;
+  }
 
   /** Orden de venta con volante: al grabarla se imprime solo un volante con código de barras. */
   async getOrderSlip(): Promise<boolean> {
+    this.resetCacheIfCompanyChanged();
     if (this.cachedOrderSlip !== null) return this.cachedOrderSlip;
     const companyId = this.companyId();
     if (!companyId) return false;

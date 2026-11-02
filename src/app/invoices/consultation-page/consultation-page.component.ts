@@ -14,6 +14,14 @@ import Swal from 'sweetalert2';
 import * as QRCode from 'qrcode';
 import * as JsBarcodeModule from 'jsbarcode';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
+/** Código QR como SVG (vector): nítido en la térmica, sin el suavizado de una imagen reducida. */
+async function qrSvgDataUrl(value: string): Promise<string> {
+  const svg: string = await (QRCode as any).toString(value, { type: 'svg', errorCorrectionLevel: 'L', margin: 4 });
+  const crisp = svg.includes('shape-rendering') ? svg : svg.replace('<svg ', '<svg shape-rendering="crispEdges" ');
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(crisp)));
+}
+
 interface InvoiceConsultationRow {
   id: number;
   number: string;
@@ -31,6 +39,7 @@ interface InvoiceConsultationRow {
   updatedAt: string;
   status: string;
   seller: string;
+  printedAt: string;
 }
 
 @Component({
@@ -41,6 +50,8 @@ interface InvoiceConsultationRow {
   styleUrls: ['./consultation-page.component.scss']
 })
 export class InvoiceConsultationPageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   private readonly ecf = inject(EcfService);
   private readonly destroyRef = inject(DestroyRef);
   @Output() editRequested = new EventEmitter<number>();
@@ -97,6 +108,7 @@ export class InvoiceConsultationPageComponent implements OnInit {
   }
 
   createDeliveryNote(invoice: InvoiceConsultationRow): void {
+    if (!this.perms.ensure('conduces.crear')) return;
     if (invoice.status === 'Anulada') return;
     void this.router.navigate(['/transacciones/conduce'], { queryParams: { factura: invoice.id } });
   }
@@ -151,6 +163,8 @@ export class InvoiceConsultationPageComponent implements OnInit {
   }
 
   requestEdit(invoice: InvoiceConsultationRow): void {
+    if (!this.perms.ensure('facturas.editar')) return;
+    if (invoice.printedAt && !this.perms.ensure('facturas.editar_impresa')) return;
     if (!this.canEdit(invoice)) {
       this.actionMessage = 'No se puede editar una factura anulada, enviada o aceptada por DGII.';
       return;
@@ -159,6 +173,7 @@ export class InvoiceConsultationPageComponent implements OnInit {
   }
 
   async cancelInvoice(invoice: InvoiceConsultationRow): Promise<void> {
+    if (!this.perms.ensure('facturas.anular')) return;
     if (invoice.status === 'Anulada' || this.isDgiiLocked(invoice) || this.isProcessingAction) return;
     const result = await Swal.fire({
       icon: 'warning',
@@ -236,7 +251,7 @@ export class InvoiceConsultationPageComponent implements OnInit {
       const canvas = document.createElement('canvas');
       const barcode = (JsBarcodeModule as any).default ?? JsBarcodeModule;
       barcode(canvas, barcodeValue, { format: 'CODE128', displayValue: false, margin: 0, width: 1.25, height: 42 });
-      return { qr: await QRCode.toDataURL(qrValue, { errorCorrectionLevel: 'L', margin: 4, scale: 8 }), barcode: canvas.toDataURL('image/png') };
+      return { qr: await qrSvgDataUrl(qrValue), barcode: canvas.toDataURL('image/png') };
     } catch {
       return { qr: '', barcode: '' };
     }

@@ -15,8 +15,11 @@ import { CompanyPrintSettingsService } from '../../core/services/printing/compan
 import { CompaniesService } from '../../core/services/companies/companies.service';
 import Swal from 'sweetalert2';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
 @Component({ selector: 'app-quotation-page', standalone: true, imports: [CommonModule, FormsModule], templateUrl: './quotation-page.component.html', styleUrls: ['./quotation-page.component.scss'] })
 export class QuotationPageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   @Input() transactionQuotation = false;
   private readonly router = inject(Router);
   tab: 'create' | 'consult' = 'create';
@@ -98,7 +101,7 @@ export class QuotationPageComponent implements OnInit {
     if (value.includes('envi') || value.includes('activ')) return 'status--sent';
     return 'status--draft';
   }
-  newQuotation() { this.reset(); this.tab = 'create'; this.quoteStatus = 'Borrador'; this.validityDays = 15; this.taxRate = 18; this.updateValidUntil(); }
+  newQuotation() { if (!this.perms.ensure('cotizaciones.crear')) return; this.reset(); this.tab = 'create'; this.quoteStatus = 'Borrador'; this.validityDays = 15; this.taxRate = 18; this.updateValidUntil(); }
   backToList() { this.tab = 'consult'; this.message = ''; }
   updateValidUntil() {
     if (!this.quote.date || this.validityDays === null || this.validityDays === undefined) return;
@@ -239,13 +242,14 @@ export class QuotationPageComponent implements OnInit {
   private async loadUsers(): Promise<void> { try { const session = this.auth.currentUser ?? await this.auth.restoreSession(); if (session) this.data.users = await this.usersService.getUsers(session.companyId); } catch {} }
   async load() { try { this.quotes = await this.quotations.list(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudieron cargar las cotizaciones.'; } }
   private payload(): Omit<Quotation, 'id' | 'number'> { return { date: this.quote.date, validUntil: this.quote.validUntil, customer: this.quote.customer.trim(), rnc: this.quote.rnc.trim(), phone: this.quote.phone.trim(), email: this.quote.email.trim(), address: this.quote.address.trim(), notes: this.quote.notes.trim(), subtotal: this.subtotal, itbis: this.tax, total: this.total, status: this.quoteStatus, lines: this.quote.lines.map((line) => ({ ...line, code: line.code.trim(), description: line.description.trim(), quantity: Number(line.quantity), price: Number(line.price), itbis: Number(line.itbis), total: Number(line.quantity) * Number(line.price) * (1 + Number(line.itbis) / 100) })) }; }
-  async save() { if (this.isReadOnly) return; const validUser = !this.transactionQuotation || Boolean(this.quotationUserCode.trim() && this.quotationUserName); if (this.isRncInvalid || !validUser || !this.quote.customer.trim() || !this.quote.lines.length || this.quote.lines.some((line) => !line.description.trim() || line.quantity <= 0)) { this.message = this.isRncInvalid ? 'RNC inválido. Regístralo en Clientes o en el catálogo RNC antes de guardar.' : !validUser ? 'Indica un código de usuario activo antes de guardar.' : 'Completa el cliente y agrega al menos un producto antes de guardar.'; return; } try { const payload = this.payload(); if (this.editingId) { if (!window.confirm('Se reemplazarán las líneas actuales de la cotización. ¿Deseas guardar los cambios?')) return; await this.quotations.update(this.editingId, payload); this.message = 'Cotización actualizada correctamente.'; } else { const saved = await this.quotations.create(payload); this.quote.number = saved.number; this.editingId = saved.id; this.quoteStatus = 'Borrador'; this.message = `Cotización ${saved.number} creada correctamente.`; } await this.load(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudo guardar la cotización.'; } }
+  async save() { if (!this.perms.ensure(this.editingId ? 'cotizaciones.editar' : 'cotizaciones.crear')) return; if (this.isReadOnly) return; const validUser = !this.transactionQuotation || Boolean(this.quotationUserCode.trim() && this.quotationUserName); if (this.isRncInvalid || !validUser || !this.quote.customer.trim() || !this.quote.lines.length || this.quote.lines.some((line) => !line.description.trim() || line.quantity <= 0)) { this.message = this.isRncInvalid ? 'RNC inválido. Regístralo en Clientes o en el catálogo RNC antes de guardar.' : !validUser ? 'Indica un código de usuario activo antes de guardar.' : 'Completa el cliente y agrega al menos un producto antes de guardar.'; return; } try { const payload = this.payload(); if (this.editingId) { if (!window.confirm('Se reemplazarán las líneas actuales de la cotización. ¿Deseas guardar los cambios?')) return; await this.quotations.update(this.editingId, payload); this.message = 'Cotización actualizada correctamente.'; } else { const saved = await this.quotations.create(payload); this.quote.number = saved.number; this.editingId = saved.id; this.quoteStatus = 'Borrador'; this.message = `Cotización ${saved.number} creada correctamente.`; } await this.load(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudo guardar la cotización.'; } }
   /** Convertida en orden de venta (o ya facturada): solo se puede consultar. */
   isLocked(item: Quotation): boolean {
     return !!item.orderNumber || !!item.invoiceNumber || this.displayStatus(item.status) === 'Facturada';
   }
 
   async edit(item: Quotation) {
+    if (!this.perms.ensure('cotizaciones.editar')) return;
     if (this.isLocked(item)) { await this.view(item); return; }
     const detail = await this.quotations.get(item.id);
     if (!detail) return;
@@ -267,6 +271,7 @@ export class QuotationPageComponent implements OnInit {
     this.message = readOnly ? `Consultando ${detail.number}.` : `Editando ${detail.number}.`;
   }
   async convert(item: Quotation): Promise<void> {
+    if (!this.perms.ensure('cotizaciones.convertir')) return;
     if (this.transactionQuotation && item.orderNumber) { this.message = `Esta cotización ya fue convertida en la orden ${item.orderNumber}.`; return; }
     if (!this.transactionQuotation && this.displayStatus(item.status) === 'Facturada') { this.message = 'Esta cotización ya fue convertida en factura.'; return; }
     const detail = await this.quotations.get(item.id);

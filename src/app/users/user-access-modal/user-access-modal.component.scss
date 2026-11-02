@@ -1,0 +1,33 @@
+.ua-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 18px; background: rgba(15, 23, 42, .45); }
+.ua { width: min(980px, 100%); max-height: calc(100vh - 36px); display: flex; flex-direction: column; background: #fff; border-radius: 16px; box-shadow: 0 24px 70px rgba(15, 23, 42, .3); overflow: hidden; }
+.ua__head { display: flex; justify-content: space-between; gap: 12px; padding: 18px 22px 12px; border-bottom: 1px solid #eaecf0; }
+.ua__head h2 { margin: 0 0 4px; font-size: 22px; }
+.ua__head p { margin: 0; color: #475467; font-size: 14px; }
+.ua__head small { color: #98a2b3; font-size: 12px; }
+.ua__tag { margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #eef4ff; color: #3538cd; font-size: 12px; font-weight: 700; }
+.ua__x { width: 36px; height: 36px; border: 0; border-radius: 9px; background: #f2f4f7; font-size: 22px; cursor: pointer; }
+.ua__info, .ua__error, .ua__loading { margin: 12px 22px 0; padding: 10px 12px; border-radius: 9px; font-size: 14px; }
+.ua__info { background: #eef4ff; color: #3538cd; }
+.ua__error { background: #fee4e2; color: #b42318; }
+.ua__loading { color: #667085; }
+.ua__body { overflow-y: auto; padding: 14px 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: start; }
+.ua__module { border: 1px solid #e4e7ec; border-radius: 12px; padding: 12px 14px; }
+.ua__module--off { background: #fafafa; }
+.ua__module-head { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 800; color: #101828; cursor: pointer; padding-bottom: 8px; border-bottom: 1px solid #f2f4f7; }
+.ua__module-head input, .ua__opt input { width: 17px; height: 17px; accent-color: #171717; cursor: pointer; }
+.ua__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.ua__cols h4 { margin: 0 0 4px; font-size: 11px; color: #667085; text-transform: uppercase; letter-spacing: .4px; }
+.ua__opt { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-size: 14px; color: #344054; cursor: pointer; }
+.ua__opt--locked { color: #98a2b3; cursor: not-allowed; }
+.ua__note { grid-column: 1 / -1; margin: 4px 0 0; color: #98a2b3; font-size: 12px; }
+.ua__foot { display: flex; align-items: center; gap: 8px; padding: 12px 22px; border-top: 1px solid #eaecf0; }
+.ua__spacer { flex: 1; }
+.ua__btn { height: 40px; padding: 0 16px; border: 1px solid #171717; border-radius: 9px; background: #171717; color: #fff; font: 700 14px inherit; cursor: pointer; }
+.ua__btn:disabled { opacity: .55; cursor: not-allowed; }
+.ua__btn--ghost { background: #fff; color: #171717; }
+@media (max-width: 760px) {
+  .ua__body { grid-template-columns: 1fr; }
+  .ua__cols { grid-template-columns: 1fr; }
+  .ua__foot { flex-wrap: wrap; }
+  .ua__foot .ua__btn { flex: 1; }
+}

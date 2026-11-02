@@ -122,7 +122,9 @@ export class AuthService {
   async signOut(): Promise<void> {
     this.currentUser = null;
     this.restoring = Promise.resolve(null);
-    await this.supabase.client.auth.signOut();
+    // Solo esta computadora: con el cierre global se caían las sesiones del mismo
+    // usuario en las demás PC (y las funciones respondían "Sesión no válida").
+    await this.supabase.client.auth.signOut({ scope: 'local' }).catch(() => undefined);
     this.clearStoredUser();
   }
 

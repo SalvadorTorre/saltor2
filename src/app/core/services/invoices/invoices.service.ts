@@ -83,6 +83,7 @@ interface InvoiceConsultationDatabaseRow {
   dgii_updated_at?: string | null;
   estado?: string | null;
   usuario_nombre?: string | null;
+  impreso_en?: string | null;
 }
 
 interface InvoiceDetailDatabaseRow {
@@ -276,10 +277,11 @@ export class InvoicesService {
     attempts: number;
     updatedAt: string;
     seller: string;
+    printedAt: string;
   }>> {
     const { data, error } = await this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, cliente_nombre, ncf, tipo_ncf, condicion_pago, forma_pago_codigo, total, estado, dgii_estado, dgii_mensaje_respuesta, ecf_operation_id, ecf_queue_status, dgii_intentos, dgii_updated_at, usuario_nombre')
+      .select('id, numero_factura, fecha_factura, cliente_nombre, ncf, tipo_ncf, condicion_pago, forma_pago_codigo, total, estado, dgii_estado, dgii_mensaje_respuesta, ecf_operation_id, ecf_queue_status, dgii_intentos, dgii_updated_at, usuario_nombre, impreso_en')
       .order('id', { ascending: false });
 
     if (error) {
@@ -302,7 +304,8 @@ export class InvoicesService {
       queueStatus: row.ecf_queue_status ?? '',
       attempts: Number(row.dgii_intentos ?? 0),
       updatedAt: row.dgii_updated_at ?? '',
-      seller: row.usuario_nombre ?? ''
+      seller: row.usuario_nombre ?? '',
+      printedAt: row.impreso_en ?? ''
     }));
   }
 

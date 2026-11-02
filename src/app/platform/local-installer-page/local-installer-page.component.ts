@@ -61,18 +61,44 @@ export class LocalInstallerPageComponent implements OnInit {
       rootPassword: randomSecret(14), postgresPassword: randomSecret(28),
       licencia: 'Activa', licenciaHasta: this.isoPlusDays(365), plan: '',
       puertoWeb: 8080, exponerPostgres: false, puertoPostgres: 5432,
-      qzCertificado: '', qzLlave: '', empresaDatosId: null
+      qzCertificado: '', qzLlave: '', empresaDatosId: null, empresasExtraIds: []
     };
   }
 
-  /** Marca o desmarca "traer datos": al elegir la empresa se copian sus datos al formulario. */
+  /** Empresas de la nube que se llevan; la primera es la principal (nombre, RNC y usuario ROOT). */
+  selectedIds: number[] = [];
+  companyFilter = '';
+
+  /** Marca o desmarca "traer datos": la empresa principal copia sus datos al formulario. */
   toggleIncludeData(): void {
-    if (!this.includeData) { this.form.empresaDatosId = null; return; }
+    if (!this.includeData) { this.selectedIds = []; this.syncSelection(); return; }
+    this.syncSelection();
+  }
+
+  get filteredCompanies(): PlatformCompany[] {
+    const q = this.companyFilter.trim().toLowerCase();
+    return q ? this.companies.filter((c) => `${c.nombre_comercial} ${c.rnc ?? ''}`.toLowerCase().includes(q)) : this.companies;
+  }
+
+  isSelected(id: number): boolean { return this.selectedIds.includes(id); }
+
+  toggleCompany(id: number): void {
+    this.selectedIds = this.isSelected(id) ? this.selectedIds.filter((x) => x !== id) : [...this.selectedIds, id];
+    this.syncSelection();
+  }
+
+  makePrincipal(id: number): void {
+    this.selectedIds = [id, ...this.selectedIds.filter((x) => x !== id)];
+    this.syncSelection();
+  }
+
+  private syncSelection(): void {
+    this.form.empresaDatosId = this.selectedIds[0] ?? null;
+    this.form.empresasExtraIds = this.selectedIds.slice(1);
     if (this.form.empresaDatosId) this.pickCompany(this.form.empresaDatosId);
   }
 
   pickCompany(id: number | null): void {
-    this.form.empresaDatosId = id;
     const company = this.companies.find((c) => c.id === id);
     if (!company) return;
     this.form.cliente = company.nombre_comercial;
@@ -81,8 +107,12 @@ export class LocalInstallerPageComponent implements OnInit {
     this.form.correoEmpresa = company.correo ?? '';
   }
 
-  get selectedCompany(): PlatformCompany | undefined {
-    return this.companies.find((c) => c.id === this.form.empresaDatosId);
+  get selectedCompanies(): PlatformCompany[] {
+    return this.selectedIds.map((id) => this.companies.find((c) => c.id === id)).filter((c): c is PlatformCompany => !!c);
+  }
+
+  get selectedProducts(): number {
+    return this.selectedCompanies.reduce((sum, c) => sum + Number(c.productos ?? 0), 0);
   }
 
   setLicense(type: LicenseType): void {
@@ -100,7 +130,7 @@ export class LocalInstallerPageComponent implements OnInit {
     this.result = null;
     this.form.puertoWeb = Number(this.form.puertoWeb);
     this.form.puertoPostgres = Number(this.form.puertoPostgres);
-    if (this.includeData && !this.form.empresaDatosId) { this.errorMessage = 'Elige la empresa cuyos datos quieres llevar.'; return; }
+    if (this.includeData && !this.form.empresaDatosId) { this.errorMessage = 'Elige al menos una empresa cuyos datos quieres llevar.'; return; }
     const invalid = validateOptions(this.form);
     if (invalid) { this.errorMessage = invalid; return; }
 
@@ -133,16 +163,20 @@ export class LocalInstallerPageComponent implements OnInit {
     }
 
     let datosSql: string | undefined;
-    if (this.form.empresaDatosId) {
-      this.step('Copiando los datos de la empresa…', 9);
-      const { data, error: dataError } = await this.supabase.client.rpc('plataforma_datos_maestros_instalador', { p_empresa_id: this.form.empresaDatosId });
+    const ids = this.form.empresaDatosId ? [this.form.empresaDatosId, ...this.form.empresasExtraIds] : [];
+    const partes: string[] = [];
+    for (const [index, id] of ids.entries()) {
+      const name = this.companies.find((c) => c.id === id)?.nombre_comercial ?? `empresa ${id}`;
+      this.step(ids.length > 1 ? `Copiando los datos de ${name} (${index + 1} de ${ids.length})…` : 'Copiando los datos de la empresa…', 9);
+      const { data, error: dataError } = await this.supabase.client.rpc('plataforma_datos_maestros_instalador', { p_empresa_id: id });
       if (dataError) {
         throw new Error(/plataforma_datos_maestros_instalador/.test(dataError.message ?? '')
           ? 'Falta aplicar la migración 20261031100000_instalador_datos_maestros.sql en la base de datos.'
-          : dataError.message);
+          : `${name}: ${dataError.message}`);
       }
-      datosSql = String(data);
+      partes.push(String(data));
     }
+    if (partes.length) datosSql = partes.join('\n\n');
 
     this.step('Leyendo el sistema web…', 12);
     const manifest = await this.fetchJson<BuildManifest>('instalador/manifiesto.json');

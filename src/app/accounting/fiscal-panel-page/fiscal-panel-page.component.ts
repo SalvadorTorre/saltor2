@@ -3,9 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { FiscalPanel, FiscalPanelService, FiscalPendingDoc } from '../../core/services/accounting/fiscal-panel.service';
+import { CertificateUploadComponent } from '../certificate-upload/certificate-upload.component';
 
 type Severity = 'danger' | 'warn' | 'info';
-interface FiscalAlert { severity: Severity; title: string; detail: string; link?: string; }
+interface FiscalAlert { severity: Severity; title: string; detail: string; link?: string; certificate?: boolean; }
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DOC_LINKS: Record<string, string> = {
@@ -18,7 +19,7 @@ const DOC_LINKS: Record<string, string> = {
 @Component({
   selector: 'app-fiscal-panel-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, CertificateUploadComponent],
   templateUrl: './fiscal-panel-page.component.html',
   styleUrls: ['./fiscal-panel-page.component.scss']
 })
@@ -37,6 +38,11 @@ export class FiscalPanelPageComponent implements OnInit {
     const today = new Date();
     this.month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     void this.load();
+  }
+
+  /** Lleva al bloque del certificado digital (las alertas del certificado apuntan aquí). */
+  goToCertificate(): void {
+    document.getElementById('certificado-digital')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   shiftMonth(delta: number): void {
@@ -79,14 +85,14 @@ export class FiscalPanelPageComponent implements OnInit {
     const env = (d.ambiente ?? '').toUpperCase();
     if (env && env !== 'PROD') {
       list.push({ severity: 'warn', title: `Ambiente DGII de pruebas (${d.ambiente})`,
-        detail: 'Los e-CF se envían a un ambiente que no es el de producción; no tienen validez fiscal. Cámbialo en Configuración → Otros ajustes cuando la DGII te habilite.', link: '/configuracion/otros' });
+        detail: 'Los e-CF se envían a un ambiente que no es el de producción; no tienen validez fiscal. Cámbialo en Configuración → Firma digital DGII cuando la DGII te habilite.', link: '/configuracion/firma-digital' });
     }
 
     const cert = d.certificado;
-    if (!cert?.valido_hasta) list.push({ severity: 'danger', title: 'No hay certificado digital cargado', detail: 'Sin certificado no se pueden firmar ni enviar e-CF.', link: '/configuracion/otros' });
-    else if ((cert.dias_restantes ?? 0) < 0) list.push({ severity: 'danger', title: 'El certificado digital está vencido', detail: `Venció el ${this.formatDate(cert.valido_hasta)}. Carga uno nuevo para seguir enviando e-CF.`, link: '/configuracion/otros' });
-    else if ((cert.dias_restantes ?? 0) <= 30) list.push({ severity: 'danger', title: `El certificado digital vence en ${cert.dias_restantes} días`, detail: `Vence el ${this.formatDate(cert.valido_hasta)}. Solicita la renovación ya.`, link: '/configuracion/otros' });
-    else if ((cert.dias_restantes ?? 0) <= 60) list.push({ severity: 'warn', title: `El certificado digital vence en ${cert.dias_restantes} días`, detail: `Vence el ${this.formatDate(cert.valido_hasta)}.`, link: '/configuracion/otros' });
+    if (!cert?.valido_hasta) list.push({ severity: 'danger', title: 'No hay certificado digital cargado', detail: 'Sin certificado no se pueden firmar ni enviar e-CF.', certificate: true });
+    else if ((cert.dias_restantes ?? 0) < 0) list.push({ severity: 'danger', title: 'El certificado digital está vencido', detail: `Venció el ${this.formatDate(cert.valido_hasta)}. Carga uno nuevo para seguir enviando e-CF.`, certificate: true });
+    else if ((cert.dias_restantes ?? 0) <= 30) list.push({ severity: 'danger', title: `El certificado digital vence en ${cert.dias_restantes} días`, detail: `Vence el ${this.formatDate(cert.valido_hasta)}. Solicita la renovación ya.`, certificate: true });
+    else if ((cert.dias_restantes ?? 0) <= 60) list.push({ severity: 'warn', title: `El certificado digital vence en ${cert.dias_restantes} días`, detail: `Vence el ${this.formatDate(cert.valido_hasta)}.`, certificate: true });
 
     d.secuencias.forEach((s) => {
       const name = `${s.serie} · ${this.shortType(s.tipo_ncf)}`;

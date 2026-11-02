@@ -8,11 +8,12 @@ import { UsersService } from '../../core/services/users/users.service';
 import { BranchesService } from '../../core/services/branches/branches.service';
 import { AuthService } from '../../core/services/auth/auth.service';
 import Swal from 'sweetalert2';
+import { AccessModalUser, UserAccessModalComponent } from '../user-access-modal/user-access-modal.component';
 
 @Component({
   selector: 'app-users-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, UserAccessModalComponent],
   templateUrl: './users-page.component.html',
   styleUrls: ['./users-page.component.scss']
 })
@@ -34,6 +35,8 @@ export class UsersPageComponent implements OnInit {
   isLoadingBranches = false;
   isSavingUser = false;
   selectedUserId: number | null = null;
+  /** Usuario cuya ventana de Accesos está abierta. */
+  accessUser: AccessModalUser | null = null;
   openUserOptionsId: number | null = null;
   private activeCompanyId: number | null = null;
   userForm: UserFormModel = this.createEmptyUserForm();
@@ -183,6 +186,16 @@ export class UsersPageComponent implements OnInit {
         return;
       }
 
+      const previous = this.data.users.find((user) => user.id === userId);
+      if (previous && previous.role !== this.userForm.role) {
+        const answer = await Swal.fire({
+          icon: 'question',
+          title: 'Cambiar el rol',
+          text: `Al pasar de ${previous.role} a ${this.userForm.role}, los accesos de ${previous.fullName} vuelven a los del rol nuevo (se pierden los accesos personalizados).`,
+          showCancelButton: true, confirmButtonText: 'Sí, cambiar rol', cancelButtonText: 'Cancelar'
+        });
+        if (!answer.isConfirmed) return;
+      }
       const updatedUser = await this.usersService.updateUser(userId, this.userForm, lastUpdate);
       this.data.users = this.data.users.map((user) => user.id === updatedUser.id ? updatedUser : user);
       this.selectedUserId = updatedUser.id;
@@ -204,6 +217,11 @@ export class UsersPageComponent implements OnInit {
   private setUserMessage(message: string, type: 'info' | 'success' | 'error' = 'info'): void {
     this.userMessage = message;
     this.userMessageType = type;
+  }
+
+  openAccess(user: UserRecord): void {
+    this.openUserOptionsId = null;
+    this.accessUser = { id: user.id, fullName: user.fullName, role: user.role, companyId: user.companyId };
   }
 
   selectUser(user: UserRecord): void {

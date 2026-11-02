@@ -1,0 +1,38 @@
+<div class="cu">
+  <div class="cu__head">
+    <div>
+      <h3>Certificado digital</h3>
+      <p>Archivo .p12 o .pfx de la empresa para firmar y enviar los e-CF a la DGII.</p>
+    </div>
+    <span class="cu__status" [ngClass]="'cu__status--' + status">{{ isLoading ? 'Consultando…' : statusLabel }}</span>
+  </div>
+
+  <dl class="cu__details" *ngIf="certificate">
+    <div><dt>Titular</dt><dd>{{ certificate.holder }}</dd></div>
+    <div><dt>Emisor</dt><dd>{{ certificate.issuer }}</dd></div>
+    <div><dt>Válido desde</dt><dd>{{ formatDate(certificate.validFrom) }}</dd></div>
+    <div><dt>Vence</dt><dd [class.cu__bad]="status === 'expired' || status === 'soon'">{{ formatDate(certificate.validUntil) }}<ng-container *ngIf="daysLeft !== null && daysLeft >= 0"> ({{ daysLeft }} días)</ng-container></dd></div>
+    <div><dt>Archivo</dt><dd>{{ certificate.fileName }}</dd></div>
+    <div><dt>Cargado</dt><dd>{{ formatDate(certificate.uploadedAt) }}</dd></div>
+  </dl>
+
+  <button *ngIf="certificate && !showForm" type="button" class="cu__link" (click)="showForm = true">Reemplazar certificado</button>
+
+  <div class="cu__form" *ngIf="showForm">
+    <label class="cu__field">
+      <span>Archivo del certificado</span>
+      <input type="file" accept=".p12,.pfx,application/x-pkcs12" (change)="onFile($event)">
+    </label>
+    <label class="cu__field">
+      <span>Contraseña del certificado</span>
+      <input type="password" [(ngModel)]="password" autocomplete="new-password" (keydown.enter)="upload()">
+    </label>
+    <div class="cu__actions">
+      <button type="button" class="cu__btn" [disabled]="isUploading" (click)="upload()">{{ isUploading ? 'Validando…' : (certificate ? 'Guardar nuevo certificado' : 'Cargar certificado') }}</button>
+      <button *ngIf="certificate" type="button" class="cu__btn cu__btn--ghost" [disabled]="isUploading" (click)="showForm = false">Cancelar</button>
+    </div>
+  </div>
+
+  <p class="cu__msg" *ngIf="message" [class.cu__msg--error]="isError">{{ message }}</p>
+  <p class="cu__note">El sistema abre el certificado para validar el archivo y la contraseña antes de guardarlo. La clave queda protegida para los envíos automáticos.</p>
+</div>

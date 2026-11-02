@@ -1,10 +1,11 @@
-import { Component, ElementRef, HostListener, OnInit } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AppDataService } from '../../app-data.service';
 import { ProductRecord, ProductFormModel } from '../../app.models';
 import { ProductsService } from '../../core/services/products/products.service';
 
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
 @Component({
   selector: 'app-products-page',
   standalone: true,
@@ -13,6 +14,8 @@ import { ProductsService } from '../../core/services/products/products.service';
   styleUrls: ['./products-page.component.scss']
 })
 export class ProductsPageComponent implements OnInit {
+  /** Accesos del usuario (Configuración › Usuarios › Accesos). */
+  private readonly perms = inject(PermissionsService);
   productSearch = '';
   productCategoryFilter = 'all';
   productStatusFilter = 'all';
@@ -118,6 +121,7 @@ export class ProductsPageComponent implements OnInit {
   }
 
   startCreateProduct(): void {
+    if (!this.perms.ensure('productos.crear')) return;
     this.openProductOptionsId = null;
     this.productEditorMode = 'create';
     this.productForm = {
@@ -162,6 +166,7 @@ export class ProductsPageComponent implements OnInit {
   }
 
   editProductFromOptions(product: ProductRecord, event?: Event): void {
+    if (!this.perms.ensure('productos.editar')) return;
     event?.stopPropagation();
     this.editProductInternal(product);
   }
@@ -293,6 +298,7 @@ export class ProductsPageComponent implements OnInit {
   }
 
   async saveProduct(): Promise<void> {
+    if (!this.perms.ensure(this.productEditorMode === 'create' ? 'productos.crear' : 'productos.editar')) return;
     if (!this.productForm.code.trim() || !this.productForm.description.trim()) {
       this.productMessage = 'Completa codigo y descripcion antes de guardar.';
       return;
@@ -355,6 +361,7 @@ export class ProductsPageComponent implements OnInit {
   }
 
   async deleteProduct(product: ProductRecord): Promise<void> {
+    if (!this.perms.ensure('productos.eliminar')) return;
     if (!this.canDeleteProduct(product)) {
       this.productMessage = `No se puede eliminar ${product.description} porque tiene stock disponible.`;
       this.openProductOptionsId = null;
@@ -371,7 +378,7 @@ export class ProductsPageComponent implements OnInit {
         this.loadProductIntoForm(firstRemaining, 'edit');
       } else {
         this.selectedProductId = null;
-        this.startCreateProduct();
+        if (this.perms.can('productos.crear')) this.startCreateProduct();
       }
       this.productMessage = `Producto ${product.description} eliminado correctamente.`;
     } catch (error) {
@@ -413,7 +420,7 @@ export class ProductsPageComponent implements OnInit {
         this.productMessage = 'Productos cargados desde Supabase.';
       } else {
         this.selectedProductId = null;
-        this.startCreateProduct();
+        if (this.perms.can('productos.crear')) this.startCreateProduct();
         this.productMessage = 'No hay productos registrados. Puedes crear el primero.';
       }
     } catch (error) {

@@ -12,18 +12,28 @@
       <fieldset [disabled]="isBuilding">
         <h3>Cliente</h3>
         <div class="pf-form">
-          <label class="li__check pf-form__wide"><input type="checkbox" name="includeData" [(ngModel)]="includeData" (ngModelChange)="toggleIncludeData()"> Llevar los datos de una empresa que ya usa el sistema en la nube</label>
+          <label class="li__check pf-form__wide"><input type="checkbox" name="includeData" [(ngModel)]="includeData" (ngModelChange)="toggleIncludeData()"> Llevar los datos de empresas que ya usan el sistema en la nube</label>
           <ng-container *ngIf="includeData">
-            <label class="pf-form__wide">Empresa *
-              <select name="empresaDatos" [ngModel]="form.empresaDatosId" (ngModelChange)="pickCompany($event)">
-                <option [ngValue]="null">Elige la empresa…</option>
-                <option *ngFor="let c of companies" [ngValue]="c.id">{{ c.nombre_comercial }}{{ c.rnc ? ' · ' + c.rnc : '' }}</option>
-              </select>
-            </label>
-            <p class="li__note pf-form__wide" *ngIf="selectedCompany">
-              Se llevan sus usuarios (con sus mismas contraseñas), {{ selectedCompany.productos }} producto(s) con su existencia, clientes con su saldo pendiente,
+            <div class="pf-form__wide li__companies">
+              <div class="li__companies-head">
+                <span>Empresas * <small>({{ selectedIds.length }} elegida{{ selectedIds.length === 1 ? '' : 's' }})</small></span>
+                <input name="companyFilter" [(ngModel)]="companyFilter" placeholder="Buscar empresa o RNC" aria-label="Buscar empresa">
+              </div>
+              <div class="li__company-list">
+                <label class="li__company" *ngFor="let c of filteredCompanies" [class.li__company--on]="isSelected(c.id)">
+                  <input type="checkbox" [checked]="isSelected(c.id)" (change)="toggleCompany(c.id)">
+                  <span class="li__company-name">{{ c.nombre_comercial }}<small>{{ c.rnc ? ' · ' + c.rnc : '' }} · {{ c.productos }} producto(s)</small></span>
+                  <b class="li__principal" *ngIf="c.id === form.empresaDatosId">Principal</b>
+                  <button type="button" class="li__make" *ngIf="isSelected(c.id) && c.id !== form.empresaDatosId" (click)="$event.preventDefault(); makePrincipal(c.id)">Hacer principal</button>
+                </label>
+                <p class="li__empty" *ngIf="!filteredCompanies.length">No hay empresas que coincidan.</p>
+              </div>
+            </div>
+            <p class="li__note pf-form__wide" *ngIf="selectedCompanies.length">
+              Se llevan {{ selectedCompanies.length === 1 ? 'sus' : 'de cada empresa sus' }} usuarios (con sus mismas contraseñas), {{ selectedProducts }} producto(s) con su existencia, clientes con su saldo pendiente,
               suplidores, secuencias de NCF y configuración e-CF. No se lleva el historial (facturas, cobros, cierres) ni la firma digital.
-              <b>Después de instalar, esta empresa debe facturar solo en el servidor local</b> para no repetir números de e-NCF.
+              <ng-container *ngIf="selectedCompanies.length > 1">La <b>principal</b> pone el nombre del paquete y es donde entra el usuario ROOT; todas quedan con la misma licencia. </ng-container>
+              <b>Después de instalar, {{ selectedCompanies.length === 1 ? 'esta empresa debe' : 'estas empresas deben' }} facturar solo en el servidor local</b> para no repetir números de e-NCF.
             </p>
           </ng-container>
           <label class="pf-form__wide">Nombre de la empresa *<input name="cliente" [(ngModel)]="form.cliente" placeholder="Ej. Farmacia Central SRL" required [readonly]="includeData"></label>
