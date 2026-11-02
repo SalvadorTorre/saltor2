@@ -129,8 +129,9 @@ export class QzPrintService {
    * Imprime un documento.  `copies` solo aplica con QZ Tray; en la impresión del
    * navegador el usuario elige las copias en el diálogo de Windows.
    */
-  async printHtml(html: string, title: string, popupSize = 'width=850,height=700', copies = 1): Promise<PrintResult> {
-    const paper = await this.companyPrintSettings.getPaper();
+  /** @param paperOverride fuerza un formato (p. ej. la orden de venta siempre en media carta). */
+  async printHtml(html: string, title: string, popupSize = 'width=850,height=700', copies = 1, paperOverride?: Awaited<ReturnType<CompanyPrintSettingsService['getPaper']>>): Promise<PrintResult> {
+    const paper = paperOverride ?? await this.companyPrintSettings.getPaper();
     // Las imágenes grandes (p. ej. un logo de 400 px) hacen lenta la impresión en QZ Tray;
     // en rollo se reducen al ancho que la térmica realmente imprime.
     const lightHtml = paper === '80mm' || paper === '90mm' ? await this.shrinkEmbeddedImages(html, 320) : html;

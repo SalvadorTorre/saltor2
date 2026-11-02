@@ -471,10 +471,14 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     const matchesAtStart = (value: string) => value.trim().toLocaleLowerCase().startsWith(search);
     const sortByDescription = (products: ProductRecord[]) => products
       .sort((a, b) => a.description.localeCompare(b.description, 'es', { sensitivity: 'base' }))
-      .slice(0, 8);
+      .slice(0, 50);
 
     if (this.productSuggestionField === 'code') {
-      return sortByDescription(this.products.filter((product) => matchesAtStart(product.code)));
+      // Todos los que empiezan con lo digitado, en orden de código (J01C, J02C, J03C… J10C).
+      return this.products
+        .filter((product) => matchesAtStart(product.code))
+        .sort((a, b) => a.code.trim().localeCompare(b.code.trim(), 'es', { numeric: true, sensitivity: 'base' }))
+        .slice(0, 300);
     }
 
     const startsWithProductText = this.products.filter((product) => this.getProductFullDescription(product).toLocaleLowerCase().startsWith(search));
@@ -671,6 +675,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     const direction = event.key === 'ArrowDown' ? 1 : -1;
     this.activeProductSuggestionIndex =
       (this.activeProductSuggestionIndex + direction + suggestions.length) % suggestions.length;
+    // Con la lista larga, mantener a la vista la fila elegida con las flechas.
+    window.setTimeout(() => document.querySelector('.product-suggestion--active')?.scrollIntoView({ block: 'nearest' }));
   }
 
   onLineEditorFieldFocus(field: 'code' | 'name'): void {
@@ -1513,19 +1519,15 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       }
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
-      if (this.saleOrder && this.orderSlipMode) {
-        // La orden no se imprime: sale solo el volante con el número en código de barras.
-        const number = savedInvoice.numero_factura;
-        try { await this.orderSlip.print(savedInvoice.id); }
-        catch (printError) { void Swal.fire({ icon: 'warning', title: `Orden ${number} guardada`, text: `No se pudo imprimir el volante: ${this.formatSupabaseError(printError, '')}` }); }
-        this.clearInvoice(true);
-        this.invoiceMessage = `Orden de venta ${number} guardada. Entregue el volante al cliente para facturar en caja.`;
-        return;
-      }
       if (this.saleOrder) {
-        this.invoiceMessage = this.editingExistingInvoiceId
-          ? `Orden de venta ${savedInvoice.numero_factura} actualizada correctamente.`
-          : `Orden de venta ${savedInvoice.numero_factura} guardada correctamente.`;
+        // La orden solo se guarda: no se imprime al guardar. Se imprime desde Consulta.
+        const number = savedInvoice.numero_factura;
+        const edited = !!this.editingExistingInvoiceId;
+        this.clearInvoice(true);
+        this.invoiceMessage = edited
+          ? `Orden de venta ${number} actualizada. Para imprimirla, búsquela en Consulta.`
+          : `Orden de venta ${number} guardada. Para imprimirla, búsquela en Consulta.`;
+        void Swal.fire({ icon: 'success', title: `Orden ${number} ${edited ? 'actualizada' : 'guardada'}`, timer: 1600, showConfirmButton: false, toast: true, position: 'top-end' });
         return;
       }
       if (isCashierSale) {
@@ -1585,9 +1587,10 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }
   }
 
+  /** Consulta → Imprimir: imprime la orden sin sacarla de la consulta. */
   async printSavedOrder(orderId: number): Promise<void> {
-    await this.viewSavedOrder(orderId);
-    if (this.savedInvoice?.id === orderId) await this.printInvoice();
+    try { await this.invoicePrint.printSalesOrder(orderId); }
+    catch (error) { this.invoiceMessage = error instanceof Error ? error.message : 'No se pudo imprimir la orden de venta.'; }
   }
 
   async resendInvoiceToDgii(invoiceId: number): Promise<void> {
@@ -1753,10 +1756,10 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
 
     const savedInvoiceId = this.savedInvoice.id;
 
-    // Empresa con volante: la orden de venta solo imprime el volante con código de barras.
-    if (this.saleOrder && this.orderSlipMode) {
-      try { await this.orderSlip.print(savedInvoiceId); }
-      catch (error) { this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo imprimir el volante.'); }
+    // Orden de venta: formato según el papel de la empresa (media carta o térmica 80 mm).
+    if (this.saleOrder) {
+      try { await this.invoicePrint.printSalesOrder(savedInvoiceId); }
+      catch (error) { this.invoiceMessage = error instanceof Error ? error.message : 'No se pudo imprimir la orden de venta.'; }
       return;
     }
 

@@ -74,16 +74,26 @@ export class ProductsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async getProducts(): Promise<ProductRecord[]> {
-    const { data, error } = await this.supabase.client
-      .from(this.table)
-      .select('*')
-      .order('id', { ascending: false });
+    // El servidor entrega como máximo 1000 filas por consulta: se piden por páginas
+    // para que las empresas con más de 1000 productos los vean todos.
+    const pageSize = 1000;
+    const rows: ProductRow[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await this.supabase.client
+        .from(this.table)
+        .select('*')
+        .order('id', { ascending: false })
+        .range(from, from + pageSize - 1);
 
-    if (error) {
-      throw error;
+      if (error) {
+        throw error;
+      }
+
+      rows.push(...((data ?? []) as ProductRow[]));
+      if (!data || data.length < pageSize) break;
     }
 
-    return (data ?? []).map((row: ProductRow) => this.fromRow(row));
+    return rows.map((row: ProductRow) => this.fromRow(row));
   }
 
   async searchProducts(search: string): Promise<ProductRecord[]> {

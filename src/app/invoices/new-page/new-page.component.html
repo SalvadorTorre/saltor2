@@ -13,7 +13,7 @@
       <button *ngIf="!isDocumentReadOnly" class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
       <button *ngIf="!invoiceSaved && !isDocumentReadOnly" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
       <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
-      <button *ngIf="invoiceSaved" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
+      <button *ngIf="invoiceSaved && (!saleOrder || isViewingOrder)" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
     </div>
   </div>
 
@@ -199,20 +199,20 @@
                   <label class="line-editor-field line-editor-field--code">
                     <span>Codigo</span>
                     <input type="text" name="lineEditorCode" [(ngModel)]="lineEditorForm.code" (ngModelChange)="onLineEditorCodeChange()" (focus)="onLineEditorFieldFocus('code')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorCodeEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
-                    <div class="product-suggestions" *ngIf="productSuggestionField === 'code' && productSuggestions.length" role="listbox">
-                      <button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)">
-                        <span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span>
-                        <span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span>
+                    <div class="product-suggestions product-suggestions--rows" *ngIf="productSuggestionField === 'code' && productSuggestions.length" role="listbox">
+                      <div class="product-suggestion-head" aria-hidden="true"><span>Código</span><span>Descripción</span><span>Tamaño</span><span>Marca</span><span>Tipo</span><span class="num">Precio</span></div>
+                      <button type="button" class="product-suggestion product-suggestion--row" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)" [title]="'Existencia: ' + product.stock">
+                        <span class="ps-code">{{ product.code }}</span><span class="ps-desc">{{ product.description }}</span><span>{{ product.size }}</span><span>{{ product.brand }}</span><span>{{ product.type }}</span><span class="num">{{ product.salePrice | number:'1.2-2' }}</span>
                       </button>
                     </div>
                   </label>
                   <label class="line-editor-field line-editor-field--product">
                     <span>Producto</span>
                     <input type="text" name="lineEditorProduct" [(ngModel)]="lineEditorForm.productName" (ngModelChange)="onLineEditorProductChange()" (focus)="onLineEditorFieldFocus('name')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorProductEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
-                    <div class="product-suggestions" *ngIf="productSuggestionField === 'name' && productSuggestions.length" role="listbox">
-                      <button type="button" class="product-suggestion" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)">
-                        <span class="product-suggestion__main"><strong>{{ getProductFullDescription(product) }}</strong><small>Código: {{ product.code }}</small></span>
-                        <span class="product-suggestion__amount"><strong>RD${{ product.salePrice | number:'1.2-2' }}</strong><small>Existencia: {{ product.stock }}</small></span>
+                    <div class="product-suggestions product-suggestions--rows" *ngIf="productSuggestionField === 'name' && productSuggestions.length" role="listbox">
+                      <div class="product-suggestion-head" aria-hidden="true"><span>Código</span><span>Descripción</span><span>Tamaño</span><span>Marca</span><span>Tipo</span><span class="num">Precio</span></div>
+                      <button type="button" class="product-suggestion product-suggestion--row" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)" [title]="'Existencia: ' + product.stock">
+                        <span class="ps-code">{{ product.code }}</span><span class="ps-desc">{{ product.description }}</span><span>{{ product.size }}</span><span>{{ product.brand }}</span><span>{{ product.type }}</span><span class="num">{{ product.salePrice | number:'1.2-2' }}</span>
                       </button>
                     </div>
                   </label>
@@ -282,7 +282,7 @@
               <button *ngIf="!invoiceSaved" class="primary-action invoice-summary__save" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
               <div *ngIf="invoiceSaved" class="invoice-summary__actions">
                 <button *ngIf="requiresDgiiOnSave" class="secondary-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar factuta' : 'Enviar a DGII' }}</button>
-                <button class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
+                <button *ngIf="!saleOrder || isViewingOrder" class="primary-action" type="button" (click)="printInvoice()">Imprimir</button>
               </div>
             </aside>
           </div>

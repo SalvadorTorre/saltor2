@@ -29,13 +29,59 @@ export class InvoicePrintService {
     private readonly salesOrders: SalesOrdersService
   ) {}
 
-  /** Orden de venta en media carta (mismo formato que la factura, sin datos fiscales ni QR). */
+  /**
+   * Orden de venta según el papel de la empresa:
+   * media carta → formato en columnas (el de Bella Real); 80/90 mm → ticket para la térmica.
+   * Ninguno lleva datos fiscales ni QR; los dos llevan el número en código de barras.
+   */
   async printSalesOrder(orderId: number, sellerFallback?: string | null, useCompanyCopies = false): Promise<void> {
-    const page = await this.buildSalesOrderHalfLetterHtml(orderId, sellerFallback);
+    const halfLetter = await this.isHalfLetter();
+    const page = halfLetter
+      ? await this.buildSalesOrderHalfLetterHtml(orderId, sellerFallback)
+      : await this.buildSalesOrderTicketHtml(orderId, sellerFallback);
     const copies = useCompanyCopies ? await this.qzPrintService.invoiceCopies() : 1;
-    const printed = await this.qzPrintService.printHtml(page.html, `Orden de venta ${page.number}`, 'width=1000,height=700', copies);
+    const printed = await this.qzPrintService.printHtml(page.html, `Orden de venta ${page.number}`, halfLetter ? 'width=1000,height=700' : undefined, copies);
     if (printed === 'unavailable') throw new Error('No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.');
     await this.salesOrders.markOrderPrinted(orderId);
+  }
+
+  /** Orden de venta para impresora térmica (80/90 mm). */
+  private async buildSalesOrderTicketHtml(orderId: number, sellerFallback?: string | null): Promise<{ html: string; number: string }> {
+    const detail = await this.salesOrders.getOrderForEditing(orderId);
+    const session = await this.auth.restoreSession();
+    const seller = sellerFallback || session?.fullName || 'N/D';
+    const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId);
+    const codes = await this.createFiscalCodes(detail.number, detail.number);
+    const e = (value: string | number | null | undefined) => this.escape(value ?? '');
+    const money = (value: number) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const qty = (value: number) => Number.isInteger(value) ? String(value) : Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const printTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const rows = detail.lines.map((line) => {
+      const price = line.quantity ? line.lineTotal / line.quantity : line.unitPrice;
+      const code = (line as { productCode?: string }).productCode;
+      return `<tr><td>${code ? `${e(code)} &nbsp; ` : ''}${qty(line.quantity)} x ${money(price)}<br><b>${e(line.description)}</b></td><td>${money(line.lineTotal)}</td></tr>`;
+    }).join('');
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Orden de venta ${e(detail.number)}</title><style>`
+      + `body{font:11px Arial,sans-serif;margin:0;color:#111}.head{text-align:center}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}`
+      + `.company{font-size:15px;font-weight:800}.muted{font-size:11px}.type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:13px;font-weight:800;letter-spacing:.5px}`
+      + `.document{line-height:1.45;margin:8px 0}.document span{display:inline-block;min-width:70px}.customer{line-height:1.5;margin:8px 0}`
+      + `table{border-collapse:collapse;width:100%;margin-top:6px;table-layout:fixed}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{padding:3px 1px;vertical-align:top;font-size:10px}`
+      + `th:nth-child(1),td:nth-child(1){width:68%}th:nth-child(2),td:nth-child(2){width:32%;text-align:right}`
+      + `.total{margin-top:8px;border-top:1px dashed #111;padding-top:6px}.total p{display:flex;justify-content:space-between;margin:3px 0}.total strong{font-size:14px}`
+      + `.foot{text-align:center;margin-top:10px;font-size:10px}.barcode{display:block;margin:8px auto 2px;max-width:100%;height:auto}.note{text-align:center;font-size:10px;margin-top:6px}`
+      + `</style></head><body>`
+      + `<div class="head">${company?.logoUrl ? `<img class="logo" src="${e(company.logoUrl)}" alt="">` : ''}<div class="company">${e(company?.legalName || company?.tradeName || session?.companyName || 'SALTOR SYSTEM')}</div>`
+      + `<div class="muted">RNC: ${e(company?.rnc || 'N/D')}</div><div class="muted">${e(company?.address || '')}</div><div class="muted">Tel.: ${e(company?.phone || 'N/D')}</div></div>`
+      + `<div class="type">ORDEN DE VENTA</div>`
+      + `<div class="document"><div><span>No. Orden:</span><b>${e(detail.number)}</b></div><div><span>Fecha:</span>${e(detail.invoiceDate)} ${e(printTime)}</div><div><span>Vendedor:</span>${e(seller)}</div></div>`
+      + `<div class="customer"><strong>Cliente:</strong> ${e(detail.customerName || 'CLIENTE CONTADO')}${detail.rnc ? `<br><strong>RNC/Cédula:</strong> ${e(detail.rnc)}` : ''}${detail.customerPhone ? `<br><strong>Teléfono:</strong> ${e(detail.customerPhone)}` : ''}</div>`
+      + `<table><thead><tr><th>DESCRIPCIÓN</th><th>VALOR</th></tr></thead><tbody>${rows}</tbody></table>`
+      + `${detail.notes ? `<p><strong>Notas:</strong> ${e(detail.notes)}</p>` : ''}`
+      + `<div class="total"><p><span>Subtotal</span><span>${money(detail.subtotal)}</span></p><p><span>ITBIS</span><span>${money(detail.taxTotal)}</span></p><p><strong>Total</strong><strong>${money(detail.grandTotal)}</strong></p></div>`
+      + `<div class="foot">${codes.barcode ? `<img class="barcode" src="${codes.barcode}" alt="Código de barras">` : ''}<div>${e(detail.number)}</div></div>`
+      + `<div class="note">Documento no válido como factura.</div>`
+      + `<script>window.onload=function(){window.print();};<\/script></body></html>`;
+    return { html, number: detail.number };
   }
 
   /** La empresa imprime en media carta: Facturación, Caja y Consulta usan el formato de media carta. */

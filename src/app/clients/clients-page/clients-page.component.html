@@ -111,7 +111,7 @@
     </div>
   </section>
 
-  <div class="client-editor-modal" *ngIf="isClientEditorOpen" (click)="closeClientEditor()">
+  <div class="client-editor-modal" *ngIf="isClientEditorOpen">
     <section class="panel client-editor-modal__panel" (click)="$event.stopPropagation()">
       <div class="panel__header company-panel-header">
         <div>
@@ -127,11 +127,11 @@
       <div class="client-editor-modal__content">
         <form class="company-form" (ngSubmit)="saveClient()">
           <div class="company-form__grid">
-            <label class="field"><span>Codigo del cliente</span><input type="text" name="clientCode" [(ngModel)]="clientForm.code" (keydown.enter)="focusNextField($event)" /></label>
-            <label class="field"><span>Nombre completo</span><input type="text" name="clientFullName" [(ngModel)]="clientForm.fullName" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Codigo del cliente <b class="req">*</b></span><input type="text" name="clientCode" [(ngModel)]="clientForm.code" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Nombre completo <b class="req">*</b></span><input type="text" name="clientFullName" [(ngModel)]="clientForm.fullName" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Empresa</span><input type="text" name="clientCompanyName" [(ngModel)]="clientForm.companyName" (keydown.enter)="focusNextField($event)" /></label>
-            <label class="field"><span>Tipo de documento</span><select name="clientDocumentType" [(ngModel)]="clientForm.documentType" (keydown.enter)="focusNextField($event)"><option value="Cedula">Cedula</option><option value="RNC">RNC</option><option value="Pasaporte">Pasaporte</option></select></label>
-            <label class="field"><span>Numero de documento</span><input type="text" name="clientDocumentNumber" [(ngModel)]="clientForm.documentNumber" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Tipo de documento <b class="req">*</b></span><select name="clientDocumentType" [(ngModel)]="clientForm.documentType" (keydown.enter)="focusNextField($event)"><option value="Cedula">Cedula</option><option value="RNC">RNC</option><option value="Pasaporte">Pasaporte</option></select></label>
+            <label class="field"><span>Numero de documento <b class="req">*</b></span><input type="text" name="clientDocumentNumber" [(ngModel)]="clientForm.documentNumber" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Telefono</span><input type="text" name="clientPhone" [(ngModel)]="clientForm.phone" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Correo</span><input type="email" name="clientEmail" [(ngModel)]="clientForm.email" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Ciudad</span><input type="text" name="clientCity" [(ngModel)]="clientForm.city" (keydown.enter)="focusNextField($event)" /></label>
