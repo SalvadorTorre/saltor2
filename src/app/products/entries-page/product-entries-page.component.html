@@ -23,8 +23,6 @@
         <label class="field"><span>Fact. Suplidor</span><input name="reference" [(ngModel)]="form.reference" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
         <label class="field"><span>Orden Compra</span><input name="purchaseOrder" [(ngModel)]="form.purchaseOrder" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
         <label class="field"><span>Fec. Factura</span><input type="date" name="supplierInvoiceDate" [(ngModel)]="form.supplierInvoiceDate" (keydown.enter)="focusNextEntryHeaderField($event)" /></label>
-        <label class="field"><span>Cód. Usuario *</span><input name="userCode" [(ngModel)]="form.userCode" (ngModelChange)="onEntryUserCodeChange()" (keydown.enter)="onEntryUserCodeEnter($event)" autocomplete="off" /></label>
-        <label class="field"><span>Usuario</span><input name="userName" [value]="entryUserName" readonly /></label>
         <label class="field entry-header-grid__notes"><span>Nota</span><textarea name="notes" [(ngModel)]="form.notes" (keydown.enter)="focusNextEntryHeaderField($event)"></textarea></label>
       </div>
 

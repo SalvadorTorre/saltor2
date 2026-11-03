@@ -404,8 +404,7 @@ export class ProductEntriesPageComponent implements OnInit {
       this.message = 'Indica el nombre del suplidor antes de guardar la entrada.';
       return;
     }
-    if (!this.form.userCode.trim()) { this.message = 'Indica el código de usuario antes de guardar la entrada.'; return; }
-    if (!await this.resolveEntryUser(true)) return;
+    // El usuario de la entrada es el que inició sesión: lo asigna la base de datos al guardar.
     if (!this.lines.length) { this.message = 'Agrega al menos un producto a la entrada.'; return; }
 
     this.isSaving = true;
@@ -611,8 +610,8 @@ export class ProductEntriesPageComponent implements OnInit {
       reference: this.form.reference,
       purchaseOrder: this.form.purchaseOrder,
       supplierInvoiceDate: this.form.supplierInvoiceDate,
-      userCode: this.form.userCode,
-      userName: this.entryUserName,
+      userCode: '',
+      userName: '',
       notes: this.form.notes,
       lines: this.lines.map((line) => ({ productId: line.product.id, quantity: line.quantity, unitCost: line.cost }))
     };
