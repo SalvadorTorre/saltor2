@@ -56,9 +56,7 @@
         </div>
         <div class="general-row general-row--address">
           <label>Dirección<input id="quotationAddress" [(ngModel)]="quote.address" name="address" (keydown.enter)="focusEditorField($event, 'quotationPhone')" /></label>
-          <label>Tel.<input id="quotationPhone" [(ngModel)]="quote.phone" name="phone" (keydown.enter)="focusEditorField($event, 'quotationUserCode')" /></label>
-          <label>Usuario <span *ngIf="transactionQuotation"></span><input id="quotationUserCode" type="password" [(ngModel)]="quotationUserCode" name="quotationUserCode" inputmode="numeric" autocomplete="off" [required]="transactionQuotation" placeholder="Código de usuario" (input)="onQuotationUserCodeChange()" (keydown.enter)="onQuotationUserCodeEnter($event)" /></label>
-          <label><input [value]="quotationUserName" readonly tabindex="-1" /></label>
+          <label>Tel.<input id="quotationPhone" [(ngModel)]="quote.phone" name="phone" (keydown.enter)="focusEditorField($event, 'quotationLineCode')" /></label>
         </div>
       </div>
     </section>

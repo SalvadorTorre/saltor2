@@ -158,7 +158,16 @@ export class QzPrintService {
           configOptions['size'] = this.qzPaperSize(paper);
         }
         const config = this.qz.configs.create(printer, configOptions);
-        const data = [{ type: 'pixel', format: 'html', flavor: 'plain', data: documentHtml.replace(/<script[\s\S]*?<\/script>/gi, '') }];
+        // Documentos de varias hojas (p. ej. media carta con muchos productos): cada hoja va como
+        // una página aparte en QZ, con su encabezado. Sin separador, el documento es una sola hoja.
+        const cleanHtml = documentHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
+        const pageBreak = '<div class="page-break"></div>';
+        const bodyStart = cleanHtml.indexOf('<body>');
+        const pages = bodyStart >= 0 && cleanHtml.includes(pageBreak)
+          ? cleanHtml.slice(bodyStart + 6).replace(/<\/body>\s*<\/html>\s*$/i, '').split(pageBreak)
+              .map((part) => `${cleanHtml.slice(0, bodyStart + 6)}${part}</body></html>`)
+          : [cleanHtml];
+        const data = pages.map((page) => ({ type: 'pixel', format: 'html', flavor: 'plain', data: page }));
         for (let copy = 0; copy < (thermalRoll ? totalCopies : 1); copy++) {
           await this.qz.print(config, data);
         }

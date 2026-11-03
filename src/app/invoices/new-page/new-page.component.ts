@@ -1546,9 +1546,14 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       this.savedInvoice = { ...savedInvoice, dgii_estado: 'No enviado' };
       await this.loadProducts();
       if (this.saleOrder) {
-        // La orden solo se guarda: no se imprime al guardar. Se imprime desde Consulta.
+        // La orden no se imprime al guardar (se imprime desde Consulta). Si la empresa tiene
+        // "orden de venta con volante", al guardar sale solo el volante con el código de barras.
         const number = savedInvoice.numero_factura;
         const edited = !!this.editingExistingInvoiceId;
+        if (this.orderSlipMode) {
+          try { await this.orderSlip.print(savedInvoice.id); }
+          catch (printError) { void Swal.fire({ icon: 'warning', title: `Orden ${number} guardada`, text: `No se pudo imprimir el volante: ${this.formatSupabaseError(printError, '')}` }); }
+        }
         this.clearInvoice(true);
         this.invoiceMessage = edited
           ? `Orden de venta ${number} actualizada. Para imprimirla, búsquela en Consulta.`

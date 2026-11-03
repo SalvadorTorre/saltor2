@@ -180,12 +180,38 @@ export class InvoicePrintService {
       const unitPrice = line.quantity ? line.lineTotal / line.quantity : line.unitPrice;
       return `<tr><td>${e(code)}</td><td class="num qty">-${e(qty(line.quantity))}-</td><td>${e((product?.unidad || 'UNIDAD').toUpperCase())}</td>`
         + `<td class="desc">${e(line.description)}</td><td class="num">${money(unitPrice)}</td><td class="num">${money(line.taxAmount)}</td><td class="num">${money(line.lineTotal)}</td></tr>`;
-    }).join('');
+    });
+    // Varias hojas: cada media carta lleva hasta ROWS_PER_PAGE productos y repite el encabezado.
+    const ROWS_PER_PAGE = 12;
+    const rowPages: string[][] = [];
+    for (let i = 0; i < rows.length; i += ROWS_PER_PAGE) rowPages.push(rows.slice(i, i + ROWS_PER_PAGE));
+    if (!rowPages.length) rowPages.push([]);
 
+    const topSection = `<section class="top">
+  <div><div class="copy">${e(copyLabel)}</div>
+    <div class="client"><b>CLIENTE</b><div>${e(detail.rnc || '')}</div><div>${e(detail.customerName)}${detail.customerId ? `(${e(detail.customerId)})` : ''}</div>${detail.customerPhone ? `<div>${e(detail.customerPhone)}</div>` : ''}</div></div>
+  <div class="company">${company?.logoUrl ? `<img class="logo" src="${e(company.logoUrl)}" alt="">` : ''}<div class="name">${e(companyName)}</div><p>${e(company?.address || '')}</p><p>${e(company?.rnc || '')}</p><p>${e(company?.phone || '')}</p></div>
+  <div class="doc">${isInvoice
+      ? `<p class="title">FACTURA</p><div class="type"><span>${e(this.receiptDocumentType(detail.ncfType))}</span><span></span></div>`
+      : `<p class="title" style="letter-spacing:3px">ORDEN DE VENTA</p><div class="type"><span>Documento no fiscal</span><span></span></div>`}
+    <div class="info">${isInvoice ? `<div><span>NCF</span><span>${e(ncf)}</span></div>` : ''}<div><span>No.</span><span class="no">${e(detail.number)}</span></div><div><span>FECHA</span><span>${e(this.formatDate(detail.invoiceDate))}</span></div><div><span>HORA IMP.</span><span>${e(this.formatDate(now.toISOString()))} ${e(printTime)}</span></div><div><span>VENDEDOR</span><span>${e(seller)}</span></div><div><span>CONDICION</span><span>${e(detail.paymentMethod)}</span></div></div></div>
+</section>`;
+    const tableHead = `<table class="items"><thead><tr><th class="c-code">Codigo</th><th class="c-qty" style="text-align:center">Cantidad</th><th class="c-unit">Unidad</th><th class="c-desc">Descripcion</th><th class="c-price" style="text-align:right">Precio</th><th class="c-tax" style="text-align:right">Itbis</th><th class="c-total" style="text-align:right">Valor</th></tr></thead>`;
+    const lastPage = rowPages.length - 1;
+    const pagesHtml = rowPages.map((pageRows, index) => {
+      const isLast = index === lastPage;
+      return `<main class="page">\n${topSection}\n${tableHead}\n<tbody>${pageRows.join('')}${isLast ? '<tr><td colspan="7" class="last">************ Ultima Linea ************</td></tr>' : ''}</tbody></table>\n`
+        + `${isLast && detail.notes ? `<div class="notes"><b>Notas:</b> ${e(detail.notes)}</div>` : ''}`
+        + `<footer class="foot">`
+        + `${isLast ? `<div class="fiscal">${isInvoice ? `${qr.qr ? `<img src="${qr.qr}" alt="Código QR">` : ''}<div><b>Código de seguridad:</b> ${e(detail.securityCode || 'Pendiente')}</div><div><b>Fecha de firma:</b> ${e(detail.signatureDate || 'Pendiente')}</div>` : ''}</div>` : '<div class="fiscal"></div>'}`
+        + `<div class="center"><div class="pag">Pag. ${index + 1}/${rowPages.length}</div>${isLast ? '<div class="sign">Recibido Conforme</div>' : ''}</div>`
+        + `${isLast ? `<div><div class="totals"><div><b>SUBTOTAL</b><span>${money(detail.subtotal)}</span></div><div><b>DESC.</b><span>0.00</span></div><div><b>ITBIS</b><span>${money(detail.taxTotal)}</span></div><div class="grand"><b>TOTAL</b><span>${money(detail.grandTotal)}</span></div></div><div class="peso">Valor en Peso RD$</div></div>` : '<div class="continua">Continúa en la página siguiente…</div>'}`
+        + `</footer></main>`;
+    }).join('<div class="page-break"></div>');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${isInvoice ? 'Factura' : 'Orden de venta'} ${e(detail.number)}</title><style>
 @page{size:letter portrait;margin:0}*{box-sizing:border-box}html{margin:0!important;padding:0!important}
-body{width:100%!important;margin:0!important;padding:1cm!important;color:#111;font-family:Arial,sans-serif;font-size:10px}
-.page{width:100%!important;min-height:4.75in;display:flex;flex-direction:column}
+body{width:100%!important;margin:0!important;padding:.8cm 1cm .25cm!important;color:#111;font-family:Arial,sans-serif;font-size:10px}
+.page{width:100%!important;min-height:4.7in;display:flex;flex-direction:column}
 .mono{font-family:'Courier New',Courier,monospace}
 .top{display:grid;grid-template-columns:1.9in 1fr 2.75in;gap:10px;align-items:start}
 .copy{font-size:15px;font-weight:800;letter-spacing:.5px}
@@ -214,25 +240,9 @@ body{width:100%!important;margin:0!important;padding:1cm!important;color:#111;fo
 .totals span{font-family:'Courier New',monospace;text-align:right;padding-right:10px}.totals b{text-align:right}
 .totals .grand span,.totals .grand b{font-weight:800}
 .peso{text-align:right;font-weight:800;font-size:12px;margin-top:2px}
-</style></head><body><main class="page">
-<section class="top">
-  <div><div class="copy">${e(copyLabel)}</div>
-    <div class="client"><b>CLIENTE</b><div>${e(detail.rnc || '')}</div><div>${e(detail.customerName)}${detail.customerId ? `(${e(detail.customerId)})` : ''}</div>${detail.customerPhone ? `<div>${e(detail.customerPhone)}</div>` : ''}</div></div>
-  <div class="company">${company?.logoUrl ? `<img class="logo" src="${e(company.logoUrl)}" alt="">` : ''}<div class="name">${e(companyName)}</div><p>${e(company?.address || '')}</p><p>${e(company?.rnc || '')}</p><p>${e(company?.phone || '')}</p></div>
-  <div class="doc">${isInvoice
-      ? `<p class="title">FACTURA</p><div class="type"><span>${e(this.receiptDocumentType(detail.ncfType))}</span><span></span></div>`
-      : `<p class="title" style="letter-spacing:3px">ORDEN DE VENTA</p><div class="type"><span>Documento no fiscal</span><span></span></div>`}
-    <div class="info">${isInvoice ? `<div><span>NCF</span><span>${e(ncf)}</span></div>` : ''}<div><span>No.</span><span class="no">${e(detail.number)}</span></div><div><span>FECHA</span><span>${e(this.formatDate(detail.invoiceDate))}</span></div><div><span>HORA IMP.</span><span>${e(this.formatDate(now.toISOString()))} ${e(printTime)}</span></div><div><span>VENDEDOR</span><span>${e(seller)}</span></div><div><span>CONDICION</span><span>${e(detail.paymentMethod)}</span></div></div></div>
-</section>
-<table class="items"><thead><tr><th class="c-code">Codigo</th><th class="c-qty" style="text-align:center">Cantidad</th><th class="c-unit">Unidad</th><th class="c-desc">Descripcion</th><th class="c-price" style="text-align:right">Precio</th><th class="c-tax" style="text-align:right">Itbis</th><th class="c-total" style="text-align:right">Valor</th></tr></thead>
-<tbody>${rows}<tr><td colspan="7" class="last">************ Ultima Linea ************</td></tr></tbody></table>
-${detail.notes ? `<div class="notes"><b>Notas:</b> ${e(detail.notes)}</div>` : ''}
-<footer class="foot">
-  <div class="fiscal">${isInvoice ? `${qr.qr ? `<img src="${qr.qr}" alt="Código QR">` : ''}<div><b>Código de seguridad:</b> ${e(detail.securityCode || 'Pendiente')}</div><div><b>Fecha de firma:</b> ${e(detail.signatureDate || 'Pendiente')}</div>` : ''}</div>
-  <div class="center"><div class="pag">Pag. 1/1</div><div class="sign">Recibido Conforme</div></div>
-  <div><div class="totals"><div><b>SUBTOTAL</b><span>${money(detail.subtotal)}</span></div><div><b>DESC.</b><span>0.00</span></div><div><b>ITBIS</b><span>${money(detail.taxTotal)}</span></div><div class="grand"><b>TOTAL</b><span>${money(detail.grandTotal)}</span></div></div><div class="peso">Valor en Peso RD$</div></div>
-</footer>
-</main><script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`;
+.page-break{page-break-after:always;break-after:page;height:0}
+.continua{font-family:'Courier New',monospace;font-size:10px;text-align:right;padding-top:8px}
+</style></head><body>${pagesHtml}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`;
     return { html, number: detail.number };
   }
 
