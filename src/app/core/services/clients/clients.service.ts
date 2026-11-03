@@ -4,11 +4,11 @@ import { SupabaseService } from '../supabase/supabase.service';
 
 interface ClientRow {
   id: number;
-  codigo: string;
+  codigo: string | null;
   nombre_completo: string;
   empresa: string | null;
   tipo_documento: 'Cedula' | 'RNC' | 'Pasaporte';
-  numero_documento: string;
+  numero_documento: string | null;
   telefono: string | null;
   correo: string | null;
   direccion: string | null;
@@ -82,11 +82,11 @@ export class ClientsService {
   private fromRow(row: ClientRow): ClientRecord {
     return {
       id: row.id,
-      code: row.codigo,
+      code: row.codigo ?? '',
       fullName: row.nombre_completo,
       companyName: row.empresa ?? '',
       documentType: row.tipo_documento,
-      documentNumber: row.numero_documento,
+      documentNumber: row.numero_documento ?? '',
       phone: row.telefono ?? '',
       email: row.correo ?? '',
       address: row.direccion ?? '',
@@ -108,11 +108,12 @@ export class ClientsService {
 
   private toUpdateRow(form: ClientFormModel): Omit<ClientRow, 'id' | 'ultima_compra' | 'balance'> {
     return {
-      codigo: form.code.trim(),
+      // Vacío al crear: la base asigna el siguiente código de la empresa.
+      codigo: form.code.trim() || null,
       nombre_completo: form.fullName.trim(),
       empresa: form.companyName.trim() || null,
       tipo_documento: form.documentType,
-      numero_documento: form.documentNumber.trim(),
+      numero_documento: form.documentNumber.trim() || null,
       telefono: form.phone.trim() || null,
       correo: form.email.trim() || null,
       direccion: form.address.trim() || null,

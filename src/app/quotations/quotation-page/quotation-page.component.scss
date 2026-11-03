@@ -58,3 +58,43 @@ h1, h2, p { margin: 0; }h1 { font-size: 23px; line-height: 1.2; letter-spacing: 
   h1 { font-size: 20px; }
   .page-title p { font-size: 14px; }
 }
+
+/* Lista de productos igual que la orden de venta: una fila por producto. */
+.product-suggestions--rows { width: min(1080px, 96vw); right: auto; max-height: 440px; padding: 0 4px 4px; display: block; }
+.product-suggestion-head, .product-suggestion--row {
+  display: grid; grid-template-columns: 130px minmax(220px, 1fr) 90px 120px 100px 105px; gap: 12px; align-items: center;
+}
+.product-suggestion-head {
+  position: sticky; top: 0; z-index: 1; padding: 8px 10px 6px; background: #fff; border-bottom: 1px solid #e2e8f0;
+  font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: #64748b;
+}
+.product-suggestion--row { padding: 9px 10px; justify-content: stretch; }
+.product-suggestion--row span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #0f172a; font-size: 16px; font-weight: 600;
+}
+.product-suggestion--row .ps-code { color: #1d4ed8; font-weight: 800; }
+.product-suggestion--row .ps-desc { color: #0b1220; font-weight: 800; }
+.product-suggestion-head .num, .product-suggestion--row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.product-suggestion--row.product-suggestion--active span { color: #1d4ed8; }
+@media (max-width: 720px) {
+  .product-suggestion-head, .product-suggestion--row { grid-template-columns: 100px minmax(120px, 1fr) 90px; }
+  .product-suggestion-head span:nth-child(n+3):not(.num), .product-suggestion--row span:nth-child(n+3):not(.num) { display: none; }
+}
+/* Edición de una línea: código y producto bloqueados, la línea resaltada y el resto del detalle bloqueado. */
+.line-editor-locked { background: #f1f5f9 !important; color: #475467 !important; cursor: not-allowed; }
+.quotation-lines-table .quote-line.quote-line--editing { background: #fff7e6; box-shadow: inset 4px 0 0 #f59e0b; }
+.quote-line--locked { opacity: .55; }
+.remove-line:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
+
+/* Precio mínimo y especial (−10 %), igual que la orden de venta. */
+.quote-product-editor { grid-template-columns: 13fr 34fr 12fr 13fr 14fr 20fr; }
+.quote-price-hints { display: grid; gap: 5px; align-self: end; }
+.quote-price-hints__label { color: #111827; font-size: 17px; font-weight: 650; }
+.price-hints { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.price-hints div { display: grid; padding: 3px 7px; border: 1px solid #fecaca; border-radius: 8px; background: #fff5f5; line-height: 1.15; }
+.price-hints small { color: #9f1239; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
+.price-hints b { color: #be123c; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.price-hints .price-hints__special { border-color: #bbf7d0; background: #f0fdf4; }
+.price-hints .price-hints__special small { color: #166534; }
+.price-hints .price-hints__special b { color: #15803d; }

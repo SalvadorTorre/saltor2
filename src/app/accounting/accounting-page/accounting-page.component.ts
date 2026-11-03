@@ -703,15 +703,19 @@ export class AccountingPageComponent implements OnInit {
   get simulatedConvertedCount(): number { return this.selectedProformaCandidates.length; }
   get simulatedProformaTotal(): number {
     const dialog = this.proformaPeriodDialog;
-    return dialog ? Math.max(0, dialog.row.proformaTotal - this.simulatedConvertToDeliveryNote) : 0;
+    if (!dialog || this.isProformaNumberFilter) return 0;
+    return Math.max(0, dialog.row.proformaTotal - this.simulatedConvertToDeliveryNote);
   }
   get simulatedInvoiceTotal(): number {
     const dialog = this.proformaPeriodDialog;
     return dialog ? dialog.row.billedTotal + this.simulatedProformaTotal : 0;
   }
+  /** Filtrando por número solo se convierte la factura buscada: no se encola ninguna otra. */
+  get isProformaNumberFilter(): boolean { return !!this.pendingFilters.invoice.trim(); }
   get simulatedQueuedInvoiceCount(): number {
     const dialog = this.proformaPeriodDialog;
-    return dialog ? dialog.row.proformas - this.simulatedConvertedCount : 0;
+    if (!dialog || this.isProformaNumberFilter) return 0;
+    return dialog.row.proformas - this.simulatedConvertedCount;
   }
   get simulatedDeliveryNoteTotal(): number {
     const dialog = this.proformaPeriodDialog;
@@ -781,11 +785,16 @@ export class AccountingPageComponent implements OnInit {
         dialog.row.to,
         this.pendingFilters.branchId,
         confirmation.amount,
-        invoiceIds
+        invoiceIds,
+        this.isProformaNumberFilter
       );
       this.closeProformaPeriodDialog();
       await this.loadProformaPeriodSales();
-      this.pendingActionMessage = `Se convirtieron ${result.count} proforma(s) seleccionada(s) a conduce por RD$ ${result.total.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Las demás facturas no fueron modificadas.`;
+      const fmt = (value: number) => value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      this.pendingActionMessage = `Se convirtieron ${result.count} proforma(s) a conduce por ${fmt(result.total)}.`
+        + (result.queuedCount
+          ? ` Las demás ${result.queuedCount} proforma(s) del período (${fmt(result.queuedTotal)}) pasaron a E32 y quedaron en cola para enviarse a la DGII.`
+          : ' No se modificó ninguna otra factura.');
     } catch (error) {
       this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudo realizar la conversión.';
       dialog.applying = false;

@@ -2,11 +2,28 @@ import { Injectable } from '@angular/core';
 import { SupabaseService } from '../supabase/supabase.service';
 
 export interface QuotationLine { code: string; description: string; quantity: number; price: number; itbis: number; total: number; }
+/**
+ * Precio con ITBIS incluido, igual que la orden de venta: total = cantidad × precio.
+ * Las cotizaciones anteriores guardaban el precio sin ITBIS (total = cantidad × precio × (1 + ITBIS));
+ * al leerlas se pasa el precio a ITBIS incluido para que todo cuadre.
+ */
+function normalizeQuotationLine(line: { code: string; description: string; quantity: number; price: number; itbis: number; total: number }) {
+  const legacyTotal = line.quantity * line.price * (1 + line.itbis / 100);
+  if (line.itbis > 0 && line.quantity > 0 && Math.abs(line.total - legacyTotal) < 0.05 && Math.abs(line.total - line.quantity * line.price) >= 0.05) {
+    return { ...line, price: Math.round((line.total / line.quantity) * 100) / 100 };
+  }
+  return line;
+}
+
 export interface Quotation { id: number; number: string; orderNumber?: string; invoiceNumber?: string; date: string; validUntil: string; customer: string; rnc: string; phone: string; email: string; address: string; notes: string; subtotal: number; itbis: number; total: number; status: string; lines: QuotationLine[]; }
 
 @Injectable({ providedIn: 'root' })
 export class QuotationsService {
   constructor(private readonly supabase: SupabaseService) {}
+
+  private toLine(line: any) {
+    return normalizeQuotationLine({ code: line.codigo_producto ?? '', description: line.descripcion, quantity: Number(line.cantidad), price: Number(line.precio_unitario), itbis: Number(line.tasa_itbis), total: Number(line.total_linea) });
+  }
 
   async validateUserKey(key: string): Promise<string> {
     const { data, error } = await this.supabase.client.rpc('validar_clave_cotizacion', { p_clave: key });
@@ -27,7 +44,7 @@ export class QuotationsService {
     if (error || !row) { if (error) throw error; return null; }
     const { data: details, error: detailsError } = await this.supabase.client.from('cotizacion_detalles').select('*').eq('cotizacion_id', id).order('id');
     if (detailsError) throw detailsError;
-    return { id: Number(row.id), number: row.numero_cotizacion, date: row.fecha, validUntil: row.vigencia_hasta ?? '', customer: row.cliente_nombre, rnc: row.cliente_rnc ?? '', phone: row.cliente_telefono ?? '', email: row.cliente_correo ?? '', address: row.cliente_direccion ?? '', notes: row.notas ?? '', subtotal: Number(row.subtotal), itbis: Number(row.itbis), total: Number(row.total), status: row.estado, lines: (details ?? []).map((line: any) => ({ code: line.codigo_producto ?? '', description: line.descripcion, quantity: Number(line.cantidad), price: Number(line.precio_unitario), itbis: Number(line.tasa_itbis), total: Number(line.total_linea) })) };
+    return { id: Number(row.id), number: row.numero_cotizacion, date: row.fecha, validUntil: row.vigencia_hasta ?? '', customer: row.cliente_nombre, rnc: row.cliente_rnc ?? '', phone: row.cliente_telefono ?? '', email: row.cliente_correo ?? '', address: row.cliente_direccion ?? '', notes: row.notas ?? '', subtotal: Number(row.subtotal), itbis: Number(row.itbis), total: Number(row.total), status: row.estado, lines: (details ?? []).map((line: any) => this.toLine(line)) };
   }
 
   async create(quote: Omit<Quotation, 'id' | 'number'>): Promise<{ id: number; number: string }> {

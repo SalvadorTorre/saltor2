@@ -73,19 +73,42 @@ export class QuotationPageComponent implements OnInit {
   get productSuggestions(): ProductRecord[] {
     const value = (this.productSuggestionField === 'code' ? this.lineEditor.code : this.lineEditor.description).trim().toLocaleLowerCase();
     if (!value) return [];
+    if (this.editingLineIndex !== null) return [];
     const sortByDescription = (products: ProductRecord[]) => products
       .sort((a, b) => a.description.localeCompare(b.description, 'es', { sensitivity: 'base' }))
-      .slice(0, 8);
+      .slice(0, 50);
     if (this.productSuggestionField === 'code') {
-      return sortByDescription(this.products.filter((product) => product.code.trim().toLocaleLowerCase().startsWith(value)));
+      // Igual que la orden de venta: todos los que empiezan con lo digitado, en orden de código (J01C, J02C… J10C).
+      return this.products
+        .filter((product) => product.code.trim().toLocaleLowerCase().startsWith(value))
+        .sort((a, b) => a.code.trim().localeCompare(b.code.trim(), 'es', { numeric: true, sensitivity: 'base' }))
+        .slice(0, 300);
     }
     const startsWith = this.products.filter((product) => this.getProductFullDescription(product).toLocaleLowerCase().startsWith(value));
     return sortByDescription(startsWith.length ? startsWith : this.products.filter((product) => this.getProductFullDescription(product).toLocaleLowerCase().includes(value)));
   }
-  get lineEditorTotal(): number { return this.round2(Number(this.lineEditor.quantity || 0) * Number(this.lineEditor.price || 0) * (1 + this.taxRate / 100)); }
-  get subtotal() { return this.quote.lines.reduce((sum, line) => sum + line.quantity * line.price, 0); }
-  get tax() { return this.quote.lines.reduce((sum, line) => sum + line.quantity * line.price * line.itbis / 100, 0); }
-  get total() { return this.subtotal + this.tax; }
+  /** Producto elegido en el editor (por su código). */
+  private get lineEditorProduct(): ProductRecord | undefined {
+    const code = this.lineEditor.code.trim().toLowerCase();
+    return code ? this.products.find((item) => item.code.trim().toLowerCase() === code) : undefined;
+  }
+  /** Mínimo = precio de venta − 10 %; Especial = el "precio mínimo" del producto (igual que la orden de venta). */
+  get lineEditorPriceInfo(): { minimum: number; special: number } | null {
+    const product = this.lineEditorProduct;
+    if (!product) return null;
+    return { minimum: this.round2(Number(product.salePrice || 0) * 0.9), special: this.round2(Number(product.minimumPrice || 0)) };
+  }
+  // Igual que la orden de venta: el precio incluye ITBIS, importe = cantidad × precio y el ITBIS se extrae.
+  get lineEditorTotal(): number { return this.round2(Number(this.lineEditor.quantity || 0) * Number(this.lineEditor.price || 0)); }
+  lineTotal(line: { quantity: number; price: number }): number { return this.round2(Number(line.quantity || 0) * Number(line.price || 0)); }
+  lineTax(line: { quantity: number; price: number; itbis: number }): number {
+    const total = this.lineTotal(line);
+    const rate = Number(line.itbis || 0);
+    return rate > 0 ? this.round2(total - total / (1 + rate / 100)) : 0;
+  }
+  get total() { return this.round2(this.quote.lines.reduce((sum, line) => sum + this.lineTotal(line), 0)); }
+  get tax() { return this.round2(this.quote.lines.reduce((sum, line) => sum + this.lineTax(line), 0)); }
+  get subtotal() { return this.round2(this.total - this.tax); }
   get filtered() {
     const value = this.search.toLowerCase().trim();
     return this.quotes.filter((quote) => {
@@ -175,6 +198,7 @@ export class QuotationPageComponent implements OnInit {
     event.preventDefault();
     const direction = event.key === 'ArrowDown' ? 1 : -1;
     this.activeProductSuggestionIndex = (this.activeProductSuggestionIndex + direction + suggestions.length) % suggestions.length;
+    window.setTimeout(() => document.querySelector('.product-suggestion--active')?.scrollIntoView({ block: 'nearest' }));
   }
   onProductSuggestionFocus(field: 'code' | 'name'): void { this.productSuggestionField = field; this.activeProductSuggestionIndex = 0; }
   onProductSuggestionBlur(): void {
@@ -222,14 +246,41 @@ export class QuotationPageComponent implements OnInit {
   selectFieldValue(event: FocusEvent): void { setTimeout(() => (event.target as HTMLInputElement | null)?.select()); }
   addQuotationLine(event?: Event): void {
     event?.preventDefault();
-    if (!this.lineEditor.description.trim() || Number(this.lineEditor.quantity) <= 0 || Number(this.lineEditor.price) < 0) { this.lineEditorMessage = 'Completa producto, cantidad y precio para agregar la línea.'; return; }
-    const line = { code: this.lineEditor.code.trim(), description: this.lineEditor.description.trim(), quantity: Number(this.lineEditor.quantity), price: Number(this.lineEditor.price), itbis: Number(this.taxRate) || 0 };
+    const qty = Number(this.lineEditor.quantity) || 0;
+    const price = Number(this.lineEditor.price) || 0;
+    if (!this.lineEditor.description.trim()) { this.lineEditorMessage = 'Selecciona un producto de la lista para agregar la línea.'; return; }
+    // Misma lógica de precio que la orden de venta: nunca en cero, ni menor al mínimo, ni igual o menor al costo.
+    if (qty <= 0 || price <= 0) { this.lineEditorMessage = 'Ingresa cantidad y precio mayores a 0 antes de agregar la línea.'; return; }
+    const product = this.lineEditorProduct;
+    if (product) {
+      if (qty < Number(product.minimumSaleQuantity || 0)) { this.lineEditorMessage = `La cantidad mínima de venta de ${product.description} es ${product.minimumSaleQuantity}.`; return; }
+      const isWholesaleSale = product.wholesaleEnabled && product.minimumWholesaleQuantity > 0 && product.wholesalePrice > 0 && qty >= product.minimumWholesaleQuantity;
+      const minimumAllowedPrice = Number(isWholesaleSale ? product.wholesalePrice : product.minimumPrice) || 0;
+      if (price <= Number(product.cost || 0) || price < minimumAllowedPrice) {
+        this.lineEditorMessage = isWholesaleSale
+          ? `La venta al por mayor requiere un precio mínimo de RD$${minimumAllowedPrice.toFixed(2)}.`
+          : `El precio no puede ser menor a RD$${minimumAllowedPrice.toFixed(2)} ni igual o menor al costo.`;
+        return;
+      }
+    }
+    // ITBIS de cada producto (exento = 0), igual que la orden de venta.
+    const itbis = product ? (product.exemptItbis ? 0 : Number(product.taxValue ?? this.taxRate) || 0) : Number(this.taxRate) || 0;
+    const line = { code: this.lineEditor.code.trim(), description: this.lineEditor.description.trim(), quantity: Number(this.lineEditor.quantity), price: Number(this.lineEditor.price), itbis };
     if (this.editingLineIndex === null) this.quote.lines.push(line); else this.quote.lines[this.editingLineIndex] = line;
     this.resetLineEditor();
     this.focusEditorField('quotationLineCode');
   }
-  editQuotationLine(index: number): void { const line = this.quote.lines[index]; if (!line) return; this.editingLineIndex = index; this.lineEditor = { code: line.code, description: line.description, quantity: line.quantity, price: line.price }; this.focusEditorField('quotationLineQuantity'); }
-  removeQuotationLine(index: number): void { this.quote.lines.splice(index, 1); if (this.editingLineIndex === index) this.resetLineEditor(); }
+  /** Igual que la orden de venta: al editar solo cantidad y precio; foco en cantidad con su valor seleccionado. */
+  editQuotationLine(index: number): void {
+    if (this.editingLineIndex !== null) return;
+    const line = this.quote.lines[index]; if (!line) return;
+    this.editingLineIndex = index;
+    this.lineEditor = { code: line.code, description: line.description, quantity: line.quantity, price: line.price };
+    this.closeProductSuggestions();
+    setTimeout(() => { const input = document.getElementById('quotationLineQuantity') as HTMLInputElement | null; input?.focus(); input?.select(); });
+  }
+  /** Mientras se edita una línea no se puede tocar el detalle. */
+  removeQuotationLine(index: number): void { if (this.editingLineIndex !== null) return; this.quote.lines.splice(index, 1); }
   private resetLineEditor(): void { this.editingLineIndex = null; this.lineEditor = { code: '', description: '', quantity: 1, price: 0 }; this.lineEditorMessage = ''; this.closeProductSuggestions(); }
   private selectProduct(product: ProductRecord, closeSuggestions = true): void { this.lineEditor = { ...this.lineEditor, code: product.code, description: this.getProductFullDescription(product), price: Number(product.salePrice ?? 0) }; this.lineEditorMessage = ''; if (closeSuggestions) this.closeProductSuggestions(); }
   private closeProductSuggestions(): void { this.productSuggestionField = null; this.activeProductSuggestionIndex = 0; }
@@ -241,7 +292,7 @@ export class QuotationPageComponent implements OnInit {
   private async loadRncRecords(): Promise<void> { try { const records = await this.rncService.getRecords(); if (records.length) this.data.rncRecords = records; } catch {} }
   private async loadUsers(): Promise<void> { try { const session = this.auth.currentUser ?? await this.auth.restoreSession(); if (session) this.data.users = await this.usersService.getUsers(session.companyId); } catch {} }
   async load() { try { this.quotes = await this.quotations.list(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudieron cargar las cotizaciones.'; } }
-  private payload(): Omit<Quotation, 'id' | 'number'> { return { date: this.quote.date, validUntil: this.quote.validUntil, customer: this.quote.customer.trim(), rnc: this.quote.rnc.trim(), phone: this.quote.phone.trim(), email: this.quote.email.trim(), address: this.quote.address.trim(), notes: this.quote.notes.trim(), subtotal: this.subtotal, itbis: this.tax, total: this.total, status: this.quoteStatus, lines: this.quote.lines.map((line) => ({ ...line, code: line.code.trim(), description: line.description.trim(), quantity: Number(line.quantity), price: Number(line.price), itbis: Number(line.itbis), total: Number(line.quantity) * Number(line.price) * (1 + Number(line.itbis) / 100) })) }; }
+  private payload(): Omit<Quotation, 'id' | 'number'> { return { date: this.quote.date, validUntil: this.quote.validUntil, customer: this.quote.customer.trim(), rnc: this.quote.rnc.trim(), phone: this.quote.phone.trim(), email: this.quote.email.trim(), address: this.quote.address.trim(), notes: this.quote.notes.trim(), subtotal: this.subtotal, itbis: this.tax, total: this.total, status: this.quoteStatus, lines: this.quote.lines.map((line) => ({ ...line, code: line.code.trim(), description: line.description.trim(), quantity: Number(line.quantity), price: Number(line.price), itbis: Number(line.itbis), total: this.lineTotal(line) })) }; }
   async save() { if (!this.perms.ensure(this.editingId ? 'cotizaciones.editar' : 'cotizaciones.crear')) return; if (this.isReadOnly) return; const validUser = !this.transactionQuotation || Boolean(this.quotationUserCode.trim() && this.quotationUserName); if (this.isRncInvalid || !validUser || !this.quote.customer.trim() || !this.quote.lines.length || this.quote.lines.some((line) => !line.description.trim() || line.quantity <= 0)) { this.message = this.isRncInvalid ? 'RNC inválido. Regístralo en Clientes o en el catálogo RNC antes de guardar.' : !validUser ? 'Indica un código de usuario activo antes de guardar.' : 'Completa el cliente y agrega al menos un producto antes de guardar.'; return; } try { const payload = this.payload(); if (this.editingId) { if (!window.confirm('Se reemplazarán las líneas actuales de la cotización. ¿Deseas guardar los cambios?')) return; await this.quotations.update(this.editingId, payload); this.message = 'Cotización actualizada correctamente.'; } else { const saved = await this.quotations.create(payload); this.quote.number = saved.number; this.editingId = saved.id; this.quoteStatus = 'Borrador'; this.message = `Cotización ${saved.number} creada correctamente.`; } await this.load(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudo guardar la cotización.'; } }
   /** Convertida en orden de venta (o ya facturada): solo se puede consultar. */
   isLocked(item: Quotation): boolean {
@@ -315,13 +366,14 @@ export class QuotationPageComponent implements OnInit {
       isHalfLetter = false;
     }
     const formatAmount = (value: number): string => Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lineItbis = (line: { total: number; itbis: number }) => Number(line.itbis) > 0 ? line.total - line.total / (1 + Number(line.itbis) / 100) : 0;
     const thermalRows = q.lines.map((line) => {
-      const itbis = line.total - (line.quantity * line.price);
+      const itbis = lineItbis(line);
       return `<tr><td><b>${this.e(line.description)}</b><br><small>${formatAmount(line.quantity)} x ${formatAmount(line.price)} &nbsp; ITBIS ${formatAmount(itbis)} &nbsp; VALOR ${formatAmount(line.total)}</small></td></tr>`;
     }).join('');
     // Media carta: una fila por producto con sus columnas (precio por unidad con ITBIS incluido).
     const halfLetterRows = q.lines.map((line) => {
-      const itbis = line.total - (line.quantity * line.price);
+      const itbis = lineItbis(line);
       const unitPrice = line.quantity ? line.total / line.quantity : line.price;
       return `<tr><td>${this.e(line.code || '')}</td><td>${this.e(line.description)}</td><td class="num">${formatAmount(line.quantity)}</td><td class="num">${formatAmount(unitPrice)}</td><td class="num">${formatAmount(itbis)}</td><td class="num">${formatAmount(line.total)}</td></tr>`;
     }).join('');

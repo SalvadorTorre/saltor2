@@ -177,8 +177,8 @@ export class ClientsPageComponent implements OnInit {
 
   async saveClient(): Promise<void> {
     if (!this.perms.ensure(this.clientEditorMode === 'create' ? 'clientes.crear' : 'clientes.editar')) return;
-    if (!this.clientForm.code.trim() || !this.clientForm.fullName.trim() || !this.clientForm.documentNumber.trim()) {
-      this.clientMessage = 'Completa los campos obligatorios (*): código, nombre completo y número de documento.';
+    if (!this.clientForm.fullName.trim()) {
+      this.clientMessage = 'Escribe el nombre completo del cliente (campo obligatorio).';
       return;
     }
 

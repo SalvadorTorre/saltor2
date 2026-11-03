@@ -200,9 +200,12 @@ export class Rep607Service {
       .order('fecha_factura', { ascending: true });
 
     if (filters.branchId !== 'Todas') query = query.eq('idsucursal', Number(filters.branchId));
+    // Filtrando por número se ignora el período: se busca la factura en cualquier fecha.
     if (filters.invoice.trim()) query = query.ilike('numero_factura', `%${filters.invoice.trim()}%`);
-    if (filters.from) query = query.gte('fecha_factura', filters.from);
-    if (filters.to) query = query.lte('fecha_factura', filters.to);
+    else {
+      if (filters.from) query = query.gte('fecha_factura', filters.from);
+      if (filters.to) query = query.lte('fecha_factura', filters.to);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -244,22 +247,30 @@ export class Rep607Service {
 
   async getProformaCandidates(companyId: number, branchId: string, from: string, to: string, invoice = ''): Promise<ProformaPeriodCandidate[]> {
     let query = this.supabase.client.from('facturas').select('id, numero_factura, fecha_factura, total')
-      .eq('idempres', companyId).eq('estado', 'PROFORMA').gte('fecha_factura', from).lte('fecha_factura', to)
+      .eq('idempres', companyId).eq('estado', 'PROFORMA')
       .order('fecha_factura', { ascending: true }).order('id', { ascending: true });
     if (branchId !== 'Todas') query = query.eq('idsucursal', Number(branchId));
+    // Filtrando por número se ignora el período.
     if (invoice.trim()) query = query.ilike('numero_factura', `%${invoice.trim()}%`);
+    else query = query.gte('fecha_factura', from).lte('fecha_factura', to);
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map((row: { id: number; numero_factura: string; fecha_factura: string; total: number | string }) => ({ id: row.id, number: row.numero_factura, date: row.fecha_factura, total: Number(row.total ?? 0) }));
   }
 
-  async convertProformasToDeliveryNotes(from: string, to: string, branchId: string, amount: number, invoiceIds: number[]): Promise<{ count: number; total: number; queuedCount: number; queuedTotal: number }> {
+  /**
+   * @param onlySelected true al filtrar por número: solo convierte esa(s) factura(s) a conduce,
+   *   sin importar el período, y no encola las demás. false: las demás proformas del período
+   *   pasan a E32 sin NCF ni firma, en cola (PENDIENTE_ENVIO) para el envío gradual a la DGII.
+   */
+  async convertProformasToDeliveryNotes(from: string, to: string, branchId: string, amount: number, invoiceIds: number[], onlySelected = false): Promise<{ count: number; total: number; queuedCount: number; queuedTotal: number }> {
     const { data, error } = await this.supabase.client.rpc('convertir_proformas_a_conduce', {
-      p_desde: from,
-      p_hasta: to,
+      p_desde: from || null,
+      p_hasta: to || null,
       p_sucursal_id: branchId === 'Todas' ? null : Number(branchId),
       p_monto: amount,
-      p_factura_ids: invoiceIds
+      p_factura_ids: invoiceIds,
+      p_solo_seleccionadas: onlySelected
     });
     if (error) throw error;
     return { count: Number(data?.cantidad ?? 0), total: Number(data?.monto ?? 0), queuedCount: Number(data?.facturas_pendientes ?? 0), queuedTotal: Number(data?.monto_pendiente ?? 0) };

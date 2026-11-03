@@ -198,7 +198,7 @@
                 <div class="line-editor-grid">
                   <label class="line-editor-field line-editor-field--code">
                     <span>Codigo</span>
-                    <input type="text" name="lineEditorCode" [(ngModel)]="lineEditorForm.code" (ngModelChange)="onLineEditorCodeChange()" (focus)="onLineEditorFieldFocus('code')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorCodeEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
+                    <input type="text" name="lineEditorCode" [readonly]="lineEditorIsEditing" [class.line-editor-locked]="lineEditorIsEditing" [attr.tabindex]="lineEditorIsEditing ? -1 : null" [(ngModel)]="lineEditorForm.code" (ngModelChange)="onLineEditorCodeChange()" (focus)="onLineEditorFieldFocus('code')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorCodeEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
                     <div class="product-suggestions product-suggestions--rows" *ngIf="productSuggestionField === 'code' && productSuggestions.length" role="listbox">
                       <div class="product-suggestion-head" aria-hidden="true"><span>Código</span><span>Descripción</span><span>Tamaño</span><span>Marca</span><span>Tipo</span><span class="num">Precio</span></div>
                       <button type="button" class="product-suggestion product-suggestion--row" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)" [title]="'Existencia: ' + product.stock">
@@ -208,7 +208,7 @@
                   </label>
                   <label class="line-editor-field line-editor-field--product">
                     <span>Producto</span>
-                    <input type="text" name="lineEditorProduct" [(ngModel)]="lineEditorForm.productName" (ngModelChange)="onLineEditorProductChange()" (focus)="onLineEditorFieldFocus('name')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorProductEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
+                    <input type="text" name="lineEditorProduct" [readonly]="lineEditorIsEditing" [class.line-editor-locked]="lineEditorIsEditing" [attr.tabindex]="lineEditorIsEditing ? -1 : null" [(ngModel)]="lineEditorForm.productName" (ngModelChange)="onLineEditorProductChange()" (focus)="onLineEditorFieldFocus('name')" (blur)="onLineEditorFieldBlur()" (keydown.enter)="onLineEditorProductEnter($event)" (keydown)="onLineEditorSuggestionKeydown($event)" autocomplete="off" />
                     <div class="product-suggestions product-suggestions--rows" *ngIf="productSuggestionField === 'name' && productSuggestions.length" role="listbox">
                       <div class="product-suggestion-head" aria-hidden="true"><span>Código</span><span>Descripción</span><span>Tamaño</span><span>Marca</span><span>Tipo</span><span class="num">Precio</span></div>
                       <button type="button" class="product-suggestion product-suggestion--row" *ngFor="let product of productSuggestions; let index = index" [class.product-suggestion--active]="isActiveProductSuggestion(index)" (mousedown)="$event.preventDefault()" (click)="selectProductSuggestion(product)" [title]="'Existencia: ' + product.stock">
@@ -228,6 +228,13 @@
                     <span>Total</span>
                     <input type="text" [value]="'RD$' + (lineEditorForm.total | number:'1.2-2')" [readonly]="true" [disabled]="true" />
                   </label>
+                  <div class="line-editor-field line-editor-field--prices" *ngIf="lineEditorPriceInfo as prices">
+                    <span>Precios</span>
+                    <div class="price-hints">
+                      <div><small>Mínimo</small><b>{{ prices.minimum | number:'1.2-2' }}</b></div>
+                      <div class="price-hints__special"><small>Especial</small><b>{{ prices.special | number:'1.2-2' }}</b></div>
+                    </div>
+                  </div>
                 </div>
                 <p class="line-editor-message" *ngIf="lineEditorMessage">{{ lineEditorMessage }}</p>
                 <p class="line-editor-notice" *ngIf="lineEditorInventoryNotice">{{ lineEditorInventoryNotice }}</p>
@@ -242,7 +249,7 @@
                   <span>Acciones</span>
                 </div>
 
-                <div class="invoice-lines__row" *ngFor="let line of invoiceLines">
+                <div class="invoice-lines__row" *ngFor="let line of invoiceLines" [class.invoice-lines__row--editing]="line.id === editingLineId" [class.invoice-lines__row--locked]="lineEditorIsEditing && line.id !== editingLineId">
                   <span><strong>{{ getInvoiceProductCode(line.productId) }}</strong></span>
                   <span>
                     <strong>{{ line.description || getInvoiceProductCode(line.productId) }}</strong>
@@ -251,10 +258,10 @@
                   <span>RD${{ line.unitPrice | number:'1.2-2' }}</span>
                   <span><strong>RD${{ line.lineTotal | number:'1.2-2' }}</strong></span>
                   <span class="invoice-line-actions">
-                    <button class="secondary-action invoice-line-btn" type="button" title="Editar producto" aria-label="Editar producto" (click)="editInvoiceLine(line.id)">
+                    <button class="secondary-action invoice-line-btn" type="button" title="Editar producto" aria-label="Editar producto" [disabled]="lineEditorIsEditing" (click)="editInvoiceLine(line.id)">
                       <img src="assets/icons/line-edit-red.svg" alt="" aria-hidden="true" />
                     </button>
-                    <button class="ghost-action invoice-line-btn invoice-line-btn--remove" type="button" title="Quitar producto" aria-label="Quitar producto" (click)="removeInvoiceLine(line.id)">
+                    <button class="ghost-action invoice-line-btn invoice-line-btn--remove" type="button" title="Quitar producto" aria-label="Quitar producto" [disabled]="lineEditorIsEditing" (click)="removeInvoiceLine(line.id)">
                       <img src="assets/icons/line-trash-red.svg" alt="" aria-hidden="true" />
                     </button>
                   </span>

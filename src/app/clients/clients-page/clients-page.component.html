@@ -45,8 +45,8 @@
       <span>Categoria</span>
       <select [(ngModel)]="clientCategoryFilter">
         <option value="all">Todas las categorias</option>
-        <option value="Credito">Credito</option>
         <option value="Contado">Contado</option>
+        <option value="Credito">Crédito</option>
       </select>
     </label>
     <label class="field">
@@ -127,16 +127,16 @@
       <div class="client-editor-modal__content">
         <form class="company-form" (ngSubmit)="saveClient()">
           <div class="company-form__grid">
-            <label class="field"><span>Codigo del cliente <b class="req">*</b></span><input type="text" name="clientCode" [(ngModel)]="clientForm.code" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Codigo del cliente</span><input type="text" name="clientCode" [ngModel]="clientForm.code" readonly tabindex="-1" class="auto-code" placeholder="Se asigna automáticamente" /></label>
             <label class="field"><span>Nombre completo <b class="req">*</b></span><input type="text" name="clientFullName" [(ngModel)]="clientForm.fullName" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Empresa</span><input type="text" name="clientCompanyName" [(ngModel)]="clientForm.companyName" (keydown.enter)="focusNextField($event)" /></label>
-            <label class="field"><span>Tipo de documento <b class="req">*</b></span><select name="clientDocumentType" [(ngModel)]="clientForm.documentType" (keydown.enter)="focusNextField($event)"><option value="Cedula">Cedula</option><option value="RNC">RNC</option><option value="Pasaporte">Pasaporte</option></select></label>
-            <label class="field"><span>Numero de documento <b class="req">*</b></span><input type="text" name="clientDocumentNumber" [(ngModel)]="clientForm.documentNumber" (keydown.enter)="focusNextField($event)" /></label>
+            <label class="field"><span>Tipo de documento</span><select name="clientDocumentType" [(ngModel)]="clientForm.documentType" (keydown.enter)="focusNextField($event)"><option value="Cedula">Cedula</option><option value="RNC">RNC</option><option value="Pasaporte">Pasaporte</option></select></label>
+            <label class="field"><span>Numero de documento</span><input type="text" name="clientDocumentNumber" [(ngModel)]="clientForm.documentNumber" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Telefono</span><input type="text" name="clientPhone" [(ngModel)]="clientForm.phone" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Correo</span><input type="email" name="clientEmail" [(ngModel)]="clientForm.email" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Ciudad</span><input type="text" name="clientCity" [(ngModel)]="clientForm.city" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field field--full"><span>Direccion</span><input type="text" name="clientAddress" [(ngModel)]="clientForm.address" (keydown.enter)="focusNextField($event)" /></label>
-            <label class="field"><span>Categoria</span><select name="clientCategory" [(ngModel)]="clientForm.category" (keydown.enter)="focusNextField($event)"><option value="Credito">Credito</option><option value="Contado">Contado</option></select></label>
+            <label class="field"><span>Categoria</span><select name="clientCategory" [(ngModel)]="clientForm.category" (keydown.enter)="focusNextField($event)"><option value="Contado">Contado</option><option value="Credito">Crédito</option></select></label>
             <label class="field"><span>Limite de credito</span><input type="number" name="clientCreditLimit" [(ngModel)]="clientForm.creditLimit" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Balance</span><input type="number" name="clientBalance" [(ngModel)]="clientForm.balance" (keydown.enter)="focusNextField($event)" /></label>
             <label class="field"><span>Estado</span><select name="clientStatus" [(ngModel)]="clientForm.status" (keydown.enter)="focusNextField($event)"><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option><option value="Bloqueado">Bloqueado</option></select></label>

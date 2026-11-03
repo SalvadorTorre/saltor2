@@ -72,23 +72,43 @@
 .quick-scan-toggle--on .quick-scan-toggle__dot { background: #12b76a; box-shadow: 0 0 0 3px rgba(18, 183, 106, .25); }
 
 /* Lista de productos al buscar: una fila por producto, todo con la misma letra. */
-.product-suggestions--rows { width: min(960px, 94vw); max-height: 360px; padding: 0 4px 4px; display: block; }
+.product-suggestions--rows { width: min(1080px, 96vw); max-height: 440px; padding: 0 4px 4px; display: block; }
 .product-suggestion-head, .product-suggestion--row {
-  display: grid; grid-template-columns: 110px minmax(180px, 1fr) 80px 110px 90px 90px; gap: 10px; align-items: center;
+  display: grid; grid-template-columns: 130px minmax(220px, 1fr) 90px 120px 100px 105px; gap: 12px; align-items: center;
 }
 .product-suggestion-head {
   position: sticky; top: 0; z-index: 1; padding: 8px 10px 6px; background: #fff; border-bottom: 1px solid #e2e8f0;
-  font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: #64748b;
+  font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: #64748b;
 }
-.product-suggestion--row { padding: 7px 10px; }
+.product-suggestion--row { padding: 9px 10px; }
 .product-suggestion--row span {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: #0f172a; font-size: 14px; font-weight: 600;
+  color: #0f172a; font-size: 16px; font-weight: 600;
 }
-.product-suggestion--row .ps-code { color: #1d4ed8; }
+.product-suggestion--row .ps-code { color: #1d4ed8; font-weight: 800; }
+.product-suggestion--row .ps-desc { color: #0b1220; font-weight: 800; }
 .product-suggestion-head .num, .product-suggestion--row .num { text-align: right; font-variant-numeric: tabular-nums; }
 .product-suggestion--row.product-suggestion--active span { color: #1d4ed8; }
 @media (max-width: 720px) {
-  .product-suggestion-head, .product-suggestion--row { grid-template-columns: 90px minmax(120px, 1fr) 80px; }
+  .product-suggestion-head, .product-suggestion--row { grid-template-columns: 100px minmax(120px, 1fr) 90px; }
   .product-suggestion-head span:nth-child(n+3):not(.num), .product-suggestion--row span:nth-child(n+3):not(.num) { display: none; }
 }
+
+/* Editando una línea: código y producto no se cambian. */
+.line-editor-locked { background: #f1f5f9 !important; color: #475467 !important; cursor: not-allowed; }
+
+/* Línea en edición resaltada; las demás bloqueadas hasta terminar o cancelar. */
+.invoice-lines__row--editing { background: #fff7e6 !important; box-shadow: inset 4px 0 0 #f59e0b; }
+.invoice-lines__row--locked { opacity: .55; }
+.invoice-line-btn:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
+
+/* Precio mínimo y especial (−10 %) del producto elegido, a la derecha de los campos. */
+.line-editor-field--prices { grid-column: 6; justify-self: end; width: max-content; align-items: flex-end; margin-right: -6px; }
+.price-hints { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.price-hints div { display: grid; padding: 3px 7px; border: 1px solid #fecaca; border-radius: 8px; background: #fff5f5; line-height: 1.15; }
+.price-hints small { color: #9f1239; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
+.price-hints b { color: #be123c; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.price-hints .price-hints__special { border-color: #bbf7d0; background: #f0fdf4; }
+.price-hints .price-hints__special small { color: #166534; }
+.price-hints .price-hints__special b { color: #15803d; }
+@media (max-width: 720px) { .line-editor-field--prices { grid-column: 1 / -1; grid-row: 3; } }

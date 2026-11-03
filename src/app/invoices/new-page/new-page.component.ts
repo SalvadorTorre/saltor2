@@ -352,6 +352,17 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }
   }
 
+  /** Mínimo = precio de venta − 10 %; Especial = el "precio mínimo" registrado en el producto. */
+  get lineEditorPriceInfo(): { minimum: number; special: number } | null {
+    const product = this.getProductById(this.lineEditorForm.productId);
+    if (!product) return null;
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+    return {
+      minimum: round2(this.getInvoiceUnitPrice(product, product.salePrice) * 0.9),
+      special: round2(this.getInvoiceUnitPrice(product, product.minimumPrice))
+    };
+  }
+
   get lineEditorIsEditing(): boolean {
     return this.editingLineId !== null;
   }
@@ -462,6 +473,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   get productSuggestions(): ProductRecord[] {
+    if (this.lineEditorIsEditing) return [];
     const input = this.productSuggestionField === 'code'
       ? this.lineEditorForm.code
       : this.lineEditorForm.productName;
@@ -507,7 +519,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   resetLineEditor(): void {
-    // this.editingLineId = null;
+    // Al terminar (o cancelar) la edición de una línea se vuelven a activar código y producto.
+    this.editingLineId = null;
     this.lineEditorForm = {
       code: '',
       productName: '',
@@ -846,6 +859,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   editInvoiceLine(lineId: number): void {
+    if (this.lineEditorIsEditing) return;
     const line = this.invoiceLines.find((l) => l.id === lineId);
     if (!line) return;
     const product = this.getProductById(line.productId);
@@ -858,6 +872,13 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       unitPrice: line.unitPrice,
       total: line.quantity * line.unitPrice
     };
+    // Al editar una línea solo se cambian cantidad y precio: foco en cantidad con su valor seleccionado.
+    this.closeProductSuggestions();
+    window.setTimeout(() => {
+      const quantityInput = this.el.nativeElement.querySelector<HTMLInputElement>('input[name="lineEditorQuantity"]');
+      quantityInput?.focus();
+      quantityInput?.select();
+    });
   }
 
   cancelEditLine(): void {
@@ -923,6 +944,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
         };
       });
       this.invoiceMessage = `Linea #${lineId} actualizada.`;
+      // Listo para el siguiente producto: foco en el código.
+      window.setTimeout(() => this.focusLineEditorCode());
     } else {
       const newLine: InvoiceLine = {
         id: this.nextInvoiceLineId++,
@@ -995,7 +1018,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       this.invoiceLines = quotation.lines.map((line, index) => {
         const product = this.products.find((item) => item.code.trim().toLowerCase() === line.code.trim().toLowerCase());
         const taxRate = Number(line.itbis) || 0;
-        const unitPrice = Number(line.price) * (1 + taxRate / 100);
+        // El precio de la cotización ya incluye ITBIS (igual que la orden de venta).
+        const unitPrice = Number(line.price);
         const lineTotal = Number(line.quantity) * unitPrice;
         return { id: index + 1, productId: product?.id ?? null, description: line.description, quantity: Number(line.quantity), unitPrice, taxRate, taxAmount: taxRate ? lineTotal - (lineTotal / (1 + taxRate / 100)) : 0, lineTotal };
       });
@@ -1224,6 +1248,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   removeInvoiceLine(lineId: number): void {
+    // Mientras se edita una línea no se puede tocar el detalle: primero se termina o cancela la edición.
+    if (this.lineEditorIsEditing) return;
     this.invoiceLines = this.invoiceLines.filter((line) => line.id !== lineId);
   }
 

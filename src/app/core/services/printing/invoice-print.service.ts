@@ -35,12 +35,15 @@ export class InvoicePrintService {
    * Ninguno lleva datos fiscales ni QR; los dos llevan el número en código de barras.
    */
   async printSalesOrder(orderId: number, sellerFallback?: string | null, useCompanyCopies = false): Promise<void> {
+    // Solo la térmica (80/90 mm) usa el ticket; carta, media carta y cualquier otro papel usan el formato en columnas.
     const halfLetter = await this.isHalfLetter();
     const page = halfLetter
       ? await this.buildSalesOrderHalfLetterHtml(orderId, sellerFallback)
       : await this.buildSalesOrderTicketHtml(orderId, sellerFallback);
     const copies = useCompanyCopies ? await this.qzPrintService.invoiceCopies() : 1;
-    const printed = await this.qzPrintService.printHtml(page.html, `Orden de venta ${page.number}`, halfLetter ? 'width=1000,height=700' : undefined, copies);
+    const printed = halfLetter
+      ? await this.qzPrintService.printHtml(page.html, `Orden de venta ${page.number}`, 'width=1000,height=700', copies, 'media_carta')
+      : await this.qzPrintService.printHtml(page.html, `Orden de venta ${page.number}`, undefined, copies);
     if (printed === 'unavailable') throw new Error('No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.');
     await this.salesOrders.markOrderPrinted(orderId);
   }
@@ -84,9 +87,15 @@ export class InvoicePrintService {
     return { html, number: detail.number };
   }
 
-  /** La empresa imprime en media carta: Facturación, Caja y Consulta usan el formato de media carta. */
+  /**
+   * Formato en columnas (media carta) para todo papel que no sea de impresora térmica:
+   * carta, media carta, etc. Solo 80/90 mm usan el ticket. Lo usan Facturación, Caja y Consulta.
+   */
   async isHalfLetter(): Promise<boolean> {
-    try { return (await this.printSettings.getPaper()) === 'media_carta'; } catch { return false; }
+    try {
+      const paper = String(await this.printSettings.getPaper());
+      return paper !== '80mm' && paper !== '90mm';
+    } catch { return false; }
   }
 
   /**
@@ -97,7 +106,7 @@ export class InvoicePrintService {
       if (await this.isHalfLetter()) {
         const page = await this.buildHalfLetterHtml(invoiceId, sellerFallback);
         const pageCopies = useCompanyCopies ? await this.qzPrintService.invoiceCopies() : 1;
-        const printed = await this.qzPrintService.printHtml(page.html, `Factura ${page.number}`, 'width=1000,height=700', pageCopies);
+        const printed = await this.qzPrintService.printHtml(page.html, `Factura ${page.number}`, 'width=1000,height=700', pageCopies, 'media_carta');
         if (printed === 'unavailable') throw new Error('No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.');
         await this.invoicesService.markInvoicePrinted(invoiceId);
         return;
@@ -176,7 +185,7 @@ export class InvoicePrintService {
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${isInvoice ? 'Factura' : 'Orden de venta'} ${e(detail.number)}</title><style>
 @page{size:letter portrait;margin:0}*{box-sizing:border-box}html{margin:0!important;padding:0!important}
 body{width:100%!important;margin:0!important;padding:1cm!important;color:#111;font-family:Arial,sans-serif;font-size:10px}
-.page{width:100%!important;min-height:4.01in;display:flex;flex-direction:column}
+.page{width:100%!important;min-height:4.75in;display:flex;flex-direction:column}
 .mono{font-family:'Courier New',Courier,monospace}
 .top{display:grid;grid-template-columns:1.9in 1fr 2.75in;gap:10px;align-items:start}
 .copy{font-size:15px;font-weight:800;letter-spacing:.5px}
@@ -220,7 +229,7 @@ body{width:100%!important;margin:0!important;padding:1cm!important;color:#111;fo
 ${detail.notes ? `<div class="notes"><b>Notas:</b> ${e(detail.notes)}</div>` : ''}
 <footer class="foot">
   <div class="fiscal">${isInvoice ? `${qr.qr ? `<img src="${qr.qr}" alt="Código QR">` : ''}<div><b>Código de seguridad:</b> ${e(detail.securityCode || 'Pendiente')}</div><div><b>Fecha de firma:</b> ${e(detail.signatureDate || 'Pendiente')}</div>` : ''}</div>
-  <div class="center"><div class="pag">Pag. 1/1</div><div class="sign">Recibido Conforme</div>${qr.barcode ? `<img class="barcode" src="${qr.barcode}" alt="">` : ''}</div>
+  <div class="center"><div class="pag">Pag. 1/1</div><div class="sign">Recibido Conforme</div></div>
   <div><div class="totals"><div><b>SUBTOTAL</b><span>${money(detail.subtotal)}</span></div><div><b>DESC.</b><span>0.00</span></div><div><b>ITBIS</b><span>${money(detail.taxTotal)}</span></div><div class="grand"><b>TOTAL</b><span>${money(detail.grandTotal)}</span></div></div><div class="peso">Valor en Peso RD$</div></div>
 </footer>
 </main><script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250)}<\/script></body></html>`;
