@@ -1465,7 +1465,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     // Preserve the selected document type while async data loads finish.
     const selectedNcfType = this.invoiceForm.ncfType;
     const usesFiscalNcf = !this.saleOrder && this.hasValidInvoiceRnc;
-    const isProformaInvoice = !this.saleOrder && !usesFiscalNcf && Number(this.paymentMethodCode) === 1;
+    // Proforma (E332): empresa con proforma activa, sin RNC válido y forma de pago distinta a tarjeta de crédito (3).
+    const isProformaInvoice = !this.saleOrder && this.proformaEnabled && !usesFiscalNcf && !this.isCreditCardPayment;
     const storedNcfType = this.saleOrder
       ? this.toStoredNcfType(this.invoiceForm.ncfType)
       : usesFiscalNcf ? this.toStoredNcfType(selectedNcfType) : isProformaInvoice ? 'E332' : 'E32';
@@ -1738,10 +1739,6 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     try {
       const result = await this.ecfService.sendInvoice(this.savedInvoice.id);
       this.applyOperationResult(result);
-      if (printAfterSend) {
-        const readyToPrint = ['Aceptado', 'Aceptado condicional', 'Firmada', 'En cola', 'Enviando DGII', 'En proceso DGII'];
-        if (readyToPrint.includes(result.dgii_estado ?? '')) await this.printInvoice();
-      }
       // Firmada o ya en la cola: la ventana se cierra sola. Si hubo error se queda abierta para leerlo.
       const dialogState = this.dgiiDialog as string | null;
       if (dialogState && dialogState !== 'error') this.autoCloseDgiiDialog();
@@ -1751,6 +1748,13 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       this.dgiiDialogMessage = this.invoiceMessage;
     } finally {
       this.isSendingDgii = false;
+    }
+    // Al generar la factura siempre se imprime, aunque no haya entrado a la cola o el NCF siga pendiente.
+    if (printAfterSend) {
+      const pendingMessage = this.dgiiDialog === 'error' ? this.invoiceMessage : '';
+      try { await this.printInvoice(); }
+      catch (error) { this.invoiceMessage = this.formatSupabaseError(error, 'La factura se guardó, pero no se pudo imprimir.'); }
+      if (pendingMessage) this.invoiceMessage = `Factura impresa. DGII pendiente: ${pendingMessage}`;
     }
   }
 
@@ -1977,7 +1981,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       }
       return;
     }
-    if (this.proformaEnabled && !this.isCashPaymentMethod) {
+    if (this.proformaEnabled && this.isCreditCardPayment) {
       this.invoiceForm.ncfType = this.consumerNcfType;
       return;
     }
@@ -2020,6 +2024,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   private get proformaNcfType(): string { return '332 - Factura de Consumo'; }
   private get consumerNcfType(): string { return this.getNcfOptionBySeriesOrCode(this.defaultNcfElectronic32); }
   private get isCashPaymentMethod(): boolean { return Number(this.paymentMethodCode) === 1; }
+  /** Tarjeta de crédito (forma de pago 3): nunca se guarda como proforma. */
+  private get isCreditCardPayment(): boolean { return Number(this.paymentMethodCode) === 3; }
 
   private toStoredNcfType(value: string): string {
     const code = value.match(/332|\d{2}/)?.[0];

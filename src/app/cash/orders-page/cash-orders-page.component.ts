@@ -199,17 +199,13 @@ export class CashOrdersPageComponent implements OnInit {
       }
     }
 
-    const consumer = this.isConsumerInvoice(ncfType);
-    if (!dgiiProblem || consumer) {
-      try { await this.printService.print(invoiceId, seller, true); }
-      catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.errorText(error) }); }
-    }
+    // Siempre se imprime al cobrar, aunque la DGII o la cola sigan pendientes.
+    try { await this.printService.print(invoiceId, seller, true); }
+    catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.errorText(error) }); }
     if (dgiiProblem) {
       await Swal.fire({
         icon: 'warning', title: `Factura ${invoiceNumber} cobrada`,
-        html: consumer
-          ? `La factura fue impresa. La DGII sigue pendiente: <b>${this.escape(dgiiProblem)}</b>`
-          : `No se pudo enviar a la DGII: <b>${this.escape(dgiiProblem)}</b><br><br>Revisa el comprobante en Facturación › Consulta antes de imprimirlo.`
+        html: `La factura fue impresa. La DGII sigue pendiente: <b>${this.escape(dgiiProblem)}</b>`
       });
     } else {
       void Swal.fire({

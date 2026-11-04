@@ -142,19 +142,14 @@ export class CashCollectionPageComponent implements OnInit, OnDestroy {
     }
 
     if (dgiiProblem) {
-      if (isConsumerInvoice) {
-        try { await this.printService.print(invoice.id, invoice.seller, true); }
-        catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }
-        await Swal.fire({
-          icon: 'warning', title: `Factura ${invoice.number} cobrada e impresa`,
-          html: `La factura tipo 32 fue impresa. La DGII sigue pendiente: <b>${this.escape(dgiiProblem)}</b>`
-        });
-      } else {
-        await Swal.fire({
-          icon: 'warning', title: `Factura ${invoice.number} cobrada`,
-          html: `${this.isProforma(invoice.ncfType) ? 'No se pudo completar la firma de la proforma' : 'No se pudo enviar a la DGII'}: <b>${this.escape(dgiiProblem)}</b><br><br>Revisa el comprobante desde Facturación → Consulta antes de imprimirlo.`
-        });
-      }
+      // Siempre se imprime al cobrar, aunque la DGII o la cola sigan pendientes.
+      void isConsumerInvoice;
+      try { await this.printService.print(invoice.id, invoice.seller, true); }
+      catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }
+      await Swal.fire({
+        icon: 'warning', title: `Factura ${invoice.number} cobrada e impresa`,
+        html: `La factura fue impresa. ${this.isProforma(invoice.ncfType) ? 'La firma de la proforma' : 'La DGII'} sigue pendiente: <b>${this.escape(dgiiProblem)}</b>`
+      });
     } else {
       try { await this.printService.print(invoice.id, invoice.seller, true); }
       catch (error) { await Swal.fire({ icon: 'warning', title: 'Cobrada, pero no se pudo imprimir', text: this.message(error) }); }

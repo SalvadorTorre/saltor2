@@ -82,6 +82,7 @@ export class CompanyPrintSettingsService {
   }
 
   private cachedOrderSlip: boolean | null = null;
+  private cachedFooter: string | null = null;
   /** Empresa de los valores guardados: al cambiar de empresa se vuelven a leer (papel, copias, volante). */
   private cachedCompanyId = 0;
 
@@ -92,6 +93,29 @@ export class CompanyPrintSettingsService {
     this.cachedPaper = null;
     this.cachedCopies = null;
     this.cachedOrderSlip = null;
+    this.cachedFooter = null;
+  }
+
+  /** Mensaje de pie de página de la impresión (hasta 3 líneas), debajo de la firma. */
+  async getFooterText(): Promise<string> {
+    this.resetCacheIfCompanyChanged();
+    if (this.cachedFooter !== null) return this.cachedFooter;
+    const companyId = this.companyId();
+    if (!companyId) return '';
+    const { data, error } = await this.supabase.client.from('empresas').select('pie_impresion').eq('id', companyId).maybeSingle();
+    if (error) return '';
+    this.cachedFooter = String((data as { pie_impresion?: string | null } | null)?.pie_impresion ?? '');
+    return this.cachedFooter;
+  }
+
+  async saveFooterText(text: string): Promise<void> {
+    const companyId = this.companyId();
+    if (!companyId) throw new Error('No se identificó la empresa activa.');
+    const value = String(text ?? '').split(/\r?\n/).slice(0, 3).map((line) => line.trimEnd()).join('\n').trim();
+    const { data, error } = await this.supabase.client.from('empresas').update({ pie_impresion: value || null }).eq('id', companyId).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('No se guardó el pie de página: solo un administrador de la empresa puede cambiarlo.');
+    this.cachedFooter = value;
   }
 
   /** Orden de venta con volante: al grabarla se imprime solo un volante con código de barras. */

@@ -157,6 +157,30 @@ export class QzPrintService {
           configOptions['units'] = 'mm';
           configOptions['size'] = this.qzPaperSize(paper);
         }
+        // Carta: QZ dibuja la página a 8.5" de ancho sobre una hoja carta vertical, sin depender de la
+        // configuración de la impresora en Windows.
+        // Media carta: el papel lo define la impresora en Windows (tamaño definido por el usuario
+        // 215.9 × 139.7 mm, vertical). Java no admite una hoja más ancha que alta y forzarla desde
+        // aquí la encogía o la giraba.
+        const letterLayout = !thermalRoll && (paper === 'carta' || paper === 'media_carta');
+        if (letterLayout) {
+          configOptions['units'] = 'in';
+          configOptions['scaleContent'] = true;
+          if (paper === 'carta') {
+            configOptions['size'] = { width: 8.5, height: 11 };
+            configOptions['orientation'] = 'portrait';
+          } else {
+            // Media carta (hoja de 8.5" × 5.5" que entra por el lado ancho): Java no acepta una hoja
+            // más ancha que alta, así que se manda como carta vertical de 8.5" de ancho. La factura
+            // ocupa los primeros 5.5" (tamaño real, sin encoger ni girar) y el resto va en blanco;
+            // cada media carta es una página aparte, así la impresora da el salto en cada una.
+            configOptions['size'] = { width: 8.5, height: 11 };
+            configOptions['orientation'] = 'portrait';
+          }
+        }
+        // Medida fija con la que QZ dibuja la página (antes la calculaba en cada impresión y cada
+        // una salía de un tamaño distinto). Media carta: 8.5" × 5.5", que es la hoja de la impresora.
+        const renderSize = { pageWidth: 8.5, pageHeight: 11 };
         const config = this.qz.configs.create(printer, configOptions);
         // Documentos de varias hojas (p. ej. media carta con muchos productos): cada hoja va como
         // una página aparte en QZ, con su encabezado. Sin separador, el documento es una sola hoja.
@@ -167,13 +191,18 @@ export class QzPrintService {
           ? cleanHtml.slice(bodyStart + 6).replace(/<\/body>\s*<\/html>\s*$/i, '').split(pageBreak)
               .map((part) => `${cleanHtml.slice(0, bodyStart + 6)}${part}</body></html>`)
           : [cleanHtml];
-        const data = pages.map((page) => ({ type: 'pixel', format: 'html', flavor: 'plain', data: page }));
+        const data = pages.map((page) => ({
+          type: 'pixel', format: 'html', flavor: 'plain', data: page,
+          ...(letterLayout ? { options: renderSize } : {})
+        }));
         for (let copy = 0; copy < (thermalRoll ? totalCopies : 1); copy++) {
           await this.qz.print(config, data);
         }
+        console.info('[QZ] impreso', { printer, paper, config: configOptions, pages: data.length });
         return 'qz';
-      } catch {
-        // A live tray without an available default printer still falls back to browser printing.
+      } catch (error) {
+        // Si QZ falla se imprime por el navegador; se deja el motivo en la consola para diagnosticar.
+        console.warn('[QZ] falló, se imprime por el navegador:', error);
       }
     }
 

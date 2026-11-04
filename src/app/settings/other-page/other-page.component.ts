@@ -206,6 +206,10 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       try { await this.companyPrintSettings.saveOrderSlip(!!this.preferences.orderSlip); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el volante de la orden de venta.'); this.preferences.orderSlip = this.originalPreferences.orderSlip; }
     }
+    if ((this.preferences.printFooterText ?? '') !== (this.originalPreferences.printFooterText ?? '')) {
+      try { await this.companyPrintSettings.saveFooterText(this.preferences.printFooterText ?? ''); }
+      catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el pie de página.'); this.preferences.printFooterText = this.originalPreferences.printFooterText; }
+    }
     if (this.preferences.billingMode !== this.originalPreferences.billingMode) {
       try { await this.billingModeService.saveMode(this.preferences.billingMode); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el modo de facturación.'); this.preferences.billingMode = this.originalPreferences.billingMode; }
@@ -400,6 +404,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       this.preferences.printPaper = await this.companyPrintSettings.getPaper();
       this.preferences.invoiceCopies = await this.companyPrintSettings.getInvoiceCopies();
       this.preferences.orderSlip = await this.companyPrintSettings.getOrderSlip();
+      this.preferences.printFooterText = await this.companyPrintSettings.getFooterText();
       this.preferences.billingMode = await this.billingModeService.getMode();
       this.originalPreferences = { ...this.preferences };
     } catch {

@@ -197,8 +197,8 @@
         </label>
 
         <label class="field field--full">
-          <span>Texto de pie de pagina para impresion</span>
-          <input type="text" name="printFooterText" [(ngModel)]="preferences.printFooterText" />
+          <span>Texto de pie de página para impresión (hasta 3 líneas, sale debajo de la firma)</span>
+          <textarea name="printFooterText" rows="3" maxlength="300" [(ngModel)]="preferences.printFooterText"></textarea>
         </label>
 
         <label class="field">
