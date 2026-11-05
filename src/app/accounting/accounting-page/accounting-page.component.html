@@ -36,6 +36,12 @@
           <small>PERÍODO</small><b>{{ rep607Period }}</b>
         </div>
       </section>
+      <section class="value-metrics">
+        <article class="value-metrics__item value-metrics__item--accepted"><span>Total aceptado</span><strong>RD$ {{ rep607AcceptedTotal | number: "1.2-2" }}</strong><small>Facturas aceptadas por la DGII</small></article>
+        <article class="value-metrics__item value-metrics__item--e31"><span>Total E31</span><strong>RD$ {{ rep607E31Total | number: "1.2-2" }}</strong><small>Crédito fiscal aceptadas</small></article>
+        <article class="value-metrics__item value-metrics__item--e32"><span>Total E32</span><strong>RD$ {{ rep607E32Total | number: "1.2-2" }}</strong><small>Consumo aceptadas</small></article>
+        <article class="value-metrics__item value-metrics__item--total"><span>Total general</span><strong>RD$ {{ rep607GrandTotal | number: "1.2-2" }}</strong><small>Todos los registros mostrados</small></article>
+      </section>
       <section class="filters rep607-filters">
         <label
           >Empresa<select disabled>
@@ -99,7 +105,7 @@
         </header>
         <div class="table-head rep607-table-head">
           <span>FACTURA</span><span>FECHA</span><span>TIPO</span
-          ><span>NCF/E-CF</span><span>CLIENTE</span><span>MONTO</span
+          ><span>NCF/E-CF</span><span>CLIENTE</span><span>FORMA PAGO</span><span>MONTO</span
           ><span>ESTADO DGII</span><span>DIAGNÓSTICO</span
           ><span>COD. SEGURIDAD</span><span>ACCIONES</span>
         </div>
@@ -115,6 +121,7 @@
             invoice.encf || "N/D"
           }}</span
           ><span>{{ invoice.customer }}</span
+          ><span>{{ invoice.paymentMethod }}</span
           ><span>RD${{ invoice.total | number: "1.2-2" }}</span
           ><span
             style="font-weight: 800; border-radius: 7px; padding: 3px 6px"
@@ -372,6 +379,12 @@
       <p *ngIf="pendingError || pendingActionMessage || proformaPeriodError" class="message">
         {{ pendingError || pendingActionMessage || proformaPeriodError }}
       </p>
+      <section *ngIf="isProformaPendingTab && !isProformaPeriodTab" class="value-metrics">
+        <article class="value-metrics__item value-metrics__item--proforma"><span>Total proformas</span><strong>RD$ {{ pendingTotal | number: "1.2-2" }}</strong><small>Valor de las facturas proforma E332</small></article>
+        <article class="value-metrics__item value-metrics__item--e31"><span>Cantidad</span><strong>{{ pendingInvoices.length }}</strong><small>Proformas filtradas</small></article>
+        <article class="value-metrics__item value-metrics__item--accepted"><span>Contado</span><strong>RD$ {{ pendingCashTotal | number: "1.2-2" }}</strong><small>Efectivo, tarjeta, transferencia…</small></article>
+        <article class="value-metrics__item value-metrics__item--total"><span>Crédito</span><strong>RD$ {{ pendingCreditTotal | number: "1.2-2" }}</strong><small>Proformas a crédito</small></article>
+      </section>
       <ng-container *ngIf="!isProformaPeriodTab; else proformaPeriodReport"><section class="report pending-report">
         <header>
           <div>
@@ -387,7 +400,7 @@
           style="grid-template-columns: 1fr 0.9fr 1.4fr 1fr 1fr 1fr 1fr 1.2fr"
         >
           <span>NO. FACTURA</span><span>FECHA</span><span>CLIENTE</span
-          ><span>TIPO e-CF</span><span>TIPO PAGO</span><span>MONTO TOTAL</span
+          ><span>TIPO e-CF</span><span>FORMA PAGO</span><span>MONTO TOTAL</span
           ><span>ESTADO DGII</span><span>ACCIONES</span>
         </div>
         <div

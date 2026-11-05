@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { SupabaseService } from '../supabase/supabase.service';
 
-export type EcfEnvironment = 'TEST' | 'PROD';
+export type EcfEnvironment = 'TEST' | 'PROD' | 'SIMULACION';
 export interface EcfConfiguration { ambiente: EcfEnvironment; url_base: string; tipo_ingreso: string; persistir_certificado: boolean; }
 
 @Injectable({ providedIn: 'root' })

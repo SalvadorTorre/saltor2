@@ -85,7 +85,8 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     screens: [
       { path: '/reportes/productos', label: 'Venta por productos' },
       { path: '/reportes/ventas', label: 'Ventas' },
-      { path: '/reportes/analisis', label: 'Análisis de ventas' }
+      { path: '/reportes/analisis', label: 'Análisis de ventas' },
+      { path: '/reportes/inventario', label: 'Inventario' }
     ],
     actions: []
   },

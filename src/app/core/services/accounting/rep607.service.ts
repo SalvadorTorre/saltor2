@@ -31,7 +31,10 @@ export interface Rep607Invoice {
   messages: unknown;
   errorMessage: string;
   branchId: number | null;
+  paymentMethod: string;
 }
+
+interface PaymentColumns { condicion_pago?: string | null; forma_pago_codigo?: number | string | null; }
 
 export interface PendingInvoice {
   id: number;
@@ -101,7 +104,7 @@ export class Rep607Service {
   async getInvoices(companyId: number, filters: Rep607Filters): Promise<Rep607Invoice[]> {
     let query = this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, fec_firma, dgii_enviado_en, tipo_ncf, ncf, cliente_nombre, total, estado_dgii, dgii_estado, dgii_mensaje_respuesta, dgii_track_id, dgii_codigo, dgii_codigo_respuesta, dgii_response_json, dgii_respuesta, dgii_response_raw, dgii_mensajes, dgii_error_message, codSeguridad, qr_link, idsucursal')
+      .select('id, numero_factura, fecha_factura, fec_firma, dgii_enviado_en, tipo_ncf, ncf, cliente_nombre, total, estado_dgii, dgii_estado, dgii_mensaje_respuesta, dgii_track_id, dgii_codigo, dgii_codigo_respuesta, dgii_response_json, dgii_respuesta, dgii_response_raw, dgii_mensajes, dgii_error_message, codSeguridad, qr_link, idsucursal, condicion_pago, forma_pago_codigo')
       .eq('idempres', companyId)
       .order('fecha_factura', { ascending: false })
       .order('id', { ascending: false });
@@ -117,10 +120,10 @@ export class Rep607Service {
     if (filters.from) query = query.gte('fec_firma', filters.from);
     if (filters.to) query = query.lte('fec_firma', `${filters.to}T23:59:59.999`);
 
-    const { data, error } = await query;
+    const [{ data, error }, paymentNames] = await Promise.all([query, this.paymentMethodNames()]);
     if (error) throw error;
 
-    return ((data ?? []) as Rep607DatabaseRow[])
+    return ((data ?? []) as Array<Rep607DatabaseRow & PaymentColumns>)
       .map((row) => ({
         id: row.id,
         number: row.numero_factura,
@@ -140,9 +143,28 @@ export class Rep607Service {
         responseRaw: row.dgii_response_raw ?? '',
         messages: row.dgii_mensajes ?? null,
         errorMessage: row.dgii_error_message ?? '',
-        branchId: row.idsucursal
+        branchId: row.idsucursal,
+        paymentMethod: this.paymentLabel(row, paymentNames)
       }))
       .filter((invoice) => ['Aceptado', 'Rechazado', 'Aceptado condicional', 'Error'].includes(invoice.status));
+  }
+
+  private paymentNamesCache: Promise<Map<number, string>> | null = null;
+
+  /** Descripciones de la tabla formapago (se consultan una sola vez). */
+  private paymentMethodNames(): Promise<Map<number, string>> {
+    this.paymentNamesCache ??= (async () => {
+      const { data } = await this.supabase.client.from('formapago').select('codigo, descripcion');
+      return new Map(((data ?? []) as Array<{ codigo: number; descripcion: string }>).map((row) => [Number(row.codigo), row.descripcion]));
+    })().catch(() => new Map<number, string>());
+    return this.paymentNamesCache;
+  }
+
+  /** Forma de pago de la factura: crédito, o la forma registrada (efectivo, tarjeta...). */
+  private paymentLabel(row: PaymentColumns, names: Map<number, string>): string {
+    if (/^cr[eé]dito$/i.test(String(row.condicion_pago ?? ''))) return 'Crédito';
+    const code = Number(row.forma_pago_codigo);
+    return (code && names.get(code)) || 'Contado';
   }
 
   async getPendingInvoices(
@@ -152,7 +174,7 @@ export class Rep607Service {
   ): Promise<PendingInvoice[]> {
     let query = this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, cliente_nombre, tipo_ncf, ncf, condicion_pago, total, estado_dgii, dgii_estado, idsucursal')
+      .select('id, numero_factura, fecha_factura, cliente_nombre, tipo_ncf, ncf, condicion_pago, forma_pago_codigo, total, estado_dgii, dgii_estado, idsucursal')
       .eq('idempres', companyId)
       .order('fecha_factura', { ascending: false })
       .order('id', { ascending: false });
@@ -165,10 +187,10 @@ export class Rep607Service {
       query = query.or('tipo_ncf.ilike.E332%,tipo_ncf.ilike.332%');
     }
 
-    const { data, error } = await query;
+    const [{ data, error }, paymentNames] = await Promise.all([query, this.paymentMethodNames()]);
     if (error) throw error;
 
-    return ((data ?? []) as Array<Rep607DatabaseRow & { condicion_pago: string | null }>)
+    return ((data ?? []) as Array<Rep607DatabaseRow & PaymentColumns>)
       .map((row) => ({
         id: row.id,
         number: row.numero_factura,
@@ -176,7 +198,7 @@ export class Rep607Service {
         customer: row.cliente_nombre ?? 'CLIENTE CONTADO',
         type: row.tipo_ncf ?? '',
         ncf: row.ncf ?? '',
-        paymentMethod: row.condicion_pago ?? 'Contado',
+        paymentMethod: this.paymentLabel(row, paymentNames),
         total: Number(row.total ?? 0),
         status: row.estado_dgii ?? row.dgii_estado ?? 'No enviado',
         branchId: row.idsucursal

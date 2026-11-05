@@ -519,6 +519,14 @@ export class AccountingPageComponent implements OnInit {
   get rep607Accepted(): number { return this.rep607Invoices.filter((invoice) => invoice.status === 'Aceptado').length; }
   get rep607RejectedOrError(): number { return this.rep607Invoices.filter((invoice) => ['Rechazado', 'Error'].includes(invoice.status)).length; }
   get rep607Conditional(): number { return this.rep607Invoices.filter((invoice) => /condicional/i.test(invoice.status)).length; }
+  /** Valores (RD$) del Rep. 607: aceptadas (incluye condicionales), por tipo y total. */
+  private rep607Sum(match: (invoice: Rep607Invoice) => boolean): number { return this.rep607Invoices.filter(match).reduce((total, invoice) => total + invoice.total, 0); }
+  private isRep607Accepted(invoice: Rep607Invoice): boolean { return /^aceptado/i.test(invoice.status); }
+  private isRep607Type(invoice: Rep607Invoice, code: string): boolean { return new RegExp(`(?:^|E)${code}`, 'i').test(invoice.type); }
+  get rep607AcceptedTotal(): number { return this.rep607Sum((invoice) => this.isRep607Accepted(invoice)); }
+  get rep607E31Total(): number { return this.rep607Sum((invoice) => this.isRep607Accepted(invoice) && this.isRep607Type(invoice, '31')); }
+  get rep607E32Total(): number { return this.rep607Sum((invoice) => this.isRep607Accepted(invoice) && this.isRep607Type(invoice, '32')); }
+  get rep607GrandTotal(): number { return this.rep607Sum(() => true); }
   get rep607Period(): string { return this.filters.from || this.filters.to ? `${this.filters.from || 'Inicio'} - ${this.filters.to || 'Hoy'}` : 'Todas las fechas'; }
   get filteredCreditNotes(): CreditNoteRecord[] {
     const search = this.creditSearch.trim().toLowerCase();
@@ -677,6 +685,8 @@ export class AccountingPageComponent implements OnInit {
     }
   }
 
+  get pendingCreditTotal(): number { return this.pendingInvoices.filter((invoice) => invoice.paymentMethod === 'Crédito').reduce((total, invoice) => total + invoice.total, 0); }
+  get pendingCashTotal(): number { return this.pendingTotal - this.pendingCreditTotal; }
   get pendingTotal(): number { return this.pendingInvoices.reduce((total, invoice) => total + invoice.total, 0); }
 
   get isProformaPendingTab(): boolean { return this.pendingTab === 'proforma'; }

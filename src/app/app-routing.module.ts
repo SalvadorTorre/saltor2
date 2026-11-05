@@ -116,7 +116,8 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'productos' },
       { path: 'productos', title: 'Venta por productos', data: { mode: 'products' }, loadComponent: () => import('./reports/report-page/report-page.component').then((m) => m.ReportPageComponent) },
       { path: 'ventas', title: 'Reporte de ventas', data: { mode: 'invoices' }, loadComponent: () => import('./reports/report-page/report-page.component').then((m) => m.ReportPageComponent) },
-      { path: 'analisis', title: 'Análisis de ventas', loadComponent: () => import('./reports/analysis-page/analysis-page.component').then((m) => m.SalesAnalysisPageComponent) }
+      { path: 'analisis', title: 'Análisis de ventas', loadComponent: () => import('./reports/analysis-page/analysis-page.component').then((m) => m.SalesAnalysisPageComponent) },
+      { path: 'inventario', title: 'Inventario', loadComponent: () => import('./reports/inventory-page/inventory-page.component').then((m) => m.InventoryReportPageComponent) }
     ]
   },
 

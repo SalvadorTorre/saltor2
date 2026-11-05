@@ -206,6 +206,10 @@ export interface InvoiceLine {
   taxRate: number;
   taxAmount: number;
   lineTotal: number;
+  /** Orden de venta: porciento de descuento, monto descontado y precio antes del descuento. */
+  discountPercent?: number;
+  discountAmount?: number;
+  originalPrice?: number;
 }
 
 export interface InvoiceFormModel {

@@ -246,6 +246,10 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     total: 0
   };
   lineEditorMessage = '';
+  /** Orden de venta: porciento de descuento de la línea que se está agregando o editando. */
+  lineEditorDiscount = 0;
+  /** Precio del producto antes del descuento (el campo Precio muestra el precio ya descontado). */
+  private lineEditorBasePrice = 0;
   productSuggestionField: 'code' | 'name' | null = null;
   activeProductSuggestionIndex = 0;
 
@@ -521,6 +525,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   resetLineEditor(): void {
     // Al terminar (o cancelar) la edición de una línea se vuelven a activar código y producto.
     this.editingLineId = null;
+    this.lineEditorDiscount = 0;
+    this.lineEditorBasePrice = 0;
     this.lineEditorForm = {
       code: '',
       productName: '',
@@ -535,8 +541,41 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
 
   private recalcLineEditorTotal(): void {
     const qty = Number(this.lineEditorForm.quantity) || 0;
-    const price = Number(this.lineEditorForm.unitPrice) || 0;
-    this.lineEditorForm.total = qty * price;
+    this.lineEditorForm.total = qty * (Number(this.lineEditorForm.unitPrice) || 0);
+  }
+
+  /** Precio con el descuento de la línea aplicado (solo orden de venta). */
+  private discountedPrice(price: number): number {
+    const percent = this.saleOrder ? Math.min(Math.max(Number(this.lineEditorDiscount) || 0, 0), 99.99) : 0;
+    return Math.round(price * (1 - percent / 100) * 100) / 100;
+  }
+
+  /** Al digitar el descuento, el Precio cambia al precio con descuento. */
+  private applyLineEditorDiscount(): void {
+    if (!this.saleOrder) return;
+    if (!this.lineEditorBasePrice) this.lineEditorBasePrice = Number(this.lineEditorForm.unitPrice) || 0;
+    this.lineEditorForm.unitPrice = this.discountedPrice(this.lineEditorBasePrice);
+  }
+
+  /** Orden de venta: Enter en Desc. % pasa a Precio (ya con el precio descontado). */
+  focusLineEditorPrice(event: Event): void {
+    event.preventDefault();
+    const input = this.el.nativeElement.querySelector<HTMLInputElement>('input[name="lineEditorPrice"]');
+    input?.focus();
+    input?.select();
+  }
+
+  onLineEditorDiscountChange(): void {
+    const value = Number(this.lineEditorDiscount);
+    this.lineEditorDiscount = !Number.isFinite(value) || value < 0 ? 0 : value > 99.99 ? 99.99 : value;
+    this.lineEditorMessage = '';
+    this.applyLineEditorDiscount();
+    this.recalcLineEditorTotal();
+  }
+
+  /** Suma de los descuentos por artículo. */
+  get invoiceDiscountTotal(): number {
+    return Math.round(this.invoiceLines.reduce((sum, line) => sum + Number(line.discountAmount ?? 0), 0) * 100) / 100;
   }
 
   onLineEditorCodeChange(): void {
@@ -752,6 +791,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       && product.wholesalePrice > 0;
     const price = appliesWholesale ? product.wholesalePrice : product.salePrice;
     this.lineEditorForm.unitPrice = this.getInvoiceUnitPrice(product, price);
+    this.lineEditorBasePrice = this.lineEditorForm.unitPrice;
+    if (this.saleOrder && this.lineEditorDiscount) this.applyLineEditorDiscount();
   }
 
   getProductFullDescription(product: ProductRecord): string {
@@ -840,6 +881,14 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   onLineEditorPriceChange(): void {
     const price = Number(this.lineEditorForm.unitPrice);
     this.lineEditorForm.unitPrice = isNaN(price) || price < 0 ? 0 : price;
+    // Orden de venta: si cambian el precio a mano, el % de descuento se recalcula sobre el precio original.
+    if (this.saleOrder) {
+      if (!this.lineEditorBasePrice) this.lineEditorBasePrice = this.lineEditorForm.unitPrice;
+      const base = this.lineEditorBasePrice;
+      this.lineEditorDiscount = base > 0 && this.lineEditorForm.unitPrice < base
+        ? Math.round((1 - this.lineEditorForm.unitPrice / base) * 10000) / 100
+        : 0;
+    }
     this.recalcLineEditorTotal();
   }
 
@@ -872,6 +921,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       unitPrice: line.unitPrice,
       total: line.quantity * line.unitPrice
     };
+    this.lineEditorDiscount = Number(line.discountPercent ?? 0);
+    this.lineEditorBasePrice = Number(line.originalPrice ?? line.unitPrice);
     // Al editar una línea solo se cambian cantidad y precio: foco en cantidad con su valor seleccionado.
     this.closeProductSuggestions();
     window.setTimeout(() => {
@@ -902,7 +953,10 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }
 
     const qty = Number(this.lineEditorForm.quantity) || 0;
+    // Orden de venta: Precio ya trae el descuento; el precio resultante debe cumplir las mismas condiciones.
     const price = Number(this.lineEditorForm.unitPrice) || 0;
+    const basePrice = this.saleOrder && this.lineEditorBasePrice > price ? this.lineEditorBasePrice : price;
+    const discountPercent = basePrice > price ? Math.round((1 - price / basePrice) * 10000) / 100 : 0;
     if (qty <= 0 || price <= 0) {
       this.lineEditorMessage = 'Ingresa cantidad y precio mayores a 0 antes de agregar la linea.';
       return false;
@@ -920,9 +974,12 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     if (price <= minimumAllowedCost || price < minimumAllowedPrice) {
       this.lineEditorMessage = isWholesaleSale
         ? `La venta al por mayor requiere un precio minimo de RD$${minimumAllowedPrice.toFixed(2)}.`
-        : `El precio no puede ser menor a RD$${minimumAllowedPrice.toFixed(2)} ni igual o menor al costo.`;
+        : `El precio${discountPercent ? ' con descuento' : ''} no puede ser menor a RD$${minimumAllowedPrice.toFixed(2)} ni igual o menor al costo.`;
       return false;
     }
+    const discountFields = this.saleOrder
+      ? { discountPercent, discountAmount: Math.round(qty * (basePrice - price) * 100) / 100, originalPrice: basePrice }
+      : {};
     const description = this.getProductFullDescription(product);
     const taxRate = this.getInvoiceTaxRate(product);
     const lineTotal = qty * price;
@@ -940,7 +997,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
           unitPrice: price,
           taxRate,
           taxAmount,
-          lineTotal
+          lineTotal,
+          ...discountFields
         };
       });
       this.invoiceMessage = `Linea #${lineId} actualizada.`;
@@ -955,7 +1013,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
         unitPrice: price,
         taxRate,
         taxAmount,
-        lineTotal
+        lineTotal,
+        ...discountFields
       };
       this.invoiceLines = [...this.invoiceLines, newLine];
       this.invoiceMessage = `Linea #${newLine.id} agregada.`;
@@ -1617,6 +1676,21 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     } catch (error) {
       this.invoiceMessage = this.formatSupabaseError(error, 'No se pudo cargar la orden para consulta.');
     }
+  }
+
+  /** Sale de la consulta de una orden: deja el formulario listo para una orden nueva. */
+  closeOrderView(goToConsultation = false): void {
+    if (!this.isViewingOrder) { if (goToConsultation) this.billingTab = 'consultation'; return; }
+    this.isViewingOrder = false;
+    this.clearInvoice(true);
+    this.billingTab = goToConsultation ? 'consultation' : 'create';
+    if (!goToConsultation) this.focusRncField();
+  }
+
+  /** Pestañas Nueva / Consulta: si se estaba consultando una orden, se libera el formulario. */
+  selectBillingTab(tab: 'create' | 'consultation'): void {
+    if (this.isViewingOrder) { this.closeOrderView(tab === 'consultation'); return; }
+    this.billingTab = tab;
   }
 
   /** Consulta → Imprimir: imprime la orden sin sacarla de la consulta. */

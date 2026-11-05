@@ -112,3 +112,20 @@
 .price-hints .price-hints__special small { color: #166534; }
 .price-hints .price-hints__special b { color: #15803d; }
 @media (max-width: 720px) { .line-editor-field--prices { grid-column: 1 / -1; grid-row: 3; } }
+
+/* Orden de venta: columna de descuento (%) en el editor y en la tabla de productos. */
+.invoice-lines__table-wrap--discount {
+  --invoice-detail-columns: minmax(0, 1fr) minmax(0, 2.1fr) minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(80px, 1.2fr);
+}
+.invoice-lines__table-wrap--discount .line-editor-field--discount { grid-column: 4; }
+.invoice-lines__table-wrap--discount .line-editor-field--price { grid-column: 5; }
+.invoice-lines__table-wrap--discount .line-editor-field--total { grid-column: 6; }
+.invoice-lines__table-wrap--discount .line-editor-field--prices { grid-column: 7; }
+.line-discount { color: #b45309; font-weight: 700; }
+.invoice-summary__amount--discount { color: #b45309; }
+@media (max-width: 720px) {
+  .invoice-lines__table-wrap--discount .line-editor-field--discount { grid-column: 1; grid-row: 3; }
+  .invoice-lines__table-wrap--discount .line-editor-field--price { grid-column: 2; grid-row: 2; }
+  .invoice-lines__table-wrap--discount .line-editor-field--total { grid-column: 3; grid-row: 2; }
+  .invoice-lines__table-wrap--discount .line-editor-field--prices { grid-column: 2 / -1; grid-row: 3; }
+}

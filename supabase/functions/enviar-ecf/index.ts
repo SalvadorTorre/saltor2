@@ -1,4 +1,5 @@
-import { reserveOperation, submitOperation, operationResult } from '../_shared/ecf-operation.ts';
+import { reserveOperation, submitOperation, operationResult, saveResult, type Operation } from '../_shared/ecf-operation.ts';
+import { STATES } from '../_shared/ecf-queue.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Content-Type': 'application/json' };
@@ -30,6 +31,35 @@ function taxTotals(lines: TaxLine[]): Record<string, string> {
 function byteaToBase64(value: string): string { const hex = value.startsWith('\\x') ? value.slice(2) : value; let binary = ''; for (let i = 0; i < hex.length; i += 2) binary += String.fromCharCode(Number.parseInt(hex.slice(i, i + 2), 16)); return btoa(binary); }
 function base64ToBytes(value: string): ArrayBuffer { return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)).buffer as ArrayBuffer; }
 async function decryptPassword(value: string): Promise<string> { const secret = Deno.env.get('ECF_ENCRYPTION_KEY') ?? Deno.env.get('JWT_SECRET'); if (!secret) throw new Error('No está configurada la clave de protección para el certificado digital.'); const [ivText, dataText] = value.split('.'); if (!ivText || !dataText) throw new Error('La clave del certificado no tiene un formato válido.'); const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret)); const key = await crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['decrypt']); const decoded = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(ivText) }, key, base64ToBytes(dataText)); return new TextDecoder().decode(decoded); }
+/**
+ * Ambiente SIMULACION (solo empresas de prueba): hace todo el proceso (reserva el e-NCF de la
+ * secuencia, guarda la operación y los estados) pero NO firma ni envía a la DGII. La factura queda
+ * Aceptada (o Firmada si es proforma) con código de seguridad, fecha de firma y QR simulados.
+ */
+async function simulateOperation(db: unknown, op: Operation, scenario: Record<string, string>): Promise<unknown> {
+  if (!op.claimed) return operationResult(op);
+  const status = op.modo === 'FIRMA' ? 'FIRMADA' : 'ACEPTADO';
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  const securityCode = Array.from(bytes, (b) => chars[b % chars.length]).join('');
+  const signedAt = new Date();
+  const signedText = signedAt.toLocaleString('en-GB', { timeZone: 'America/Santo_Domingo', hour12: false }).replace(',', '').replaceAll('/', '-');
+  const qr = 'https://ecf.dgii.gov.do/testecf/consultatimbre?SIMULACION=1'
+    + `&RncEmisor=${encodeURIComponent(scenario.RNCEmisor ?? '')}&RncComprador=${encodeURIComponent(scenario.RNCComprador ?? '')}`
+    + `&ENCF=${encodeURIComponent(op.encf)}&FechaEmision=${encodeURIComponent(scenario.FechaEmision ?? '')}`
+    + `&MontoTotal=${encodeURIComponent(scenario.MontoTotal ?? '')}&FechaFirma=${encodeURIComponent(signedText)}&CodigoSeguridad=${securityCode}`;
+  await saveResult(db, op, 'ENVIANDO_SERVICIO', { dgii_estado: 'Preparando envío' }, { simulacion: true, scenario });
+  const result = {
+    ecf_queue_status: status, ecf_operation_id: null, dgii_estado: STATES[status], estado_dgii: STATES[status],
+    dgii_track_id: `SIM-${op.encf}`, dgii_codigo_respuesta: '1',
+    dgii_mensaje_respuesta: 'SIMULACIÓN: no se envió a la DGII (empresa de prueba).',
+    codSeguridad: securityCode, qr_link: qr, fec_firma: signedAt.toISOString(),
+    ecf_xml_firmado: op.modo === 'FIRMA' ? `<!-- SIMULACION ${op.encf} -->` : null,
+    dgii_mensajes: null, dgii_response_json: { simulacion: true }, dgii_response_raw: 'SIMULACION', dgii_error_message: null
+  };
+  return operationResult(await saveResult(db, op, status, result));
+}
+
 function validInternalScheduler(request: Request): boolean {
   const expected = Deno.env.get('ECF_RECONCILER_SECRET');
   const received = request.headers.get('x-ecf-reconciler-secret');
@@ -82,12 +112,13 @@ Deno.serve(async (request) => {
     if (!lines?.length) return json({ error: 'La factura no tiene detalles para transmitir.' }, 400);
     if (!company?.rnc || !company.razon_social) return json({ error: 'Completa el RNC y la razón social de la empresa.' }, 400);
     if (!config) return json({ error: 'Falta la configuración e-CF de la empresa.' }, 400);
-    if (!certificate?.archivo || !certificate.clave_cifrada) return json({ error: 'Vuelve a cargar el certificado con su clave para habilitar el envío automático.' }, 400);
+    const simulation = String(config.ambiente ?? '').toUpperCase() === 'SIMULACION';
+    if (!simulation && (!certificate?.archivo || !certificate.clave_cifrada)) return json({ error: 'Vuelve a cargar el certificado con su clave para habilitar el envío automático.' }, 400);
     const taxLines: TaxLine[] = lines.map((line: Record<string, unknown>) => {
       const tax = Number(line.monto_itbis ?? 0);
       return { base: Number(line.total_linea ?? 0) - tax, tax, rate: effectiveRate(Number(line.tasa_itbis ?? 0), tax) };
     });
-    const certificatePassword = await decryptPassword(certificate.clave_cifrada);
+    const certificatePassword = simulation ? '' : await decryptPassword(certificate!.clave_cifrada);
     const operation = await reserveOperation(admin, 'FACTURA', invoice.id, user, tipoEcf, config);
     if (!operation.claimed) return json(operationResult(operation));
     const encf = operation.encf;
@@ -129,8 +160,9 @@ Deno.serve(async (request) => {
       scenario[`PrecioUnitarioItem[${n}]`] = decimal(Number(line.precio_unitario ?? 0) / divisor);
       scenario[`MontoItem[${n}]`] = decimal(base);
     });
+    if (simulation) return json(await simulateOperation(admin, operation, scenario));
     const result = await submitOperation(admin, operation, scenario, {
-      'Content-Type': 'application/json', 'x-cert-p12-b64': byteaToBase64(certificate.archivo),
+      'Content-Type': 'application/json', 'x-cert-p12-b64': byteaToBase64(certificate!.archivo),
       'x-cert-password': certificatePassword, 'x-cert-rnc': company.rnc
     });
     return json(result);

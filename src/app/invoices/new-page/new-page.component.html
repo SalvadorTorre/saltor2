@@ -10,6 +10,8 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14M6 5v14M9 5v14M13 5v14M15 5v14M18 5v14M21 5v14"/></svg>
         <input type="text" name="scannedOrderCode" [(ngModel)]="scannedOrderCode" (keydown.enter)="$event.preventDefault(); loadScannedOrder()" [disabled]="isLoadingScannedOrder" placeholder="Escanear orden de venta" autocomplete="off" aria-label="Escanear orden de venta">
       </label>
+      <button *ngIf="isDocumentReadOnly" class="secondary-action" type="button" (click)="closeOrderView(true)">← Volver a consulta</button>
+      <button *ngIf="isDocumentReadOnly" class="secondary-action" type="button" (click)="closeOrderView()">＋ Nueva orden</button>
       <button *ngIf="!isDocumentReadOnly" class="secondary-action" type="button" (click)="requestClearInvoice()">Limpiar</button>
       <button *ngIf="!invoiceSaved && !isDocumentReadOnly" class="primary-action" type="button" (click)="saveInvoice()" [disabled]="isSavingInvoice">{{ saveInvoiceLabel }}</button>
       <button *ngIf="invoiceSaved && requiresDgiiOnSave" class="secondary-action dgii-action" type="button" (click)="requestSendInvoiceToDgii()" [disabled]="isSendingDgii || !canSendToDgii">{{ isSendingDgii ? 'Preparando...' : isProforma ? 'Firmar proforma' : 'Enviar a DGII' }}</button>
@@ -18,8 +20,8 @@
   </div>
 
   <div *ngIf="!embedded" class="invoice-module-tabs" role="tablist" [attr.aria-label]="saleOrder ? 'Opciones de orden de venta' : 'Opciones de facturación'">
-    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'create'" [class.invoice-module-tabs__button--active]="billingTab === 'create'" class="invoice-module-tabs__button" (click)="billingTab = 'create'">{{ saleOrder ? 'Nueva orden de venta' : 'Nueva factura' }}</button>
-    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="billingTab = 'consultation'">{{ saleOrder ? 'Consulta de órdenes' : 'Consulta de facturas' }}</button>
+    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'create'" [class.invoice-module-tabs__button--active]="billingTab === 'create'" class="invoice-module-tabs__button" (click)="selectBillingTab('create')">{{ saleOrder ? 'Nueva orden de venta' : 'Nueva factura' }}</button>
+    <button type="button" role="tab" [attr.aria-selected]="billingTab === 'consultation'" [class.invoice-module-tabs__button--active]="billingTab === 'consultation'" class="invoice-module-tabs__button" (click)="selectBillingTab('consultation')">{{ saleOrder ? 'Consulta de órdenes' : 'Consulta de facturas' }}</button>
   </div>
   <p class="invoice-feedback" *ngIf="invoiceMessage">{{ invoiceMessage }}</p>
   </div>
@@ -193,7 +195,7 @@
           </div>
                     
           <div class="invoice-lines__body">
-            <div class="invoice-lines__table-wrap">
+            <div class="invoice-lines__table-wrap" [class.invoice-lines__table-wrap--discount]="saleOrder">
               <section class="panel line-editor-panel">
                 <div class="line-editor-grid">
                   <label class="line-editor-field line-editor-field--code">
@@ -220,6 +222,10 @@
                     <span>Cantidad</span>
                     <input type="number" name="lineEditorQuantity" min="1" step="1" [(ngModel)]="lineEditorForm.quantity" (ngModelChange)="onLineEditorQtyChange()" (keydown.enter)="focusNextField($event)" />
                   </label>
+                  <label class="line-editor-field line-editor-field--num line-editor-field--discount" *ngIf="saleOrder">
+                    <span>Desc. %</span>
+                    <input type="number" name="lineEditorDiscount" min="0" max="99.99" step="0.01" [(ngModel)]="lineEditorDiscount" (ngModelChange)="onLineEditorDiscountChange()" (focus)="$any($event.target).select()" (keydown.enter)="focusLineEditorPrice($event)" />
+                  </label>
                   <label class="line-editor-field line-editor-field--num line-editor-field--price">
                     <span>Precio</span>
                     <input type="number" name="lineEditorPrice" min="0" step="0.01" [(ngModel)]="lineEditorForm.unitPrice" (ngModelChange)="onLineEditorPriceChange()" (keydown.enter)="onEditorPriceEnter($event)" />
@@ -244,6 +250,7 @@
                   <span>Codigo</span>
                   <span>Producto</span>
                   <span>Cant</span>
+                  <span *ngIf="saleOrder">Desc. %</span>
                   <span>Precio</span>
                   <span>Total</span>
                   <span>Acciones</span>
@@ -255,6 +262,7 @@
                     <strong>{{ line.description || getInvoiceProductCode(line.productId) }}</strong>
                   </span>
                   <span>{{ line.quantity }}</span>
+                  <span *ngIf="saleOrder" class="line-discount" [title]="line.discountPercent ? 'Precio sin descuento: RD$' + (line.originalPrice | number:'1.2-2') + ' · Descuento: RD$' + (line.discountAmount | number:'1.2-2') : ''">{{ line.discountPercent ? (line.discountPercent | number:'1.0-2') + '%' : '—' }}</span>
                   <span>RD${{ line.unitPrice | number:'1.2-2' }}</span>
                   <span><strong>RD${{ line.lineTotal | number:'1.2-2' }}</strong></span>
                   <span class="invoice-line-actions">
@@ -272,6 +280,10 @@
 
             <aside class="invoice-summary invoice-summary--right">
               <div class="invoice-summary__card">
+                <div class="invoice-summary__row" *ngIf="saleOrder">
+                  <p class="invoice-summary__label">Descuento</p>
+                  <p class="invoice-summary__amount invoice-summary__amount--discount">RD${{ invoiceDiscountTotal | number:'1.2-2' }}</p>
+                </div>
                 <div class="invoice-summary__row">
                   <p class="invoice-summary__label">Subtotal</p>
                   <p class="invoice-summary__amount">RD${{ invoiceSubtotal | number:'1.2-2' }}</p>

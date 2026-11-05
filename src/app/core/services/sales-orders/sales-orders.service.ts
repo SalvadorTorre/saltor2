@@ -37,6 +37,9 @@ interface SalesOrderDetailRow {
   tasa_itbis: number | string;
   monto_itbis: number | string;
   total_linea: number | string;
+  descuento_porcentaje?: number | string | null;
+  descuento_monto?: number | string | null;
+  precio_original?: number | string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -84,7 +87,9 @@ export class SalesOrdersService {
       .map((line) => ({
         ordenventa_id: orderId, producto_id: line.productId, codigo_producto: (line as InvoiceLine & { productCode?: string }).productCode ?? null,
         descripcion: line.description, cantidad: line.quantity, precio_unitario: line.unitPrice,
-        tasa_itbis: line.taxRate, monto_itbis: line.taxAmount, total_linea: line.lineTotal
+        tasa_itbis: line.taxRate, monto_itbis: line.taxAmount, total_linea: line.lineTotal,
+        descuento_porcentaje: Number(line.discountPercent ?? 0), descuento_monto: Number(line.discountAmount ?? 0),
+        precio_original: Number(line.originalPrice ?? line.unitPrice)
       }));
     const { error: detailsError } = await this.supabase.client.from('ordenventa_detalle').insert(details);
     if (detailsError) throw detailsError;
@@ -123,7 +128,7 @@ export class SalesOrdersService {
 
     const { data: details, error: detailsError } = await this.supabase.client
       .from('ordenventa_detalle')
-      .select('id, producto_id, codigo_producto, descripcion, cantidad, precio_unitario, tasa_itbis, monto_itbis, total_linea')
+      .select('id, producto_id, codigo_producto, descripcion, cantidad, precio_unitario, tasa_itbis, monto_itbis, total_linea, descuento_porcentaje, descuento_monto, precio_original')
       .eq('ordenventa_id', orderId)
       .order('id');
     if (detailsError) throw detailsError;
@@ -188,6 +193,9 @@ export class SalesOrdersService {
       taxRate: Number(detail.tasa_itbis),
       taxAmount: Number(detail.monto_itbis),
       lineTotal: Number(detail.total_linea),
+      discountPercent: Number(detail.descuento_porcentaje ?? 0),
+      discountAmount: Number(detail.descuento_monto ?? 0),
+      originalPrice: Number(detail.precio_original ?? detail.precio_unitario),
       productCode: detail.codigo_producto ?? ''
     };
   }

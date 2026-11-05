@@ -174,6 +174,11 @@ export class AppComponent implements OnInit {
             { label: 'Ventas', path: '/reportes/ventas' },
             { label: 'Análisis de ventas', path: '/reportes/analisis' }
           ]
+        },
+        {
+          title: 'Inventario', icon: 'box', color: '#2563eb', links: [
+            { label: 'Inventario', path: '/reportes/inventario' }
+          ]
         }
       ]
     },
