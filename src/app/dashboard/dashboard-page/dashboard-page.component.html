@@ -1,4 +1,4 @@
-<section class="dashboard-content">
+<section class="dashboard-content" *ngIf="showData; else welcome">
   <div class="dashboard-header">
     <div>
       <p class="dashboard-header__eyebrow">Resumen general</p>
@@ -186,3 +186,51 @@
     </section>
   </div>
 </section>
+
+<ng-template #welcome>
+  <section class="welcome">
+    <div class="welcome__hero">
+      <div class="welcome__text">
+        <p class="welcome__date">{{ todayText }}</p>
+        <h2>{{ greeting }}<ng-container *ngIf="userName">, {{ userName }}</ng-container></h2>
+        <p class="welcome__company">{{ companyName }}</p>
+        <p class="welcome__lead">¿Qué deseas hacer hoy? Elige una opción para comenzar.</p>
+      </div>
+      <div class="welcome__clock" aria-label="Hora actual">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="52" class="welcome__clock-ring" />
+          <circle cx="60" cy="60" r="40" class="welcome__clock-face" />
+          <path d="M60 32v28l18 12" class="welcome__clock-hands" />
+        </svg>
+        <strong>{{ clockText }}</strong>
+      </div>
+      <span class="welcome__blob welcome__blob--one"></span>
+      <span class="welcome__blob welcome__blob--two"></span>
+    </div>
+
+    <p *ngIf="isLoading" class="dashboard-feedback">Cargando…</p>
+    <p *ngIf="errorMessage" class="dashboard-feedback dashboard-feedback--error">{{ errorMessage }}</p>
+
+    <div class="welcome__grid" *ngIf="quickLinks.length">
+      <a *ngFor="let link of quickLinks" class="welcome__card" [routerLink]="link.path" [style.--wc]="link.color">
+        <span class="welcome__icon" [ngSwitch]="link.icon" aria-hidden="true">
+          <svg *ngSwitchCase="'order'" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+          <svg *ngSwitchCase="'invoice'" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>
+          <svg *ngSwitchCase="'quote'" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h3"/></svg>
+          <svg *ngSwitchCase="'cash'" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v.01M18 15v.01"/></svg>
+          <svg *ngSwitchCase="'users'" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg>
+          <svg *ngSwitchCase="'box'" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+          <svg *ngSwitchCase="'stock'" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <svg *ngSwitchDefault viewBox="0 0 24 24"><path d="M4 21V9l8-5 8 5v12"/><path d="M9 21v-6h6v6M3 21h18"/></svg>
+        </span>
+        <span class="welcome__card-text"><b>{{ link.label }}</b><small>{{ link.hint }}</small></span>
+        <span class="welcome__arrow" aria-hidden="true">→</span>
+      </a>
+    </div>
+
+    <p class="welcome__note">
+      El resumen de datos de Inicio está desactivado para esta empresa.
+      <ng-container *ngIf="isAdmin">Puedes activarlo en <a routerLink="/configuracion/otros">Configuración → Otros</a>.</ng-container>
+    </p>
+  </section>
+</ng-template>

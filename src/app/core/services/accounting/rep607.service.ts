@@ -20,6 +20,7 @@ export interface Rep607Invoice {
   encf: string;
   customer: string;
   total: number;
+  itbis: number;
   status: string;
   message: string;
   securityCode: string;
@@ -104,7 +105,7 @@ export class Rep607Service {
   async getInvoices(companyId: number, filters: Rep607Filters): Promise<Rep607Invoice[]> {
     let query = this.supabase.client
       .from('facturas')
-      .select('id, numero_factura, fecha_factura, fec_firma, dgii_enviado_en, tipo_ncf, ncf, cliente_nombre, total, estado_dgii, dgii_estado, dgii_mensaje_respuesta, dgii_track_id, dgii_codigo, dgii_codigo_respuesta, dgii_response_json, dgii_respuesta, dgii_response_raw, dgii_mensajes, dgii_error_message, codSeguridad, qr_link, idsucursal, condicion_pago, forma_pago_codigo')
+      .select('id, numero_factura, fecha_factura, fec_firma, dgii_enviado_en, tipo_ncf, ncf, cliente_nombre, total, itbis, estado_dgii, dgii_estado, dgii_mensaje_respuesta, dgii_track_id, dgii_codigo, dgii_codigo_respuesta, dgii_response_json, dgii_respuesta, dgii_response_raw, dgii_mensajes, dgii_error_message, codSeguridad, qr_link, idsucursal, condicion_pago, forma_pago_codigo')
       .eq('idempres', companyId)
       .order('fecha_factura', { ascending: false })
       .order('id', { ascending: false });
@@ -133,6 +134,7 @@ export class Rep607Service {
         encf: row.ncf ?? '',
         customer: row.cliente_nombre ?? 'CLIENTE CONTADO',
         total: Number(row.total ?? 0),
+        itbis: Number((row as { itbis?: number | string | null }).itbis ?? 0),
         status: row.estado_dgii ?? row.dgii_estado ?? 'No enviado',
         message: row.dgii_mensaje_respuesta ?? '',
         securityCode: row.codSeguridad ?? '',
@@ -267,9 +269,27 @@ export class Rep607Service {
     return [...groups.values()];
   }
 
-  async getProformaCandidates(companyId: number, branchId: string, from: string, to: string, invoice = ''): Promise<ProformaPeriodCandidate[]> {
+  /** Conduces (facturas en estado CONDUCE) del período, para pasarlos a factura E32. */
+  getDeliveryNoteCandidates(companyId: number, branchId: string, from: string, to: string, invoice = ''): Promise<ProformaPeriodCandidate[]> {
+    return this.getProformaCandidates(companyId, branchId, from, to, invoice, 'CONDUCE');
+  }
+
+  async convertDeliveryNotesToInvoices(from: string, to: string, branchId: string, amount: number, invoiceIds: number[], onlySelected = false): Promise<{ count: number; total: number }> {
+    const { data, error } = await this.supabase.client.rpc('convertir_conduces_a_factura', {
+      p_desde: from || null,
+      p_hasta: to || null,
+      p_sucursal_id: branchId === 'Todas' ? null : Number(branchId),
+      p_monto: amount,
+      p_factura_ids: invoiceIds,
+      p_solo_seleccionadas: onlySelected
+    });
+    if (error) throw error;
+    return { count: Number(data?.cantidad ?? 0), total: Number(data?.monto ?? 0) };
+  }
+
+  async getProformaCandidates(companyId: number, branchId: string, from: string, to: string, invoice = '', status: 'PROFORMA' | 'CONDUCE' = 'PROFORMA'): Promise<ProformaPeriodCandidate[]> {
     let query = this.supabase.client.from('facturas').select('id, numero_factura, fecha_factura, total')
-      .eq('idempres', companyId).eq('estado', 'PROFORMA')
+      .eq('idempres', companyId).eq('estado', status)
       .order('fecha_factura', { ascending: true }).order('id', { ascending: true });
     if (branchId !== 'Todas') query = query.eq('idsucursal', Number(branchId));
     // Filtrando por número se ignora el período.

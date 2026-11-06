@@ -47,6 +47,7 @@ export interface OtherPreferences {
   printPaper: PrintPaper;
   invoiceCopies: number;
   orderSlip: boolean;
+  showDashboard: boolean;
   useWindowsDefaultPrinter: boolean;
   printerName: string;
   billingMode: BillingMode;
@@ -141,6 +142,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
     printPaper: 'carta',
     invoiceCopies: 1,
     orderSlip: false,
+    showDashboard: true,
     useWindowsDefaultPrinter: true,
     printerName: '',
     billingMode: 'Directo',
@@ -206,6 +208,10 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       try { await this.companyPrintSettings.saveOrderSlip(!!this.preferences.orderSlip); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el volante de la orden de venta.'); this.preferences.orderSlip = this.originalPreferences.orderSlip; }
     }
+    if (this.preferences.showDashboard !== this.originalPreferences.showDashboard) {
+      try { await this.companyPrintSettings.saveShowDashboard(this.preferences.showDashboard !== false); }
+      catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar la opción de Inicio.'); this.preferences.showDashboard = this.originalPreferences.showDashboard; }
+    }
     if ((this.preferences.printFooterText ?? '') !== (this.originalPreferences.printFooterText ?? '')) {
       try { await this.companyPrintSettings.saveFooterText(this.preferences.printFooterText ?? ''); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el pie de página.'); this.preferences.printFooterText = this.originalPreferences.printFooterText; }
@@ -258,6 +264,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       printPaper: 'carta',
       invoiceCopies: 1,
       orderSlip: this.preferences.orderSlip,
+      showDashboard: this.preferences.showDashboard,
       useWindowsDefaultPrinter: true,
       printerName: '',
       billingMode: this.preferences.billingMode,
@@ -404,6 +411,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       this.preferences.printPaper = await this.companyPrintSettings.getPaper();
       this.preferences.invoiceCopies = await this.companyPrintSettings.getInvoiceCopies();
       this.preferences.orderSlip = await this.companyPrintSettings.getOrderSlip();
+      this.preferences.showDashboard = await this.companyPrintSettings.getShowDashboard();
       this.preferences.printFooterText = await this.companyPrintSettings.getFooterText();
       this.preferences.billingMode = await this.billingModeService.getMode();
       this.originalPreferences = { ...this.preferences };

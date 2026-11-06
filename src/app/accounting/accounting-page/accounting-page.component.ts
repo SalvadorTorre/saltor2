@@ -20,8 +20,10 @@ import { QzPrintService } from '../../core/services/printing/qz-print.service';
 type FiscalView = 'pending' | 'rep607' | 'encf' | 'credit' | 'expenses' | 'receivables' | 'rep606' | 'e41';
 type DgiiSendDialog = { phase: 'confirm' | 'processing' | 'success' | 'error'; invoiceNumber: string; message: string };
 type DgiiSendTarget = { source: 'pending' | 'rep607'; invoice: PendingInvoice | Rep607Invoice };
-type ProformaPeriodDialog = { row: ProformaPeriodSummary; option: 'convert' | 'keep'; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean };
-type ProformaConversionConfirmation = { count: number; amount: number };
+type ProformaPeriodDialog = { row: ProformaPeriodSummary; option: 'convert' | 'keep'; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; deliveryNotes: DeliveryNoteConversion };
+/** Conduces → factura E32 (sección dentro del detalle del período). */
+type DeliveryNoteConversion = { open: boolean; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; confirming: boolean };
+type ProformaConversionConfirmation = { count: number; amount: number; queuedCount: number; queuedAmount: number };
 const MINOR_CATEGORIES = ['Oficina y suministros', 'Combustible', 'Viáticos', 'Hospedaje', 'Alimentación', 'Mantenimiento', 'Transporte', 'Comunicaciones', 'Servicios profesionales', 'Publicidad', 'Impuestos y tasas', 'Otros gastos'];
 const MINOR_CENTERS = ['Administración', 'Ventas', 'Operaciones', 'Logística', 'Mercadeo', 'General'];
 const MINOR_PAYMENTS = ['Efectivo', 'Tarjeta débito', 'Tarjeta crédito', 'Transferencia', 'Cheque', 'Otro'];
@@ -527,6 +529,14 @@ export class AccountingPageComponent implements OnInit {
   get rep607E31Total(): number { return this.rep607Sum((invoice) => this.isRep607Accepted(invoice) && this.isRep607Type(invoice, '31')); }
   get rep607E32Total(): number { return this.rep607Sum((invoice) => this.isRep607Accepted(invoice) && this.isRep607Type(invoice, '32')); }
   get rep607GrandTotal(): number { return this.rep607Sum(() => true); }
+  private rep607ItbisSum(match: (invoice: Rep607Invoice) => boolean): number { return this.rep607Invoices.filter(match).reduce((total, invoice) => total + (invoice.itbis || 0), 0); }
+  /** ITBIS de todos los registros mostrados y su detalle. */
+  get rep607Itbis(): number { return this.rep607ItbisSum(() => true); }
+  get rep607ItbisAccepted(): number { return this.rep607ItbisSum((invoice) => this.isRep607Accepted(invoice)); }
+  get rep607ItbisE31(): number { return this.rep607ItbisSum((invoice) => this.isRep607Accepted(invoice) && this.isRep607Type(invoice, '31')); }
+  get rep607ItbisE32(): number { return this.rep607ItbisSum((invoice) => this.isRep607Accepted(invoice) && this.isRep607Type(invoice, '32')); }
+  /** Total general sin ITBIS. */
+  get rep607NetTotal(): number { return this.rep607GrandTotal - this.rep607Itbis; }
   get rep607Period(): string { return this.filters.from || this.filters.to ? `${this.filters.from || 'Inicio'} - ${this.filters.to || 'Hoy'}` : 'Todas las fechas'; }
   get filteredCreditNotes(): CreditNoteRecord[] {
     const search = this.creditSearch.trim().toLowerCase();
@@ -740,7 +750,7 @@ export class AccountingPageComponent implements OnInit {
   }
 
   async openProformaPeriodDialog(row: ProformaPeriodSummary): Promise<void> {
-    this.proformaPeriodDialog = { row, option: 'convert', amount: row.proformaTotal, candidates: [], loading: true, applying: false };
+    this.proformaPeriodDialog = { row, option: 'convert', amount: row.proformaTotal, candidates: [], loading: true, applying: false, deliveryNotes: { open: false, amount: 0, candidates: [], loading: false, applying: false, confirming: false } };
     try {
       const user = await this.auth.restoreSession();
       if (!user) throw new Error('No hay una sesión activa.');
@@ -764,6 +774,65 @@ export class AccountingPageComponent implements OnInit {
     this.proformaConversionConfirmation = null;
   }
 
+  /** Conduces seleccionados (completos, por fecha) hasta el monto indicado. */
+  get selectedDeliveryNotes(): ProformaPeriodCandidate[] {
+    const conversion = this.proformaPeriodDialog?.deliveryNotes;
+    if (!conversion) return [];
+    const limit = Math.max(0, Math.min(Number(conversion.amount) || 0, this.proformaPeriodDialog!.row.deliveryNoteTotal));
+    let total = 0;
+    return conversion.candidates.filter((invoice) => {
+      if (total + invoice.total > limit + 0.005) return false;
+      total += invoice.total;
+      return true;
+    });
+  }
+  get selectedDeliveryNotesTotal(): number { return this.selectedDeliveryNotes.reduce((total, invoice) => total + invoice.total, 0); }
+
+  async toggleDeliveryNoteConversion(): Promise<void> {
+    const dialog = this.proformaPeriodDialog;
+    if (!dialog) return;
+    const conversion = dialog.deliveryNotes;
+    conversion.open = !conversion.open;
+    conversion.confirming = false;
+    if (!conversion.open || conversion.candidates.length || conversion.loading) return;
+    conversion.loading = true;
+    conversion.amount = dialog.row.deliveryNoteTotal;
+    try {
+      const user = await this.auth.restoreSession();
+      if (!user) throw new Error('No hay una sesión activa.');
+      conversion.candidates = await this.rep607Service.getDeliveryNoteCandidates(user.companyId, this.pendingFilters.branchId, dialog.row.from, dialog.row.to, this.pendingFilters.invoice);
+    } catch (error) {
+      this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudieron consultar los conduces del período.';
+    } finally {
+      conversion.loading = false;
+    }
+  }
+
+  requestDeliveryNoteConversion(): void {
+    const conversion = this.proformaPeriodDialog?.deliveryNotes;
+    if (!conversion || conversion.loading || conversion.applying || !this.selectedDeliveryNotes.length) return;
+    conversion.confirming = true;
+  }
+
+  async confirmDeliveryNoteConversion(): Promise<void> {
+    const dialog = this.proformaPeriodDialog;
+    const conversion = dialog?.deliveryNotes;
+    const ids = this.selectedDeliveryNotes.map((invoice) => invoice.id);
+    if (!dialog || !conversion || !ids.length || conversion.applying) return;
+    conversion.confirming = false;
+    conversion.applying = true;
+    try {
+      const result = await this.rep607Service.convertDeliveryNotesToInvoices(dialog.row.from, dialog.row.to, this.pendingFilters.branchId, this.selectedDeliveryNotesTotal, ids, this.isProformaNumberFilter);
+      this.closeProformaPeriodDialog();
+      await this.loadProformaPeriodSales();
+      const fmt = (value: number) => value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      this.pendingActionMessage = `Se convirtieron ${result.count} conduce(s) por ${fmt(result.total)} a factura E32. Quedaron en cola para enviarse a la DGII.`;
+    } catch (error) {
+      this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudieron convertir los conduces.';
+      conversion.applying = false;
+    }
+  }
+
   setProformaPeriodDialogOption(option: 'convert' | 'keep'): void {
     if (!this.proformaPeriodDialog) return;
     this.proformaPeriodDialog.option = option;
@@ -777,7 +846,9 @@ export class AccountingPageComponent implements OnInit {
     if (!dialog || dialog.loading || dialog.applying || !this.simulatedConvertedCount) return;
     this.proformaConversionConfirmation = {
       count: this.simulatedConvertedCount,
-      amount: this.simulatedConvertToDeliveryNote
+      amount: this.simulatedConvertToDeliveryNote,
+      queuedCount: this.simulatedQueuedInvoiceCount,
+      queuedAmount: this.simulatedProformaTotal
     };
   }
 

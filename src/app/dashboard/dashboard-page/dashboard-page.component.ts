@@ -1,8 +1,25 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth/auth.service';
 import { DashboardService, DashboardSummary } from '../../core/services/dashboard/dashboard.service';
+import { CompanyPrintSettingsService } from '../../core/services/printing/company-print-settings.service';
+import { CompanyModule, CompanyModulesService } from '../../core/services/company-modules/company-modules.service';
+import { PermissionsService } from '../../core/services/permissions/permissions.service';
+
+interface QuickLink { label: string; hint: string; path: string; icon: string; color: string; module: CompanyModule; }
+
+/** Accesos rápidos de la bienvenida (Inicio sin datos). Se muestran solo los permitidos. */
+const QUICK_LINKS: QuickLink[] = [
+  { label: 'Orden de venta', hint: 'Registrar una orden', path: '/transacciones/orden-venta', icon: 'order', color: '#f97316', module: 'transacciones' },
+  { label: 'Facturación', hint: 'Emitir una factura', path: '/transacciones/facturacion', icon: 'invoice', color: '#2563eb', module: 'transacciones' },
+  { label: 'Cotización', hint: 'Preparar una cotización', path: '/transacciones/cotizacion', icon: 'quote', color: '#8b5cf6', module: 'transacciones' },
+  { label: 'Facturar órdenes', hint: 'Cobrar en caja', path: '/caja/facturar-ordenes', icon: 'cash', color: '#10b981', module: 'caja' },
+  { label: 'Clientes', hint: 'Consultar y registrar', path: '/mantenimiento/clientes', icon: 'users', color: '#0ea5e9', module: 'mantenimiento' },
+  { label: 'Productos', hint: 'Catálogo y precios', path: '/mantenimiento/productos', icon: 'box', color: '#14b8a6', module: 'mantenimiento' },
+  { label: 'Inventario', hint: 'Existencias', path: '/reportes/inventario', icon: 'stock', color: '#64748b', module: 'reportes' },
+  { label: 'Rep. 607', hint: 'Facturas enviadas a la DGII', path: '/contabilidad/rep-607', icon: 'fiscal', color: '#ef4444', module: 'contabilidad' }
+];
 
 interface StatCard { label: string; value: string; hint: string; trend?: 'up' | 'down' | ''; tone: string; icon: string; link?: string; }
 interface AlertItem { text: string; detail?: string; link?: string; }
@@ -12,8 +29,14 @@ interface ChartPoint { label: string; value: string; x: number; y: number; showL
 const CATEGORY_COLORS = ['#2563eb', '#14b8a6', '#f97316', '#ef4444', '#8b5cf6', '#94a3b8'];
 
 @Component({ selector: 'app-dashboard-page', standalone: true, imports: [CommonModule, RouterLink], templateUrl: './dashboard-page.component.html', styleUrls: ['./dashboard-page.component.scss'] })
-export class DashboardPageComponent implements OnInit {
+export class DashboardPageComponent implements OnInit, OnDestroy {
   isLoading = true;
+  /** Configuración → Otros: si la empresa no muestra datos en Inicio, se ve la bienvenida. */
+  showData = true;
+  userName = '';
+  quickLinks: QuickLink[] = [];
+  now = new Date();
+  private clock: ReturnType<typeof setInterval> | null = null;
   errorMessage = '';
   companyName = '';
   updatedAt = '';
@@ -28,8 +51,37 @@ export class DashboardPageComponent implements OnInit {
   inventoryFlow: Array<{ label: string; value: number; width: number; tone: string }> = [];
   transactions: Array<{ date: string; invoice: string; client: string; total: string; status: string }> = [];
 
-  constructor(private readonly auth: AuthService, private readonly dashboard: DashboardService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly dashboard: DashboardService,
+    private readonly companySettings: CompanyPrintSettingsService,
+    private readonly modules: CompanyModulesService,
+    private readonly permissions: PermissionsService
+  ) {}
   ngOnInit(): void { void this.loadDashboard(); }
+  ngOnDestroy(): void { if (this.clock) clearInterval(this.clock); }
+
+  get greeting(): string {
+    const hour = this.now.getHours();
+    return hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  }
+  get todayText(): string {
+    const text = this.now.toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  get clockText(): string { return this.now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }); }
+  get isAdmin(): boolean { return this.permissions.isAdmin; }
+
+  /** Bienvenida: reloj y accesos rápidos según módulos de la empresa y permisos del usuario. */
+  private async prepareWelcome(companyId: number): Promise<void> {
+    if (!this.clock) this.clock = setInterval(() => this.now = new Date(), 30000);
+    try {
+      const [active] = await Promise.all([this.modules.getActiveModules(companyId), this.permissions.ensureLoaded()]);
+      this.quickLinks = QUICK_LINKS.filter((link) => active.includes(link.module) && this.permissions.canOpen(link.path));
+    } catch {
+      this.quickLinks = [];
+    }
+  }
 
   async loadDashboard(): Promise<void> {
     this.isLoading = true;
@@ -38,6 +90,9 @@ export class DashboardPageComponent implements OnInit {
       const session = await this.auth.restoreSession();
       if (!session) throw new Error('No se encontró una sesión activa.');
       this.companyName = session.companyName;
+      this.userName = (session.fullName || '').trim().split(/\s+/)[0] || '';
+      this.showData = await this.companySettings.getShowDashboard();
+      if (!this.showData) { await this.prepareWelcome(session.companyId); return; }
       this.data = await this.dashboard.getSummary();
       this.applyData(this.data);
       this.updatedAt = new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });

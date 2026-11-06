@@ -82,6 +82,7 @@ export class CompanyPrintSettingsService {
   }
 
   private cachedOrderSlip: boolean | null = null;
+  private cachedShowDashboard: boolean | null = null;
   private cachedFooter: string | null = null;
   /** Empresa de los valores guardados: al cambiar de empresa se vuelven a leer (papel, copias, volante). */
   private cachedCompanyId = 0;
@@ -93,6 +94,7 @@ export class CompanyPrintSettingsService {
     this.cachedPaper = null;
     this.cachedCopies = null;
     this.cachedOrderSlip = null;
+    this.cachedShowDashboard = null;
     this.cachedFooter = null;
   }
 
@@ -137,6 +139,27 @@ export class CompanyPrintSettingsService {
     if (error) throw error;
     if (!data?.length) throw new Error('No se guardó el volante de la orden de venta: solo un administrador de la empresa puede cambiarlo.');
     this.cachedOrderSlip = !!enabled;
+  }
+
+  /** Inicio con datos (resumen de ventas, alertas...) o solo la pantalla de bienvenida. */
+  async getShowDashboard(): Promise<boolean> {
+    this.resetCacheIfCompanyChanged();
+    if (this.cachedShowDashboard !== null) return this.cachedShowDashboard;
+    const companyId = this.companyId();
+    if (!companyId) return true;
+    const { data, error } = await this.supabase.client.from('empresas').select('mostrar_inicio').eq('id', companyId).maybeSingle();
+    if (error) return true;
+    this.cachedShowDashboard = (data as { mostrar_inicio?: boolean | null } | null)?.mostrar_inicio !== false;
+    return this.cachedShowDashboard;
+  }
+
+  async saveShowDashboard(enabled: boolean): Promise<void> {
+    const companyId = this.companyId();
+    if (!companyId) throw new Error('No se identificó la empresa activa.');
+    const { data, error } = await this.supabase.client.from('empresas').update({ mostrar_inicio: !!enabled }).eq('id', companyId).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('No se guardó la opción de Inicio: solo un administrador de la empresa puede cambiarla.');
+    this.cachedShowDashboard = !!enabled;
   }
 
   private companyId(): number {

@@ -40,7 +40,14 @@
         <article class="value-metrics__item value-metrics__item--accepted"><span>Total aceptado</span><strong>RD$ {{ rep607AcceptedTotal | number: "1.2-2" }}</strong><small>Facturas aceptadas por la DGII</small></article>
         <article class="value-metrics__item value-metrics__item--e31"><span>Total E31</span><strong>RD$ {{ rep607E31Total | number: "1.2-2" }}</strong><small>Crédito fiscal aceptadas</small></article>
         <article class="value-metrics__item value-metrics__item--e32"><span>Total E32</span><strong>RD$ {{ rep607E32Total | number: "1.2-2" }}</strong><small>Consumo aceptadas</small></article>
-        <article class="value-metrics__item value-metrics__item--total"><span>Total general</span><strong>RD$ {{ rep607GrandTotal | number: "1.2-2" }}</strong><small>Todos los registros mostrados</small></article>
+        <article class="value-metrics__item value-metrics__item--total"><span>Total general sin ITBIS</span><strong>RD$ {{ rep607NetTotal | number: "1.2-2" }}</strong><small>Con ITBIS: RD$ {{ rep607GrandTotal | number: "1.2-2" }}</small></article>
+        <article class="value-metrics__item value-metrics__item--itbis"><span>ITBIS</span><strong>RD$ {{ rep607Itbis | number: "1.2-2" }}</strong>
+          <dl class="value-metrics__detail">
+            <div><dt>Aceptadas</dt><dd>RD$ {{ rep607ItbisAccepted | number: "1.2-2" }}</dd></div>
+            <div><dt>E31</dt><dd>RD$ {{ rep607ItbisE31 | number: "1.2-2" }}</dd></div>
+            <div><dt>E32</dt><dd>RD$ {{ rep607ItbisE32 | number: "1.2-2" }}</dd></div>
+          </dl>
+        </article>
       </section>
       <section class="filters rep607-filters">
         <label
@@ -522,17 +529,40 @@
             </div>
             <section class="proforma-period-modal__simulation">
               <h3>Simular conversión</h3><p>Elige una forma de introducir el monto. Esta pantalla calcula el resultado, pero no modifica los documentos.</p>
+              <p *ngIf="!isProformaNumberFilter" class="proforma-period-modal__rule">Importante: ninguna proforma del período queda como proforma. Lo que no pase a conduce se convierte en factura E32 y queda en cola para enviarse a la DGII.</p>
               <div class="proforma-period-modal__options">
                 <label [class.is-active]="dialog.option === 'convert'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'convert'" (change)="setProformaPeriodDialogOption('convert')"> Valor a convertir en conduce</label>
-                <label [class.is-active]="dialog.option === 'keep'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'keep'" (change)="setProformaPeriodDialogOption('keep')"> Valor a dejar como proforma</label>
+                <label [class.is-active]="dialog.option === 'keep'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'keep'" (change)="setProformaPeriodDialogOption('keep')"> Valor a facturar (E32 a la DGII)</label>
               </div>
-              <label class="proforma-period-modal__amount">{{ dialog.option === 'convert' ? 'Monto para convertir en conduce' : 'Monto que quedará como proforma' }}<input type="number" min="0" [max]="dialog.row.proformaTotal" step="0.01" [(ngModel)]="dialog.amount"><small>Disponible en proformas: RD$ {{ dialog.row.proformaTotal | number:'1.2-2' }}</small></label>
+              <label class="proforma-period-modal__amount">{{ dialog.option === 'convert' ? 'Monto para convertir en conduce' : 'Monto que pasará a factura E32 (DGII)' }}<input type="number" min="0" [max]="dialog.row.proformaTotal" step="0.01" [(ngModel)]="dialog.amount"><small>Disponible en proformas: RD$ {{ dialog.row.proformaTotal | number:'1.2-2' }}</small></label>
               <p *ngIf="dialog.loading" class="proforma-period-modal__loading">Buscando proformas completas del período...</p>
               <div class="proforma-period-modal__result" *ngIf="!dialog.loading">
                 <article><span>Se convertiría en conduce</span><strong>RD$ {{ simulatedConvertToDeliveryNote | number:'1.2-2' }}</strong><small>{{ simulatedConvertedCount }} factura(s)</small></article>
                 <article><span>Facturas E32 pendientes DGII</span><strong>RD$ {{ simulatedProformaTotal | number:'1.2-2' }}</strong><small>{{ simulatedQueuedInvoiceCount }} factura(s)</small></article>
                 <article><span>Conduce resultante</span><strong>RD$ {{ simulatedDeliveryNoteTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.deliveryNotes + simulatedConvertedCount }} factura(s)</small></article>
                 <article><span>FACTURA resultante</span><strong>RD$ {{ simulatedInvoiceTotal | number:'1.2-2' }}</strong><small>{{ dialog.row.invoices + simulatedQueuedInvoiceCount }} factura(s)</small></article>
+              </div>
+            </section>
+            <section class="delivery-convert" *ngIf="dialog.row.deliveryNotes > 0 || dialog.deliveryNotes.open">
+              <button type="button" class="delivery-convert__toggle" [attr.aria-expanded]="dialog.deliveryNotes.open" (click)="toggleDeliveryNoteConversion()">
+                <span>⇄ Convertir conduce en factura</span>
+                <small>{{ dialog.row.deliveryNotes }} conduce(s) · RD$ {{ dialog.row.deliveryNoteTotal | number:'1.2-2' }}</small>
+                <b aria-hidden="true">{{ dialog.deliveryNotes.open ? '▲' : '▼' }}</b>
+              </button>
+              <div class="delivery-convert__body" *ngIf="dialog.deliveryNotes.open">
+                <p>Los conduces elegidos pasan a <strong>factura E32</strong> y quedan en cola para enviarse a la DGII. Se toman conduces completos, del más antiguo al más reciente, hasta el monto indicado. Los demás conduces no cambian.</p>
+                <label class="proforma-period-modal__amount">Monto de conduces a facturar<input type="number" min="0" [max]="dialog.row.deliveryNoteTotal" step="0.01" [(ngModel)]="dialog.deliveryNotes.amount"><small>Disponible en conduces: RD$ {{ dialog.row.deliveryNoteTotal | number:'1.2-2' }}</small></label>
+                <p *ngIf="dialog.deliveryNotes.loading" class="proforma-period-modal__loading">Buscando conduces del período...</p>
+                <div class="delivery-convert__result" *ngIf="!dialog.deliveryNotes.loading">
+                  <article><span>Pasarían a factura E32</span><strong>RD$ {{ selectedDeliveryNotesTotal | number:'1.2-2' }}</strong><small>{{ selectedDeliveryNotes.length }} conduce(s)</small></article>
+                  <article><span>Conduce restante</span><strong>RD$ {{ (dialog.row.deliveryNoteTotal - selectedDeliveryNotesTotal) | number:'1.2-2' }}</strong><small>{{ dialog.row.deliveryNotes - selectedDeliveryNotes.length }} conduce(s)</small></article>
+                  <article><span>FACTURA resultante</span><strong>RD$ {{ (dialog.row.billedTotal + selectedDeliveryNotesTotal) | number:'1.2-2' }}</strong><small>{{ dialog.row.invoices + selectedDeliveryNotes.length }} factura(s)</small></article>
+                </div>
+                <div class="delivery-convert__confirm" *ngIf="dialog.deliveryNotes.confirming">
+                  <p>¿Convertir <strong>{{ selectedDeliveryNotes.length }} conduce(s)</strong> por <strong>RD$ {{ selectedDeliveryNotesTotal | number:'1.2-2' }}</strong> en factura E32? Quedarán en cola para enviarse a la DGII.</p>
+                  <div><button type="button" class="proforma-period-modal__close" (click)="dialog.deliveryNotes.confirming = false">Cancelar</button><button type="button" class="delivery-convert__accept" (click)="confirmDeliveryNoteConversion()">Confirmar</button></div>
+                </div>
+                <button *ngIf="!dialog.deliveryNotes.confirming" type="button" class="delivery-convert__accept" [disabled]="dialog.deliveryNotes.loading || dialog.deliveryNotes.applying || !selectedDeliveryNotes.length" (click)="requestDeliveryNoteConversion()">{{ dialog.deliveryNotes.applying ? 'Convirtiendo…' : 'Convertir conduce en factura' }}</button>
               </div>
             </section>
             <footer><button type="button" class="proforma-period-modal__convert" [disabled]="dialog.loading || dialog.applying || !simulatedConvertedCount" (click)="convertProformaPeriod()">{{ dialog.applying ? 'Convirtiendo…' : 'Convertir a conduce' }}</button><button type="button" class="proforma-period-modal__close" (click)="closeProformaPeriodDialog()">Cerrar</button></footer>
@@ -543,7 +573,8 @@
             <div class="proforma-conversion-confirmation__icon">!</div>
             <h2>Confirmar conversión</h2>
             <p>Se convertirá{{ confirmation.count === 1 ? '' : 'n' }} {{ confirmation.count }} proforma{{ confirmation.count === 1 ? '' : 's' }} seleccionada{{ confirmation.count === 1 ? '' : 's' }} por <strong>RD$ {{ confirmation.amount | number:'1.2-2' }}</strong> a conduce.</p>
-            <p class="proforma-conversion-confirmation__note">Solo se modificarán las facturas que aparecen en este detalle.</p>
+            <p *ngIf="confirmation.queuedCount > 0" class="proforma-conversion-confirmation__queued">Las demás <strong>{{ confirmation.queuedCount }} proforma{{ confirmation.queuedCount === 1 ? '' : 's' }}</strong> del período por <strong>RD$ {{ confirmation.queuedAmount | number:'1.2-2' }}</strong> pasarán a <strong>factura E32</strong> y quedarán en cola para enviarse a la DGII.</p>
+            <p class="proforma-conversion-confirmation__note">{{ confirmation.queuedCount > 0 ? 'Al confirmar no quedará ninguna proforma en este período.' : 'Solo se modificarán las facturas seleccionadas.' }}</p>
             <footer>
               <button type="button" class="proforma-conversion-confirmation__cancel" (click)="proformaConversionConfirmation = null">Cancelar</button>
               <button type="button" class="proforma-conversion-confirmation__accept" (click)="confirmProformaPeriodConversion()">Confirmar conversión</button>
