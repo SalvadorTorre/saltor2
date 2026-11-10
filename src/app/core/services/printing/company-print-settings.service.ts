@@ -83,6 +83,7 @@ export class CompanyPrintSettingsService {
 
   private cachedOrderSlip: boolean | null = null;
   private cachedShowDashboard: boolean | null = null;
+  private cachedQuoteDiscount: boolean | null = null;
   private cachedFooter: string | null = null;
   /** Empresa de los valores guardados: al cambiar de empresa se vuelven a leer (papel, copias, volante). */
   private cachedCompanyId = 0;
@@ -95,6 +96,7 @@ export class CompanyPrintSettingsService {
     this.cachedCopies = null;
     this.cachedOrderSlip = null;
     this.cachedShowDashboard = null;
+    this.cachedQuoteDiscount = null;
     this.cachedFooter = null;
   }
 
@@ -139,6 +141,27 @@ export class CompanyPrintSettingsService {
     if (error) throw error;
     if (!data?.length) throw new Error('No se guardó el volante de la orden de venta: solo un administrador de la empresa puede cambiarlo.');
     this.cachedOrderSlip = !!enabled;
+  }
+
+  /** Cotización con columna de descuento por línea (activo en Bella Real). */
+  async getQuoteDiscount(): Promise<boolean> {
+    this.resetCacheIfCompanyChanged();
+    if (this.cachedQuoteDiscount !== null) return this.cachedQuoteDiscount;
+    const companyId = this.companyId();
+    if (!companyId) return false;
+    const { data, error } = await this.supabase.client.from('empresas').select('cotizacion_descuento').eq('id', companyId).maybeSingle();
+    if (error) return false;
+    this.cachedQuoteDiscount = !!(data as { cotizacion_descuento?: boolean } | null)?.cotizacion_descuento;
+    return this.cachedQuoteDiscount;
+  }
+
+  async saveQuoteDiscount(enabled: boolean): Promise<void> {
+    const companyId = this.companyId();
+    if (!companyId) throw new Error('No se identificó la empresa activa.');
+    const { data, error } = await this.supabase.client.from('empresas').update({ cotizacion_descuento: !!enabled }).eq('id', companyId).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('No se guardó el descuento en cotización: solo un administrador de la empresa puede cambiarlo.');
+    this.cachedQuoteDiscount = !!enabled;
   }
 
   /** Inicio con datos (resumen de ventas, alertas...) o solo la pantalla de bienvenida. */

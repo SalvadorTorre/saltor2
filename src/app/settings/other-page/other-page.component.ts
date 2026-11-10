@@ -48,6 +48,7 @@ export interface OtherPreferences {
   invoiceCopies: number;
   orderSlip: boolean;
   showDashboard: boolean;
+  quoteDiscount: boolean;
   useWindowsDefaultPrinter: boolean;
   printerName: string;
   billingMode: BillingMode;
@@ -143,6 +144,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
     invoiceCopies: 1,
     orderSlip: false,
     showDashboard: true,
+    quoteDiscount: false,
     useWindowsDefaultPrinter: true,
     printerName: '',
     billingMode: 'Directo',
@@ -208,6 +210,10 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       try { await this.companyPrintSettings.saveOrderSlip(!!this.preferences.orderSlip); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el volante de la orden de venta.'); this.preferences.orderSlip = this.originalPreferences.orderSlip; }
     }
+    if (!!this.preferences.quoteDiscount !== !!this.originalPreferences.quoteDiscount) {
+      try { await this.companyPrintSettings.saveQuoteDiscount(!!this.preferences.quoteDiscount); }
+      catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar el descuento en cotización.'); this.preferences.quoteDiscount = this.originalPreferences.quoteDiscount; }
+    }
     if (this.preferences.showDashboard !== this.originalPreferences.showDashboard) {
       try { await this.companyPrintSettings.saveShowDashboard(this.preferences.showDashboard !== false); }
       catch (error) { problems.push(error instanceof Error ? error.message : 'No se pudo guardar la opción de Inicio.'); this.preferences.showDashboard = this.originalPreferences.showDashboard; }
@@ -265,6 +271,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       invoiceCopies: 1,
       orderSlip: this.preferences.orderSlip,
       showDashboard: this.preferences.showDashboard,
+      quoteDiscount: this.preferences.quoteDiscount,
       useWindowsDefaultPrinter: true,
       printerName: '',
       billingMode: this.preferences.billingMode,
@@ -412,6 +419,7 @@ export class SettingsOtherPageComponent implements OnInit, OnDestroy {
       this.preferences.invoiceCopies = await this.companyPrintSettings.getInvoiceCopies();
       this.preferences.orderSlip = await this.companyPrintSettings.getOrderSlip();
       this.preferences.showDashboard = await this.companyPrintSettings.getShowDashboard();
+      this.preferences.quoteDiscount = await this.companyPrintSettings.getQuoteDiscount();
       this.preferences.printFooterText = await this.companyPrintSettings.getFooterText();
       this.preferences.billingMode = await this.billingModeService.getMode();
       this.originalPreferences = { ...this.preferences };

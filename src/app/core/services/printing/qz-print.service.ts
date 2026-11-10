@@ -67,9 +67,13 @@ export class QzPrintService {
     }
   }
 
+  /** Si QZ Tray no respondió hace poco, no se vuelve a esperar en cada impresión (se reintenta luego). */
+  private unavailableUntil = 0;
+
   private async connectIfAvailable(): Promise<boolean> {
     if (this.isActive()) return true;
     if (this.connecting) return this.connecting;
+    if (Date.now() < this.unavailableUntil) return false;
 
     this.connecting = (async () => {
       try {
@@ -84,8 +88,11 @@ export class QzPrintService {
           this.qz.websocket.connect({ retries: 0, delay: 0 }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('QZ Tray no respondió')), 1800))
         ]);
-        return this.isActive();
+        const active = this.isActive();
+        if (!active) this.unavailableUntil = Date.now() + 30_000;
+        return active;
       } catch {
+        this.unavailableUntil = Date.now() + 30_000;
         return false;
       } finally {
         this.connecting = null;
@@ -134,7 +141,8 @@ export class QzPrintService {
     const paper = paperOverride ?? await this.companyPrintSettings.getPaper();
     // Las imágenes grandes (p. ej. un logo de 400 px) hacen lenta la impresión en QZ Tray;
     // en rollo se reducen al ancho que la térmica realmente imprime.
-    const lightHtml = paper === '80mm' || paper === '90mm' ? await this.shrinkEmbeddedImages(html, 320) : html;
+    // En carta/media carta el logo ocupa poco espacio: a 600 px se ve igual y QZ lo dibuja mucho más rápido.
+    const lightHtml = await this.shrinkEmbeddedImages(html, paper === '80mm' || paper === '90mm' ? 320 : 600);
     const documentHtml = this.applyPaperLayout(lightHtml, paper);
 
     if (await this.connectIfAvailable()) {

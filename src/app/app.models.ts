@@ -143,6 +143,8 @@ export interface ProductRecord {
   cost: number;
   salePrice: number;
   minimumPrice: number;
+  /** Precio especial (campo precioespecial). */
+  specialPrice?: number;
   wholesaleEnabled: boolean;
   wholesalePrice: number;
   minimumSaleQuantity: number;

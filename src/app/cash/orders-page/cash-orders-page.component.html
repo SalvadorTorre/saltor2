@@ -44,17 +44,17 @@
 
     <ng-container *ngIf="detail as d; else pick">
       <header class="co__doc">
-        <div class="co__doc-id">
-          <span class="co__eyebrow">Orden de venta</span>
-          <h3>{{ d.number }}</h3>
-          <small>{{ date(d.invoiceDate) }}</small>
-        </div>
         <div class="co__doc-client">
           <div class="co__avatar" aria-hidden="true">{{ (d.customerName || 'C').charAt(0) }}</div>
           <div>
             <strong>{{ d.customerName || 'CLIENTE CONTADO' }}</strong>
             <small>{{ d.rnc ? 'RNC/Cédula ' + d.rnc : 'Consumidor final' }}<ng-container *ngIf="d.customerPhone"> · {{ d.customerPhone }}</ng-container></small>
           </div>
+        </div>
+        <div class="co__doc-id co__doc-id--right">
+          <span class="co__eyebrow">Orden de venta</span>
+          <h3>{{ d.number }}</h3>
+          <small>{{ date(d.invoiceDate) }}</small>
         </div>
       </header>
 

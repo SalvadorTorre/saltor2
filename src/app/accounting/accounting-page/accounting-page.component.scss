@@ -447,3 +447,4 @@
 .delivery-convert__accept { border: 0; border-radius: 8px; background: #15803d; color: #fff; cursor: pointer; font-size: 15px; font-weight: 800; min-height: 40px; padding: 0 18px; }
 .delivery-convert__accept:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 700px) { .delivery-convert__result { grid-template-columns: 1fr; } }
+.proforma-period-modal__rule--number { background: #eff6ff !important; border-color: #bfdbfe !important; color: #1e40af !important; }

@@ -224,8 +224,8 @@ export class Rep607Service {
       .order('fecha_factura', { ascending: true });
 
     if (filters.branchId !== 'Todas') query = query.eq('idsucursal', Number(filters.branchId));
-    // Filtrando por número se ignora el período: se busca la factura en cualquier fecha.
-    if (filters.invoice.trim()) query = query.ilike('numero_factura', `%${filters.invoice.trim()}%`);
+    // Filtrando por número (exacto) se ignora el período: se busca la factura en cualquier fecha.
+    if (filters.invoice.trim()) query = query.eq('numero_factura', filters.invoice.trim());
     else {
       if (filters.from) query = query.gte('fecha_factura', filters.from);
       if (filters.to) query = query.lte('fecha_factura', filters.to);
@@ -293,7 +293,7 @@ export class Rep607Service {
       .order('fecha_factura', { ascending: true }).order('id', { ascending: true });
     if (branchId !== 'Todas') query = query.eq('idsucursal', Number(branchId));
     // Filtrando por número se ignora el período.
-    if (invoice.trim()) query = query.ilike('numero_factura', `%${invoice.trim()}%`);
+    if (invoice.trim()) query = query.eq('numero_factura', invoice.trim());
     else query = query.gte('fecha_factura', from).lte('fecha_factura', to);
     const { data, error } = await query;
     if (error) throw error;
@@ -305,6 +305,13 @@ export class Rep607Service {
    *   sin importar el período, y no encola las demás. false: las demás proformas del período
    *   pasan a E32 sin NCF ni firma, en cola (PENDIENTE_ENVIO) para el envío gradual a la DGII.
    */
+  /** Buscando por número: pasa solo esas proformas a factura E32 en cola DGII (sin conduce). */
+  async convertProformasToInvoices(invoiceIds: number[]): Promise<{ count: number; total: number }> {
+    const { data, error } = await this.supabase.client.rpc('convertir_proformas_a_factura', { p_factura_ids: invoiceIds });
+    if (error) throw error;
+    return { count: Number(data?.cantidad ?? 0), total: Number(data?.monto ?? 0) };
+  }
+
   async convertProformasToDeliveryNotes(from: string, to: string, branchId: string, amount: number, invoiceIds: number[], onlySelected = false): Promise<{ count: number; total: number; queuedCount: number; queuedTotal: number }> {
     const { data, error } = await this.supabase.client.rpc('convertir_proformas_a_conduce', {
       p_desde: from || null,

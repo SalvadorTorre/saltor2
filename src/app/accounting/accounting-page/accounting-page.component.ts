@@ -23,7 +23,7 @@ type DgiiSendTarget = { source: 'pending' | 'rep607'; invoice: PendingInvoice | 
 type ProformaPeriodDialog = { row: ProformaPeriodSummary; option: 'convert' | 'keep'; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; deliveryNotes: DeliveryNoteConversion };
 /** Conduces → factura E32 (sección dentro del detalle del período). */
 type DeliveryNoteConversion = { open: boolean; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; confirming: boolean };
-type ProformaConversionConfirmation = { count: number; amount: number; queuedCount: number; queuedAmount: number };
+type ProformaConversionConfirmation = { count: number; amount: number; queuedCount: number; queuedAmount: number; direct: boolean; ids: number[] };
 const MINOR_CATEGORIES = ['Oficina y suministros', 'Combustible', 'Viáticos', 'Hospedaje', 'Alimentación', 'Mantenimiento', 'Transporte', 'Comunicaciones', 'Servicios profesionales', 'Publicidad', 'Impuestos y tasas', 'Otros gastos'];
 const MINOR_CENTERS = ['Administración', 'Ventas', 'Operaciones', 'Logística', 'Mercadeo', 'General'];
 const MINOR_PAYMENTS = ['Efectivo', 'Tarjeta débito', 'Tarjeta crédito', 'Transferencia', 'Cheque', 'Otro'];
@@ -69,6 +69,7 @@ export class AccountingPageComponent implements OnInit {
   encf = { type: '32 - Factura de Consumo', series: 'E32', from: 1, to: 1000, expiry: '' };
   creditTab: 'create' | 'consult' = 'create';
   creditSearch = '';
+  creditStatusFilter: 'Todos' | 'Sin enviar' | 'Enviada' | 'Aceptada' | 'Rechazada' = 'Todos';
   creditNotes: CreditNoteRecord[] = [];
   isSavingCreditNote = false;
   isSendingCreditNote = false;
@@ -540,8 +541,76 @@ export class AccountingPageComponent implements OnInit {
   get rep607Period(): string { return this.filters.from || this.filters.to ? `${this.filters.from || 'Inicio'} - ${this.filters.to || 'Hoy'}` : 'Todas las fechas'; }
   get filteredCreditNotes(): CreditNoteRecord[] {
     const search = this.creditSearch.trim().toLowerCase();
-    return !search ? this.creditNotes : this.creditNotes.filter((note) =>
-      [note.number, note.invoice, note.encf, note.customer, note.status].some((value) => value.toLowerCase().includes(search)));
+    return this.creditNotes.filter((note) =>
+      this.matchesCreditStatus(note.status) &&
+      (!search || [note.number, note.invoice, note.encf, note.noteEncf, note.customer, note.status].some((value) => String(value ?? '').toLowerCase().includes(search))));
+  }
+  /** Filtro "Estado" de la consulta de notas de crédito. */
+  private matchesCreditStatus(status: string): boolean {
+    const value = String(status ?? '').trim().toLowerCase();
+    const unsent = !value || /no enviad|sin enviar|borrador|pendiente/.test(value);
+    const rejected = /rechaz|error/.test(value);
+    const accepted = /^aceptad/.test(value);
+    switch (this.creditStatusFilter) {
+      case 'Sin enviar': return unsent;
+      case 'Rechazada': return rejected;
+      case 'Aceptada': return accepted;
+      case 'Enviada': return !unsent && !rejected;
+      default: return true;
+    }
+  }
+
+  /** Rep. 607: exporta a Excel los registros que se están mostrando, con totales. */
+  exportRep607Excel(): void {
+    const rows = this.rep607Invoices;
+    if (!rows.length) { this.actionMessage = 'No hay registros para exportar. Pulsa Filtrar primero.'; return; }
+    const head = ['Factura', 'Fecha', 'Tipo', 'e-NCF', 'Cliente', 'Forma de pago', 'Monto sin ITBIS', 'ITBIS', 'Monto', 'Estado DGII', 'Código seguridad', 'Diagnóstico'];
+    const date = (value: string) => { const d = value ? new Date(value) : null; return d && !isNaN(d.getTime()) ? d.toLocaleDateString('es-DO') : ''; };
+    const body: Array<Array<string | number>> = rows.map((invoice) => [invoice.number, date(invoice.date), invoice.type, invoice.encf, invoice.customer, invoice.paymentMethod,
+      this.round2(invoice.total - (invoice.itbis || 0)), this.round2(invoice.itbis || 0), this.round2(invoice.total), invoice.status, invoice.securityCode, invoice.message]);
+    body.push(['TOTAL', `${rows.length} registro(s)`, '', '', '', '', this.round2(this.rep607NetTotal), this.round2(this.rep607Itbis), this.round2(this.rep607GrandTotal), '', '', '']);
+    body.push(['Total aceptado', '', '', '', '', '', '', this.round2(this.rep607ItbisAccepted), this.round2(this.rep607AcceptedTotal), '', '', '']);
+    this.downloadSpreadsheet('Rep 607', head, body, `rep-607-${this.filters.from || 'inicio'}-${this.filters.to || 'hoy'}.xls`);
+  }
+
+  /** Reporte 606 del mes elegido: archivo CSV (se abre en Excel) con totales. */
+  exportPurchase606Csv(): void {
+    const rows = this.purchaseReportRecords;
+    const period = `${this.purchaseReportYear}${String(this.purchaseReportMonth).padStart(2, '0')}`;
+    if (!rows.length) { this.message = `No hay compras registradas en ${period} para exportar.`; return; }
+    const head = ['#', 'RNC/Cédula', 'Tipo ID', 'Suplidor', 'NCF', 'Factura', 'Fecha comprobante', 'Fecha pago', 'Tipo bienes/servicios', 'Monto facturado', 'ITBIS facturado', 'ITBIS retenido', 'Forma de pago'];
+    const body: Array<Array<string | number>> = rows.map((record, index) => [index + 1, record.rnc, record.documentType, record.supplier, record.ncf, record.document,
+      record.invoiceDate, record.paymentDate || '', record.goodsType || '', this.round2(record.invoiceAmount), this.round2(record.itbisAmount), 0, record.paymentType || '']);
+    body.push(['', 'TOTALES', '', '', '', '', '', '', '', this.round2(this.purchaseReportAmountTotal), this.round2(this.purchaseReportItbisTotal), 0, '']);
+    const cell = (value: string | number) => {
+      const text = typeof value === 'number' ? value.toFixed(2) : String(value ?? '');
+      return /[",;\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    // Separador ";" y BOM UTF-8: Excel en español lo abre en columnas y con acentos correctos.
+    const csv = '\uFEFF' + [head, ...body].map((row) => row.map(cell).join(';')).join('\r\n');
+    this.downloadBlob(csv, 'text/csv;charset=utf-8;', `606-${period}.csv`);
+    this.message = `Archivo 606-${period}.csv descargado (${rows.length} compra(s)).`;
+  }
+
+  private downloadSpreadsheet(sheet: string, head: string[], body: Array<Array<string | number>>, fileName: string): void {
+    const esc = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const cell = (value: string | number) => typeof value === 'number'
+      ? `<Cell><Data ss:Type="Number">${value}</Data></Cell>`
+      : `<Cell><Data ss:Type="String">${esc(String(value ?? ''))}</Data></Cell>`;
+    const xml = [head, ...body].map((row) => `<Row>${row.map(cell).join('')}</Row>`).join('');
+    const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="${esc(sheet)}"><Table>${xml}</Table></Worksheet></Workbook>`;
+    this.downloadBlob(workbook, 'application/vnd.ms-excel;charset=utf-8;', fileName);
+  }
+
+  private downloadBlob(content: string, type: string, fileName: string): void {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   private getLineGross(line: { quantity: number; price: number; discount: number }): number {
     return Math.max(0, line.quantity) * Math.max(0, line.price) * (1 - Math.max(0, Math.min(100, line.discount)) / 100);
@@ -708,9 +777,22 @@ export class AccountingPageComponent implements OnInit {
   get simulatedConvertToDeliveryNote(): number {
     return this.selectedProformaCandidates.reduce((total, invoice) => total + invoice.total, 0);
   }
+  /** Buscando una factura por número y marcando "Valor a facturar": va directo a E32 (nada a conduce). */
+  get isDirectInvoiceMode(): boolean { return this.isProformaNumberFilter && this.proformaPeriodDialog?.option === 'keep'; }
+  get directInvoiceCandidates(): ProformaPeriodCandidate[] {
+    const dialog = this.proformaPeriodDialog;
+    if (!dialog || !this.isDirectInvoiceMode) return [];
+    const limit = Math.max(0, Math.min(Number(dialog.amount) || 0, dialog.row.proformaTotal));
+    let total = 0;
+    return dialog.candidates.filter((invoice) => {
+      if (total + invoice.total > limit + 0.005) return false;
+      total += invoice.total;
+      return true;
+    });
+  }
   get selectedProformaCandidates(): ProformaPeriodCandidate[] {
     const dialog = this.proformaPeriodDialog;
-    if (!dialog) return [];
+    if (!dialog || this.isDirectInvoiceMode) return [];
     const typed = Math.max(0, Math.min(Number(dialog.amount) || 0, dialog.row.proformaTotal));
     const limit = dialog.option === 'convert' ? typed : Math.max(0, dialog.row.proformaTotal - typed);
     let total = 0;
@@ -723,6 +805,7 @@ export class AccountingPageComponent implements OnInit {
   get simulatedConvertedCount(): number { return this.selectedProformaCandidates.length; }
   get simulatedProformaTotal(): number {
     const dialog = this.proformaPeriodDialog;
+    if (this.isDirectInvoiceMode) return this.directInvoiceCandidates.reduce((total, invoice) => total + invoice.total, 0);
     if (!dialog || this.isProformaNumberFilter) return 0;
     return Math.max(0, dialog.row.proformaTotal - this.simulatedConvertToDeliveryNote);
   }
@@ -734,6 +817,7 @@ export class AccountingPageComponent implements OnInit {
   get isProformaNumberFilter(): boolean { return !!this.pendingFilters.invoice.trim(); }
   get simulatedQueuedInvoiceCount(): number {
     const dialog = this.proformaPeriodDialog;
+    if (this.isDirectInvoiceMode) return this.directInvoiceCandidates.length;
     if (!dialog || this.isProformaNumberFilter) return 0;
     return dialog.row.proformas - this.simulatedConvertedCount;
   }
@@ -836,19 +920,28 @@ export class AccountingPageComponent implements OnInit {
   setProformaPeriodDialogOption(option: 'convert' | 'keep'): void {
     if (!this.proformaPeriodDialog) return;
     this.proformaPeriodDialog.option = option;
-    this.proformaPeriodDialog.amount = option === 'convert'
+    this.proformaPeriodDialog.amount = option === 'convert' || this.isProformaNumberFilter
       ? this.proformaPeriodDialog.row.proformaTotal
       : 0;
   }
 
   async convertProformaPeriod(): Promise<void> {
     const dialog = this.proformaPeriodDialog;
-    if (!dialog || dialog.loading || dialog.applying || !this.simulatedConvertedCount) return;
+    if (!dialog || dialog.loading || dialog.applying) return;
+    if (this.isDirectInvoiceMode) {
+      const direct = this.directInvoiceCandidates;
+      if (!direct.length) return;
+      this.proformaConversionConfirmation = { count: 0, amount: 0, queuedCount: direct.length, queuedAmount: this.simulatedProformaTotal, direct: true, ids: direct.map((invoice) => invoice.id) };
+      return;
+    }
+    if (!this.simulatedConvertedCount) return;
     this.proformaConversionConfirmation = {
       count: this.simulatedConvertedCount,
       amount: this.simulatedConvertToDeliveryNote,
       queuedCount: this.simulatedQueuedInvoiceCount,
-      queuedAmount: this.simulatedProformaTotal
+      queuedAmount: this.simulatedProformaTotal,
+      direct: false,
+      ids: []
     };
   }
 
@@ -856,6 +949,21 @@ export class AccountingPageComponent implements OnInit {
     const dialog = this.proformaPeriodDialog;
     const confirmation = this.proformaConversionConfirmation;
     if (!dialog || !confirmation || dialog.loading || dialog.applying) return;
+    if (confirmation.direct) {
+      this.proformaConversionConfirmation = null;
+      dialog.applying = true;
+      try {
+        const result = await this.rep607Service.convertProformasToInvoices(confirmation.ids);
+        this.closeProformaPeriodDialog();
+        await this.loadProformaPeriodSales();
+        const amount = result.total.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        this.pendingActionMessage = `${result.count} proforma(s) por ${amount} pasaron a factura E32 y quedaron en cola para enviarse a la DGII. No se convirtió nada en conduce.`;
+      } catch (error) {
+        this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudo pasar la proforma a factura.';
+        dialog.applying = false;
+      }
+      return;
+    }
     const invoiceIds = this.selectedProformaCandidates.map((invoice) => invoice.id);
     if (!invoiceIds.length) return;
     this.proformaConversionConfirmation = null;

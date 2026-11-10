@@ -231,6 +231,12 @@
         <p class="field-help">Para toda la empresa. Activa: Inicio muestra ventas, alertas, productos e inventario. Inactiva: Inicio muestra solo una pantalla de bienvenida con accesos rápidos, sin datos.</p>
 
         <label class="field checkbox-field field--full">
+          <input type="checkbox" name="quoteDiscount" [(ngModel)]="preferences.quoteDiscount" />
+          <span>Cotización con descuento por línea (Desc. %)</span>
+        </label>
+        <p class="field-help">Para toda la empresa. Agrega en Cotización la columna Desc. % antes del precio, igual que en la orden de venta. El descuento no puede dejar el precio por debajo del mínimo (con RNC) o del especial.</p>
+
+        <label class="field checkbox-field field--full">
           <input type="checkbox" name="orderSlip" [(ngModel)]="preferences.orderSlip" />
           <span>Orden de venta con volante (código de barras)</span>
         </label>

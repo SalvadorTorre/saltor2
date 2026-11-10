@@ -98,3 +98,10 @@ h1, h2, p { margin: 0; }h1 { font-size: 23px; line-height: 1.2; letter-spacing: 
 .price-hints .price-hints__special { border-color: #bbf7d0; background: #f0fdf4; }
 .price-hints .price-hints__special small { color: #166534; }
 .price-hints .price-hints__special b { color: #15803d; }
+
+/* Descuento por línea (empresas que lo usan, p. ej. Bella Real) */
+.quote-product-editor.quote-product-editor--discount { grid-template-columns: 14fr 34fr 11fr 11fr 14fr 14fr; }
+.quotation-lines-table.quotation-lines-table--discount .line-header, .quotation-lines-table.quotation-lines-table--discount .quote-line { grid-template-columns: 15fr 40fr 12fr 12fr 15fr 15fr 105px; }
+.quote-line__discount { color: #b45309; font-weight: 700; }
+.quotation-summary .totals .totals__discount { color: #b45309; }
+.quotation-summary .totals .totals__discount strong { color: #b45309; }

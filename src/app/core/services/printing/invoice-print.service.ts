@@ -41,7 +41,14 @@ export class InvoicePrintService {
     private readonly printSettings: CompanyPrintSettingsService,
     private readonly supabase: SupabaseService,
     private readonly salesOrders: SalesOrdersService
-  ) {}
+  ) {
+    // Al abrir Facturación, Caja o Consulta se deja lista la conexión con QZ Tray y el tipo de
+    // papel, para que la primera impresión no tenga que esperar por eso.
+    setTimeout(() => {
+      void this.qzPrintService.checkConnection().catch(() => false);
+      void this.printSettings.getPaper().catch(() => null);
+    }, 0);
+  }
 
   /**
    * Orden de venta según el papel de la empresa:
@@ -67,7 +74,7 @@ export class InvoicePrintService {
     const detail = await this.salesOrders.getOrderForEditing(orderId);
     const session = await this.auth.restoreSession();
     const seller = sellerFallback || session?.fullName || 'N/D';
-    const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId);
+    const company = await this.activeCompany(session?.companyId);
     const codes = await this.createFiscalCodes(detail.number, detail.number);
     const e = (value: string | number | null | undefined) => this.escape(value ?? '');
     const money = (value: number) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -121,29 +128,33 @@ export class InvoicePrintService {
         // Al generar la factura: la primera copia dice ORIGINAL y las demás COPIA.
         // Reimpresión desde Consulta: sale una sola, marcada COPIA.
         const pageCopies = useCompanyCopies ? await this.qzPrintService.invoiceCopies() : 1;
-        for (let copy = 0; copy < pageCopies; copy++) {
-          const label = useCompanyCopies && copy === 0 ? 'ORIGINAL' : 'COPIA';
-          const page = await this.buildHalfLetterHtml(invoiceId, sellerFallback, label);
-          const printed = await this.qzPrintService.printHtml(page.html, `Factura ${page.number} ${label}`, 'width=1000,height=700', 1, 'media_carta');
-          if (printed === 'unavailable') throw new Error('No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.');
-        }
+        // La factura se arma una sola vez; las copias solo cambian la etiqueta ORIGINAL/COPIA
+        // y van todas en un mismo trabajo de impresión (una conexión y una firma de QZ).
+        const firstLabel = useCompanyCopies ? 'ORIGINAL' : 'COPIA';
+        const page = await this.buildHalfLetterHtml(invoiceId, sellerFallback, firstLabel);
+        const documents = Array.from({ length: pageCopies }, (_, copy) => copy === 0
+          ? page.html
+          : page.html.split(`<div class="copy">${firstLabel}</div>`).join('<div class="copy">COPIA</div>'));
+        const printed = await this.qzPrintService.printHtml(this.mergeDocuments(documents), `Factura ${page.number}`, 'width=1000,height=700', 1, 'media_carta');
+        if (printed === 'unavailable') throw new Error('No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.');
         await this.invoicesService.markInvoicePrinted(invoiceId);
         return;
       }
-      const detail = await this.invoicesService.getInvoiceForEditing(invoiceId);
-      const session = await this.auth.restoreSession();
+      const [detail, session] = await Promise.all([this.invoicesService.getInvoiceForEditing(invoiceId), this.auth.restoreSession()]);
       // Vendedor guardado en la factura; las facturas anteriores al cambio no lo tienen.
       const seller = sellerFallback || session?.fullName || 'N/D';
-      const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId);
+      const company = await this.activeCompany(session?.companyId);
       const fiscalCodes = await this.createFiscalCodes(
         detail.qrLink || `${detail.number}|${detail.ncf}|${detail.grandTotal.toFixed(2)}`,
         detail.number
       );
+      // Forma de pago (Efectivo, Tarjeta…) junto a la condición.
+      const paymentName = await this.paymentMethodName(detail);
       const rows = detail.lines.map((line) => {
         const priceWithoutTax = line.taxRate > 0 ? line.unitPrice / (1 + (line.taxRate / 100)) : line.unitPrice;
         return `<tr><td>${line.quantity} x ${priceWithoutTax.toFixed(2)}<br><b>${this.escape(line.description)}</b></td><td>${line.taxAmount.toFixed(2)}</td><td>${line.lineTotal.toFixed(2)}</td></tr>`;
       }).join('');
-      const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Factura ${this.escape(detail.number)}</title><style>body{font:11px Arial;margin:0;color:#111}.head{text-align:center}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.document{line-height:1.45;margin:8px 0}.document span{display:inline-block;min-width:76px}.customer{line-height:1.5;margin:10px 0}table{border-collapse:collapse;width:100%;margin-top:8px;table-layout:fixed}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;vertical-align:top;font-size:10px}th:nth-child(1),td:nth-child(1){width:43%}th:nth-child(2),td:nth-child(2){width:19%;text-align:right}th:nth-child(3),td:nth-child(3){width:38%;text-align:right}.total{margin-top:10px}.total p{display:flex;justify-content:space-between;margin:4px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:36mm;height:36mm;display:block;margin:0 auto 5px;image-rendering:pixelated;image-rendering:crisp-edges}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body><div class="head">${company?.logoUrl ? `<img class="logo" src="${this.escape(company.logoUrl)}" alt="">` : ''}<div class="company">${this.escape(company?.legalName || company?.tradeName || session?.companyName || 'SALTOR SYSTEM')}</div><div class="muted">RNC: ${this.escape(company?.rnc || 'N/D')}</div><div class="muted">${this.escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${this.escape(company?.phone || 'N/D')}</div></div><div class="document"><div><span>No. Factura:</span>${this.escape(detail.number)}</div><div><span>Fecha:</span>${this.escape(detail.invoiceDate)}</div><div><span>e-NCF:</span>${this.escape(detail.ncf || 'N/A')}</div></div><div class="receipt-type">${this.escape(this.receiptDocumentType(detail.ncfType))}</div><div class="customer"><strong>Cliente:</strong> ${this.escape(detail.customerName)}<br><strong>RNC/Cédula:</strong> ${this.escape(detail.rnc || 'Consumidor final')}<br><strong>Dirección:</strong> ${this.escape(detail.customerAddress || 'N/D')}<br><strong>Teléfono:</strong> ${this.escape(detail.customerPhone || 'N/D')}<br><strong>Vendedor:</strong> ${this.escape(seller)}</div><table><thead><tr><th>DESCRIPCIÓN</th><th>ITBIS</th><th>VALOR</th></tr></thead><tbody>${rows}</tbody></table><p><strong>Condición:</strong> ${this.escape(detail.paymentMethod)}</p>${printableInvoiceNotes(detail.notes) ? `<p><strong>Notas:</strong> ${this.escape(printableInvoiceNotes(detail.notes))}</p>` : ''}<div class="total"><p><span>Subtotal</span><span>${detail.subtotal.toFixed(2)}</span></p><p><span>ITBIS</span><span>${detail.taxTotal.toFixed(2)}</span></p><p><strong>Total</strong><strong>${detail.grandTotal.toFixed(2)}</strong></p></div><div class="fiscal">${fiscalCodes.qr ? `<img class="qr" src="${fiscalCodes.qr}" alt="Código QR">` : ''}<p><b>Código de seguridad:</b> ${this.escape(detail.securityCode || 'Pendiente')}</p><p><b>Fecha firma digital:</b> ${this.escape(detail.signatureDate || 'Pendiente')}</p>${fiscalCodes.barcode ? `<img class="barcode" src="${fiscalCodes.barcode}" alt="Código de barras"><p>${this.escape(detail.number)}</p>` : ''}</div><script>window.onload=function(){window.print();};<\/script></body></html>`;
+      const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Factura ${this.escape(detail.number)}</title><style>body{font:11px Arial;margin:0;color:#111}.head{text-align:center}.head .logo{display:block;max-width:42mm;max-height:22mm;margin:0 auto 4px;object-fit:contain}.company{font-size:15px;font-weight:800}.muted{font-size:11px}.receipt-type{border-top:1px dashed #111;border-bottom:1px dashed #111;margin:8px 0;padding:5px 0;text-align:center;font-size:12px;font-weight:800}.document{line-height:1.45;margin:8px 0}.document span{display:inline-block;min-width:76px}.customer{line-height:1.5;margin:10px 0}table{border-collapse:collapse;width:100%;margin-top:8px;table-layout:fixed}th{border-bottom:1px dashed #777;padding:4px 1px;text-align:left;font-size:10px}td{border:0;padding:3px 1px;text-align:left;vertical-align:top;font-size:10px}th:nth-child(1),td:nth-child(1){width:43%}th:nth-child(2),td:nth-child(2){width:19%;text-align:right}th:nth-child(3),td:nth-child(3){width:38%;text-align:right}.total{margin-top:10px}.total p{display:flex;justify-content:space-between;margin:4px 0}.total strong{font-size:13px}.fiscal{border-top:1px dashed #111;margin-top:10px;padding-top:8px;text-align:center;font-size:9px}.fiscal img.qr{width:36mm;height:36mm;display:block;margin:0 auto 5px;image-rendering:pixelated;image-rendering:crisp-edges}.fiscal p{margin:3px 0}.barcode{margin-top:9mm;max-width:100%;height:auto}</style></head><body><div class="head">${company?.logoUrl ? `<img class="logo" src="${this.escape(company.logoUrl)}" alt="">` : ''}<div class="company">${this.escape(company?.legalName || company?.tradeName || session?.companyName || 'SALTOR SYSTEM')}</div><div class="muted">RNC: ${this.escape(company?.rnc || 'N/D')}</div><div class="muted">${this.escape(company?.address || 'N/D')}</div><div class="muted">Tel.: ${this.escape(company?.phone || 'N/D')}</div></div><div class="document"><div><span>No. Factura:</span>${this.escape(detail.number)}</div><div><span>Fecha:</span>${this.escape(detail.invoiceDate)}</div><div><span>e-NCF:</span>${this.escape(detail.ncf || 'N/A')}</div></div><div class="receipt-type">${this.escape(this.receiptDocumentType(detail.ncfType))}</div><div class="customer"><strong>Cliente:</strong> ${this.escape(detail.customerName)}<br><strong>RNC/Cédula:</strong> ${this.escape(detail.rnc || 'Consumidor final')}<br><strong>Dirección:</strong> ${this.escape(detail.customerAddress || 'N/D')}<br><strong>Teléfono:</strong> ${this.escape(detail.customerPhone || 'N/D')}<br><strong>Vendedor:</strong> ${this.escape(seller)}</div><table><thead><tr><th>DESCRIPCIÓN</th><th>ITBIS</th><th>VALOR</th></tr></thead><tbody>${rows}</tbody></table><p><strong>Condición:</strong> ${this.escape(detail.paymentMethod)}${paymentName ? ` — ${this.escape(paymentName)}` : ''}</p>${printableInvoiceNotes(detail.notes) ? `<p><strong>Notas:</strong> ${this.escape(printableInvoiceNotes(detail.notes))}</p>` : ''}<div class="total"><p><span>Subtotal</span><span>${detail.subtotal.toFixed(2)}</span></p><p><span>ITBIS</span><span>${detail.taxTotal.toFixed(2)}</span></p><p><strong>Total</strong><strong>${detail.grandTotal.toFixed(2)}</strong></p></div><div class="fiscal">${fiscalCodes.qr ? `<img class="qr" src="${fiscalCodes.qr}" alt="Código QR">` : ''}<p><b>Código de seguridad:</b> ${this.escape(detail.securityCode || 'Pendiente')}</p><p><b>Fecha firma digital:</b> ${this.escape(detail.signatureDate || 'Pendiente')}</p>${fiscalCodes.barcode ? `<img class="barcode" src="${fiscalCodes.barcode}" alt="Código de barras"><p>${this.escape(detail.number)}</p>` : ''}</div><script>window.onload=function(){window.print();};<\/script></body></html>`;
       const copies = useCompanyCopies ? await this.qzPrintService.invoiceCopies() : 1;
       const result = await this.qzPrintService.printHtml(html, `Factura ${detail.number}`, undefined, copies);
       if (result === 'unavailable') throw new Error('No fue posible abrir la impresión. Permite las ventanas emergentes e inténtalo de nuevo.');
@@ -166,23 +177,70 @@ export class InvoicePrintService {
     return this.renderHalfLetter(detail, sellerFallback, 'ORIGINAL', 'orden');
   }
 
+  /** Une varios documentos del mismo formato en uno, separados por salto de página. */
+  private mergeDocuments(documents: string[]): string {
+    if (documents.length <= 1) return documents[0] ?? '';
+    const bodyOf = (html: string) => {
+      const start = html.indexOf('<body>');
+      const end = html.lastIndexOf('</body>');
+      return start >= 0 && end > start ? html.slice(start + 6, end).replace(/<script[\s\S]*?<\/script>/gi, '') : html;
+    };
+    const first = documents[0];
+    const end = first.lastIndexOf('</body>');
+    if (first.indexOf('<body>') < 0 || end < 0) return first;
+    const extra = documents.slice(1).map((html) => `<div class="page-break"></div>${bodyOf(html)}`).join('');
+    return first.slice(0, end) + extra + first.slice(end);
+  }
+
+  private companyCache: { id: number; promise: Promise<Awaited<ReturnType<CompaniesService['getCompanies']>>[number] | undefined> } | null = null;
+  /** Datos de la empresa activa (logo, RNC…): se leen una vez y se guardan para las siguientes impresiones. */
+  private activeCompany(companyId: number | null | undefined) {
+    const id = Number(companyId || 0);
+    if (!this.companyCache || this.companyCache.id !== id) {
+      const promise = this.companiesService.getCompanies().then((list) => list.find((item) => item.id === id));
+      promise.catch(() => { if (this.companyCache?.promise === promise) this.companyCache = null; });
+      this.companyCache = { id, promise };
+    }
+    return this.companyCache.promise;
+  }
+
+  private paymentNameCache = new Map<number, string>();
+
+  /** Descripción de la forma de pago de la factura (Efectivo, Tarjeta, Transferencia, Crédito…). */
+  private async paymentMethodName(detail: EditableInvoiceData): Promise<string> {
+    const paymentCode = Number((detail as { paymentMethodCode?: number }).paymentMethodCode || 0);
+    if (!paymentCode) return '';
+    if (this.paymentNameCache.has(paymentCode)) return this.paymentNameCache.get(paymentCode)!;
+    try {
+      const { data } = await this.supabase.client.from('formapago').select('descripcion').eq('codigo', paymentCode).maybeSingle();
+      const name = String((data as { descripcion?: string } | null)?.descripcion ?? '');
+      this.paymentNameCache.set(paymentCode, name);
+      return name;
+    } catch {
+      return '';
+    }
+  }
+
   private async renderHalfLetter(detail: EditableInvoiceData, sellerFallback: string | null | undefined, copyLabel: string, kind: 'factura' | 'orden'): Promise<{ html: string; number: string }> {
     const isInvoice = kind === 'factura';
     const session = await this.auth.restoreSession();
     const seller = sellerFallback || session?.fullName || 'N/D';
-    const company = (await this.companiesService.getCompanies()).find((item) => item.id === session?.companyId);
 
     // Unidad (y código, si la línea no lo guardó) de cada producto.
     const productIds = [...new Set(detail.lines.map((line) => line.productId).filter((id): id is number => !!id))];
     const products = new Map<number, { codigo: string; unidad: string }>();
-    if (productIds.length) {
-      const { data } = await this.supabase.client.from('products').select('id, codigo, unidad').in('id', productIds);
-      for (const row of (data ?? []) as Array<{ id: number; codigo: string | null; unidad: string | null }>) {
-        products.set(row.id, { codigo: row.codigo ?? '', unidad: row.unidad ?? '' });
-      }
-    }
-
-    const codes = await this.createFiscalCodes(detail.qrLink || detail.number, detail.number);
+    type ProductRow = { id: number; codigo: string | null; unidad: string | null };
+    // Todo lo que no depende entre sí se consulta a la vez (antes iba uno detrás de otro).
+    const [company, productRows, codes, footerTextValue, paymentName] = await Promise.all([
+      this.activeCompany(session?.companyId),
+      productIds.length
+        ? Promise.resolve(this.supabase.client.from('products').select('id, codigo, unidad').in('id', productIds)).then(({ data }) => (data ?? []) as ProductRow[])
+        : Promise.resolve([] as ProductRow[]),
+      this.createFiscalCodes(detail.qrLink || detail.number, detail.number),
+      this.printSettings.getFooterText().catch(() => ''),
+      this.paymentMethodName(detail)
+    ]);
+    for (const row of productRows) products.set(row.id, { codigo: row.codigo ?? '', unidad: row.unidad ?? '' });
     // El QR solo se imprime cuando la DGII ya devolvió su enlace (factura firmada).
     const qr = { qr: isInvoice && detail.qrLink ? codes.qr : '', barcode: codes.barcode };
     const e = (value: string | number | null | undefined) => this.escape(value ?? '');
@@ -193,19 +251,10 @@ export class InvoicePrintService {
     // NCF pendiente: el espacio queda en blanco (no se imprime ningún mensaje).
     const ncf = !detail.ncf || detail.ncf.toUpperCase().startsWith('PENDIENTE') ? '' : detail.ncf;
     // Mensaje de pie de página configurado por la empresa (hasta 3 líneas), debajo de la firma.
-    let footerText = '';
-    try { footerText = await this.printSettings.getFooterText(); } catch { footerText = ''; }
+    const footerText = String(footerTextValue ?? '');
     // El pie de página solo va en la factura (no en la orden de venta).
     const footerLines = isInvoice ? footerText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3) : [];
     // Forma de pago (Efectivo, Tarjeta…) debajo de la condición.
-    let paymentName = '';
-    const paymentCode = Number((detail as { paymentMethodCode?: number }).paymentMethodCode || 0);
-    if (paymentCode) {
-      try {
-        const { data } = await this.supabase.client.from('formapago').select('descripcion').eq('codigo', paymentCode).maybeSingle();
-        paymentName = String((data as { descripcion?: string } | null)?.descripcion ?? '');
-      } catch { paymentName = ''; }
-    }
     // Fecha de firma legible: 2026-11-03T14:36:10+00:00 -> 03-11-2026 10:36:10 (hora de RD).
     const signatureDate = (() => {
       const raw = String(detail.signatureDate || '');
@@ -249,7 +298,7 @@ export class InvoicePrintService {
   <div class="doc">${isInvoice
       ? `<p class="title">FACTURA</p><div class="type"><span>${e(this.receiptDocumentType(detail.ncfType))}</span><span></span></div>`
       : `<p class="title" style="letter-spacing:3px">ORDEN DE VENTA</p><div class="type"><span>Documento no fiscal</span><span></span></div>`}
-    <div class="info">${isInvoice ? `<div><span>NCF</span><span>${e(ncf)}</span></div>` : ''}<div><span>No.</span><span class="no">${e(detail.number)}</span></div><div><span>FECHA</span><span>${e(this.formatDate(detail.invoiceDate))}</span></div><div><span>HORA IMP.</span><span>${e(this.formatDate(now.toISOString()))} ${e(printTime)}</span></div><div><span>VENDEDOR</span><span>${e(seller)}</span></div><div><span>CONDICION</span><span>${e(detail.paymentMethod)}</span></div>${paymentName ? `<div><span>FORMA PAGO</span><span>${e(paymentName)}</span></div>` : ''}</div></div>
+    <div class="info">${isInvoice ? `<div><span>NCF</span><span>${e(ncf)}</span></div>` : ''}<div><span>No.</span><span class="no">${e(detail.number)}</span></div><div><span>FECHA</span><span>${e(this.formatDate(detail.invoiceDate))}</span></div><div><span>HORA IMP.</span><span>${e(this.formatDate(now.toISOString()))} ${e(printTime)}</span></div><div><span>VENDEDOR</span><span>${e(seller)}</span></div><div><span>CONDICION</span><span>${e(detail.paymentMethod)}${paymentName ? ` — ${e(paymentName)}` : ''}</span></div></div></div>
   ${isInvoice ? `<div class="qr-head">${qr.qr ? `<img src="${qr.qr}" alt="Código QR">` : ''}${detail.securityCode ? `<div><b>Código de seguridad:</b> ${e(detail.securityCode)}</div>` : ''}${signatureDate ? `<div><b>Fecha de firma:</b> ${e(signatureDate)}</div>` : ''}</div>` : ''}
 </section>`;
     const tableHead = `<table class="items"><thead><tr><th class="c-code">Codigo</th><th class="c-qty" style="text-align:center">Cantidad</th><th class="c-unit">Unidad</th><th class="c-desc">Descripcion</th><th class="c-price" style="text-align:right">Precio</th><th class="c-tax" style="text-align:right">Itbis</th><th class="c-total" style="text-align:right">Valor</th></tr></thead>`;

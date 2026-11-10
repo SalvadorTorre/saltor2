@@ -112,3 +112,6 @@
   .co__cols, .co__item { grid-template-columns: 92px 70px minmax(0, 1fr) 80px; gap: 6px; }
   .co__doc-id h3 { font-size: 22px; }
 }
+
+/* Encabezado: cliente a la izquierda; No. de orden y fecha a la derecha */
+.co__doc-id--right { margin-left: auto; text-align: right; }

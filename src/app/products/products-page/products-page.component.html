@@ -147,6 +147,7 @@
             <label class="field product-field--cost"><span>Costo</span><input type="number" name="productCost" [(ngModel)]="productForm.cost" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field product-field--sale-price"><span>Precio ventas</span><input type="number" name="productSalePrice" [(ngModel)]="productForm.salePrice" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field"><span>Precio minimo</span><input type="number" name="productMinimumPrice" [(ngModel)]="productForm.minimumPrice" (keydown.enter)="focusNextProductField($event)" /></label>
+            <label class="field"><span>Precio especial</span><input type="number" name="productSpecialPrice" [(ngModel)]="productForm.specialPrice" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field"><span>Cant. minima venta</span><input type="number" min="1" step="1" name="productMinimumSaleQuantity" [(ngModel)]="productForm.minimumSaleQuantity" (keydown.enter)="focusNextProductField($event)" /></label>
             <label class="field product-wholesale-toggle"><span>Venta por mayor</span><span class="product-wholesale-toggle__control"><input type="checkbox" name="productWholesaleEnabled" [(ngModel)]="productForm.wholesaleEnabled" (ngModelChange)="onWholesaleEnabledChange()" /><b>{{ productForm.wholesaleEnabled ? 'Si' : 'No' }}</b></span></label>
             <ng-container *ngIf="productForm.wholesaleEnabled">
@@ -198,6 +199,7 @@
               <p><strong>Costo:</strong> RD${{ productForm.cost | number:'1.2-2' }}</p>
               <p><strong>Precio venta:</strong> RD${{ productForm.salePrice | number:'1.2-2' }}</p>
               <p><strong>Precio minimo:</strong> RD${{ productForm.minimumPrice | number:'1.2-2' }}</p>
+              <p><strong>Precio especial:</strong> RD${{ (productForm.specialPrice || 0) | number:'1.2-2' }}</p>
               <p><strong>Cant. minima venta:</strong> {{ productForm.minimumSaleQuantity }}</p>
               <p *ngIf="productForm.wholesaleEnabled"><strong>Precio por mayor:</strong> RD${{ productForm.wholesalePrice | number:'1.2-2' }}</p>
               <p><strong>Impuesto:</strong> {{ productForm.taxValue }}%</p>

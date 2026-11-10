@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
 import { SupabaseService } from '../supabase/supabase.service';
 
-export interface QuotationLine { code: string; description: string; quantity: number; price: number; itbis: number; total: number; }
+export interface QuotationLine { code: string; description: string; quantity: number; price: number; itbis: number; total: number; discountPercent?: number; discountAmount?: number; originalPrice?: number | null; }
 /**
  * Precio con ITBIS incluido, igual que la orden de venta: total = cantidad × precio.
  * Las cotizaciones anteriores guardaban el precio sin ITBIS (total = cantidad × precio × (1 + ITBIS));
  * al leerlas se pasa el precio a ITBIS incluido para que todo cuadre.
  */
-function normalizeQuotationLine(line: { code: string; description: string; quantity: number; price: number; itbis: number; total: number }) {
+function normalizeQuotationLine<T extends { code: string; description: string; quantity: number; price: number; itbis: number; total: number }>(line: T): T {
   const legacyTotal = line.quantity * line.price * (1 + line.itbis / 100);
   if (line.itbis > 0 && line.quantity > 0 && Math.abs(line.total - legacyTotal) < 0.05 && Math.abs(line.total - line.quantity * line.price) >= 0.05) {
     return { ...line, price: Math.round((line.total / line.quantity) * 100) / 100 };
@@ -22,7 +22,8 @@ export class QuotationsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   private toLine(line: any) {
-    return normalizeQuotationLine({ code: line.codigo_producto ?? '', description: line.descripcion, quantity: Number(line.cantidad), price: Number(line.precio_unitario), itbis: Number(line.tasa_itbis), total: Number(line.total_linea) });
+    return normalizeQuotationLine({ code: line.codigo_producto ?? '', description: line.descripcion, quantity: Number(line.cantidad), price: Number(line.precio_unitario), itbis: Number(line.tasa_itbis), total: Number(line.total_linea),
+      discountPercent: Number(line.descuento_porcentaje ?? 0), discountAmount: Number(line.descuento_monto ?? 0), originalPrice: line.precio_original == null ? null : Number(line.precio_original) });
   }
 
   async validateUserKey(key: string): Promise<string> {
@@ -47,9 +48,13 @@ export class QuotationsService {
     return { id: Number(row.id), number: row.numero_cotizacion, date: row.fecha, validUntil: row.vigencia_hasta ?? '', customer: row.cliente_nombre, rnc: row.cliente_rnc ?? '', phone: row.cliente_telefono ?? '', email: row.cliente_correo ?? '', address: row.cliente_direccion ?? '', notes: row.notas ?? '', subtotal: Number(row.subtotal), itbis: Number(row.itbis), total: Number(row.total), status: row.estado, lines: (details ?? []).map((line: any) => this.toLine(line)) };
   }
 
+  private discountTotal(lines: QuotationLine[]): number {
+    return Math.round(lines.reduce((sum, line) => sum + Number(line.discountAmount || 0), 0) * 100) / 100;
+  }
+
   async create(quote: Omit<Quotation, 'id' | 'number'>): Promise<{ id: number; number: string }> {
     await this.ensureAuthenticatedSession();
-    const { data, error } = await this.supabase.client.rpc('crear_cotizacion', { p_cotizacion: { fecha: quote.date, vigenciaHasta: quote.validUntil, clienteNombre: quote.customer, clienteRnc: quote.rnc, clienteTelefono: quote.phone, clienteCorreo: quote.email, clienteDireccion: quote.address, notas: quote.notes, subtotal: quote.subtotal, itbis: quote.itbis, total: quote.total }, p_detalles: quote.lines.map((line) => ({ codigo: line.code, descripcion: line.description, cantidad: line.quantity, precio: line.price, itbis: line.itbis, total: line.total })) });
+    const { data, error } = await this.supabase.client.rpc('crear_cotizacion', { p_cotizacion: { fecha: quote.date, vigenciaHasta: quote.validUntil, clienteNombre: quote.customer, clienteRnc: quote.rnc, clienteTelefono: quote.phone, clienteCorreo: quote.email, clienteDireccion: quote.address, notas: quote.notes, subtotal: quote.subtotal, itbis: quote.itbis, total: quote.total, descuentoTotal: this.discountTotal(quote.lines) }, p_detalles: quote.lines.map((line) => ({ codigo: line.code, descripcion: line.description, cantidad: line.quantity, precio: line.price, itbis: line.itbis, total: line.total, descuentoPorcentaje: Number(line.discountPercent || 0), descuentoMonto: Number(line.discountAmount || 0), precioOriginal: line.originalPrice ?? null })) });
     if (error) throw this.toSaveError(error);
     const saved = Array.isArray(data) ? data[0] : data;
     const id = Number(saved.id);
@@ -62,12 +67,12 @@ export class QuotationsService {
 
   async update(id: number, quote: Omit<Quotation, 'id' | 'number'>): Promise<void> {
     await this.ensureAuthenticatedSession();
-    const header = { fecha: quote.date, vigencia_hasta: quote.validUntil || null, cliente_nombre: quote.customer, cliente_rnc: quote.rnc || null, cliente_telefono: quote.phone || null, cliente_correo: quote.email || null, cliente_direccion: quote.address || null, notas: quote.notes || null, subtotal: quote.subtotal, itbis: quote.itbis, total: quote.total, estado: this.toDatabaseStatus(quote.status) };
+    const header = { fecha: quote.date, vigencia_hasta: quote.validUntil || null, cliente_nombre: quote.customer, cliente_rnc: quote.rnc || null, cliente_telefono: quote.phone || null, cliente_correo: quote.email || null, cliente_direccion: quote.address || null, notas: quote.notes || null, subtotal: quote.subtotal, itbis: quote.itbis, total: quote.total, estado: this.toDatabaseStatus(quote.status), descuento_total: this.discountTotal(quote.lines) };
     const { error: updateError } = await this.supabase.client.from('cotizaciones').update(header).eq('id', id);
     if (updateError) throw updateError;
     const { error: deleteError } = await this.supabase.client.from('cotizacion_detalles').delete().eq('cotizacion_id', id);
     if (deleteError) throw deleteError;
-    const { error: insertError } = await this.supabase.client.from('cotizacion_detalles').insert(quote.lines.map((line) => ({ cotizacion_id: id, codigo_producto: line.code || null, descripcion: line.description, cantidad: line.quantity, precio_unitario: line.price, tasa_itbis: line.itbis, total_linea: line.total })));
+    const { error: insertError } = await this.supabase.client.from('cotizacion_detalles').insert(quote.lines.map((line) => ({ cotizacion_id: id, codigo_producto: line.code || null, descripcion: line.description, cantidad: line.quantity, precio_unitario: line.price, tasa_itbis: line.itbis, total_linea: line.total, descuento_porcentaje: Number(line.discountPercent || 0), descuento_monto: Number(line.discountAmount || 0), precio_original: line.originalPrice ?? null })));
     if (insertError) throw insertError;
   }
 

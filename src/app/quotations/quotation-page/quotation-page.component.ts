@@ -45,8 +45,10 @@ export class QuotationPageComponent implements OnInit {
   private quotationUserLookupVersion = 0;
   isRncInvalid = false;
   editingLineIndex: number | null = null;
-  lineEditor = { code: '', description: '', quantity: 1, price: 0 };
+  lineEditor = { code: '', description: '', quantity: 1, price: 0, discount: 0, basePrice: 0 };
   lineEditorMessage = '';
+  /** Configuración → Otros: columna Desc. % por línea (activa en Bella Real). */
+  discountEnabled = false;
   productSuggestionField: 'code' | 'name' | null = null;
   activeProductSuggestionIndex = 0;
   quote = this.emptyQuote();
@@ -62,7 +64,7 @@ export class QuotationPageComponent implements OnInit {
     private readonly auth: AuthService,
     private readonly companiesService: CompaniesService
   ) {}
-  ngOnInit(): void { void this.load(); void this.loadClients(); void this.loadProducts(); void this.loadRncRecords(); void this.loadUsers(); }
+  ngOnInit(): void { void this.printSettings.getQuoteDiscount().then((enabled) => this.discountEnabled = enabled).catch(() => this.discountEnabled = false); void this.load(); void this.loadClients(); void this.loadProducts(); void this.loadRncRecords(); void this.loadUsers(); }
   emptyQuote() { return { number: '', date: new Date().toISOString().slice(0, 10), validUntil: '', customer: '', rnc: '', phone: '', email: '', address: '', notes: '', lines: [] as Omit<QuotationLine, 'total'>[] }; }
   get clients(): ClientRecord[] { return this.data.clients; }
   get products(): ProductRecord[] { return this.data.products; }
@@ -92,11 +94,38 @@ export class QuotationPageComponent implements OnInit {
     const code = this.lineEditor.code.trim().toLowerCase();
     return code ? this.products.find((item) => item.code.trim().toLowerCase() === code) : undefined;
   }
-  /** Mínimo = precio de venta − 10 %; Especial = el "precio mínimo" del producto (igual que la orden de venta). */
+  /** Mínimo = precio de venta − 10 %; Especial = el precio especial del producto, o su precio mínimo si no tiene (igual que la orden de venta). */
+  /** Con RNC (crédito fiscal E31) el piso es el precio mínimo; sin RNC (E32 / proforma), el precio especial. */
+  private get isFiscalCreditQuote(): boolean { return !!this.quote.rnc.trim() && !this.isRncInvalid; }
+  private priceFloor(product: ProductRecord, quantity: number): { price: number; label: string; wholesale: boolean } {
+    const wholesale = product.wholesaleEnabled && product.minimumWholesaleQuantity > 0 && product.wholesalePrice > 0 && quantity >= product.minimumWholesaleQuantity;
+    if (wholesale) return { price: Number(product.wholesalePrice) || 0, label: 'precio por mayor', wholesale };
+    if (this.isFiscalCreditQuote) return { price: Number(product.minimumPrice) || 0, label: 'precio mínimo (crédito fiscal E31)', wholesale };
+    const special = Number(product.specialPrice) > 0 ? Number(product.specialPrice) : Number(product.minimumPrice) || 0;
+    return { price: special, label: 'precio especial (consumo E32 / proforma)', wholesale };
+  }
+  /** Al digitar el Desc. % el precio cambia; no puede quedar por debajo del mínimo o del especial. */
+  onQuoteDiscountChange(): void {
+    const value = Number(this.lineEditor.discount);
+    this.lineEditor.discount = !Number.isFinite(value) || value < 0 ? 0 : value > 99.99 ? 99.99 : value;
+    if (!this.lineEditor.basePrice) this.lineEditor.basePrice = Number(this.lineEditor.price) || 0;
+    const base = Number(this.lineEditor.basePrice) || 0;
+    this.lineEditorMessage = '';
+    this.lineEditor.price = this.round2(base * (1 - this.lineEditor.discount / 100));
+    const product = this.lineEditorProduct;
+    if (!product || !this.lineEditor.discount || base <= 0) return;
+    const floor = this.priceFloor(product, Number(this.lineEditor.quantity) || 0);
+    if (this.lineEditor.price >= floor.price - 0.005) return;
+    const maxPercent = Math.max(0, Math.floor((1 - floor.price / base) * 10000) / 100);
+    this.lineEditor.discount = maxPercent;
+    this.lineEditor.price = this.round2(base * (1 - maxPercent / 100));
+    this.lineEditorMessage = `Descuento máximo ${maxPercent.toFixed(2)} %: el precio no puede bajar del ${floor.label} (RD$${floor.price.toFixed(2)}).`;
+  }
+  get quoteDiscountTotal(): number { return this.round2(this.quote.lines.reduce((sum, line) => sum + Number(line.discountAmount || 0), 0)); }
   get lineEditorPriceInfo(): { minimum: number; special: number } | null {
     const product = this.lineEditorProduct;
     if (!product) return null;
-    return { minimum: this.round2(Number(product.salePrice || 0) * 0.9), special: this.round2(Number(product.minimumPrice || 0)) };
+    return { minimum: this.round2(Number(product.salePrice || 0) * 0.9), special: this.round2(Number(product.specialPrice) > 0 ? Number(product.specialPrice) : Number(product.minimumPrice || 0)) };
   }
   // Igual que la orden de venta: el precio incluye ITBIS, importe = cantidad × precio y el ITBIS se extrae.
   get lineEditorTotal(): number { return this.round2(Number(this.lineEditor.quantity || 0) * Number(this.lineEditor.price || 0)); }
@@ -254,18 +283,25 @@ export class QuotationPageComponent implements OnInit {
     const product = this.lineEditorProduct;
     if (product) {
       if (qty < Number(product.minimumSaleQuantity || 0)) { this.lineEditorMessage = `La cantidad mínima de venta de ${product.description} es ${product.minimumSaleQuantity}.`; return; }
-      const isWholesaleSale = product.wholesaleEnabled && product.minimumWholesaleQuantity > 0 && product.wholesalePrice > 0 && qty >= product.minimumWholesaleQuantity;
-      const minimumAllowedPrice = Number(isWholesaleSale ? product.wholesalePrice : product.minimumPrice) || 0;
-      if (price <= Number(product.cost || 0) || price < minimumAllowedPrice) {
+      const floor = this.priceFloor(product, qty);
+      const isWholesaleSale = floor.wholesale;
+      const minimumAllowedPrice = floor.price;
+      if (price <= Number(product.cost || 0) || price < minimumAllowedPrice - 0.005) {
         this.lineEditorMessage = isWholesaleSale
           ? `La venta al por mayor requiere un precio mínimo de RD$${minimumAllowedPrice.toFixed(2)}.`
-          : `El precio no puede ser menor a RD$${minimumAllowedPrice.toFixed(2)} ni igual o menor al costo.`;
+          : price <= Number(product.cost || 0)
+            ? 'El precio no puede ser igual o menor al costo.'
+            : `El precio no puede ser menor al ${floor.label}: RD$${minimumAllowedPrice.toFixed(2)}.`;
         return;
       }
     }
     // ITBIS de cada producto (exento = 0), igual que la orden de venta.
     const itbis = product ? (product.exemptItbis ? 0 : Number(product.taxValue ?? this.taxRate) || 0) : Number(this.taxRate) || 0;
-    const line = { code: this.lineEditor.code.trim(), description: this.lineEditor.description.trim(), quantity: Number(this.lineEditor.quantity), price: Number(this.lineEditor.price), itbis };
+    // Descuento por línea (si la empresa lo usa): el precio ya trae el descuento; se guarda el % y el precio original.
+    const basePrice = this.discountEnabled && Number(this.lineEditor.basePrice) > price ? Number(this.lineEditor.basePrice) : price;
+    const discountPercent = basePrice > price ? Math.round((1 - price / basePrice) * 10000) / 100 : 0;
+    const line = { code: this.lineEditor.code.trim(), description: this.lineEditor.description.trim(), quantity: Number(this.lineEditor.quantity), price: Number(this.lineEditor.price), itbis,
+      discountPercent, discountAmount: Math.round(qty * (basePrice - price) * 100) / 100, originalPrice: discountPercent ? basePrice : null };
     if (this.editingLineIndex === null) this.quote.lines.push(line); else this.quote.lines[this.editingLineIndex] = line;
     this.resetLineEditor();
     this.focusEditorField('quotationLineCode');
@@ -275,14 +311,14 @@ export class QuotationPageComponent implements OnInit {
     if (this.editingLineIndex !== null) return;
     const line = this.quote.lines[index]; if (!line) return;
     this.editingLineIndex = index;
-    this.lineEditor = { code: line.code, description: line.description, quantity: line.quantity, price: line.price };
+    this.lineEditor = { code: line.code, description: line.description, quantity: line.quantity, price: line.price, discount: Number(line.discountPercent || 0), basePrice: Number(line.originalPrice || line.price) };
     this.closeProductSuggestions();
     setTimeout(() => { const input = document.getElementById('quotationLineQuantity') as HTMLInputElement | null; input?.focus(); input?.select(); });
   }
   /** Mientras se edita una línea no se puede tocar el detalle. */
   removeQuotationLine(index: number): void { if (this.editingLineIndex !== null) return; this.quote.lines.splice(index, 1); }
-  private resetLineEditor(): void { this.editingLineIndex = null; this.lineEditor = { code: '', description: '', quantity: 1, price: 0 }; this.lineEditorMessage = ''; this.closeProductSuggestions(); }
-  private selectProduct(product: ProductRecord, closeSuggestions = true): void { this.lineEditor = { ...this.lineEditor, code: product.code, description: this.getProductFullDescription(product), price: Number(product.salePrice ?? 0) }; this.lineEditorMessage = ''; if (closeSuggestions) this.closeProductSuggestions(); }
+  private resetLineEditor(): void { this.editingLineIndex = null; this.lineEditor = { code: '', description: '', quantity: 1, price: 0, discount: 0, basePrice: 0 }; this.lineEditorMessage = ''; this.closeProductSuggestions(); }
+  private selectProduct(product: ProductRecord, closeSuggestions = true): void { this.lineEditor = { ...this.lineEditor, code: product.code, description: this.getProductFullDescription(product), price: Number(product.salePrice ?? 0), discount: 0, basePrice: Number(product.salePrice ?? 0) }; this.lineEditorMessage = ''; if (closeSuggestions) this.closeProductSuggestions(); }
   private closeProductSuggestions(): void { this.productSuggestionField = null; this.activeProductSuggestionIndex = 0; }
   private populateClient(client: ClientRecord): void { this.quote.customer = client.fullName; this.quote.rnc = client.documentType === 'RNC' ? client.documentNumber : this.quote.rnc; this.quote.phone = client.phone ?? ''; this.quote.email = client.email ?? ''; this.quote.address = client.address ?? ''; }
   private clearCustomerContact(): void { this.quote.customer = ''; this.quote.phone = ''; this.quote.email = ''; this.quote.address = ''; }
@@ -294,7 +330,11 @@ export class QuotationPageComponent implements OnInit {
   async load() { try { this.quotes = await this.quotations.list(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudieron cargar las cotizaciones.'; } }
   private payload(): Omit<Quotation, 'id' | 'number'> { return { date: this.quote.date, validUntil: this.quote.validUntil, customer: this.quote.customer.trim(), rnc: this.quote.rnc.trim(), phone: this.quote.phone.trim(), email: this.quote.email.trim(), address: this.quote.address.trim(), notes: this.quote.notes.trim(), subtotal: this.subtotal, itbis: this.tax, total: this.total, status: this.quoteStatus, lines: this.quote.lines.map((line) => ({ ...line, code: line.code.trim(), description: line.description.trim(), quantity: Number(line.quantity), price: Number(line.price), itbis: Number(line.itbis), total: this.lineTotal(line) })) }; }
   async save() { if (!this.perms.ensure(this.editingId ? 'cotizaciones.editar' : 'cotizaciones.crear')) return; if (this.isReadOnly) return; // La cotización queda a nombre del usuario que inició sesión (ya no se pide código de usuario).
-    const validUser = true; if (this.isRncInvalid || !validUser || !this.quote.customer.trim() || !this.quote.lines.length || this.quote.lines.some((line) => !line.description.trim() || line.quantity <= 0)) { this.message = this.isRncInvalid ? 'RNC inválido. Regístralo en Clientes o en el catálogo RNC antes de guardar.' : !validUser ? 'Indica un código de usuario activo antes de guardar.' : 'Completa el cliente y agrega al menos un producto antes de guardar.'; return; } try { const payload = this.payload(); if (this.editingId) { if (!window.confirm('Se reemplazarán las líneas actuales de la cotización. ¿Deseas guardar los cambios?')) return; await this.quotations.update(this.editingId, payload); this.message = 'Cotización actualizada correctamente.'; } else { const saved = await this.quotations.create(payload); this.quote.number = saved.number; this.editingId = saved.id; this.quoteStatus = 'Borrador'; this.message = `Cotización ${saved.number} creada correctamente.`; } await this.load(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudo guardar la cotización.'; } }
+    const validUser = true; if (this.isRncInvalid || !validUser || !this.quote.customer.trim() || !this.quote.lines.length || this.quote.lines.some((line) => !line.description.trim() || line.quantity <= 0)) { this.message = this.isRncInvalid ? 'RNC inválido. Regístralo en Clientes o en el catálogo RNC antes de guardar.' : !validUser ? 'Indica un código de usuario activo antes de guardar.' : 'Completa el cliente y agrega al menos un producto antes de guardar.'; return; }
+    // Si se digitó el RNC al final, el piso cambia (mínimo con RNC, especial sin RNC): se revisan todas las líneas.
+    const belowFloor = this.quote.lines.map((line, index) => { const product = this.products.find((item) => item.code.trim().toLowerCase() === line.code.trim().toLowerCase()); if (!product) return null; const floor = this.priceFloor(product, Number(line.quantity) || 0); return Number(line.price) < floor.price - 0.005 ? `#${index + 1} ${line.description} (RD$${Number(line.price).toFixed(2)}; ${floor.label}: RD$${floor.price.toFixed(2)})` : null; }).filter((item): item is string => !!item);
+    if (belowFloor.length) { this.message = `No se puede guardar: ${belowFloor.length} línea(s) con precio por debajo del permitido. ${belowFloor.slice(0, 3).join('; ')}${belowFloor.length > 3 ? '…' : ''}. Corrige el precio o el descuento.`; return; }
+    try { const payload = this.payload(); if (this.editingId) { if (!window.confirm('Se reemplazarán las líneas actuales de la cotización. ¿Deseas guardar los cambios?')) return; await this.quotations.update(this.editingId, payload); this.message = 'Cotización actualizada correctamente.'; } else { const saved = await this.quotations.create(payload); this.quote.number = saved.number; this.editingId = saved.id; this.quoteStatus = 'Borrador'; this.message = `Cotización ${saved.number} creada correctamente.`; } await this.load(); } catch (error) { this.message = error instanceof Error ? error.message : 'No se pudo guardar la cotización.'; } }
   /** Convertida en orden de venta (o ya facturada): solo se puede consultar. */
   isLocked(item: Quotation): boolean {
     return !!item.orderNumber || !!item.invoiceNumber || this.displayStatus(item.status) === 'Facturada';

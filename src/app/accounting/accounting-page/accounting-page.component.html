@@ -94,7 +94,7 @@
             Filtrar</button
           ><button type="button" (click)="clear()" [disabled]="isLoadingRep607">
             Limpiar</button
-          ><button class="green" type="button">Exportar XLS</button>
+          ><button class="green" type="button" (click)="exportRep607Excel()" [disabled]="isLoadingRep607 || !rep607Invoices.length">Exportar XLS</button>
         </div>
       </section>
       <p *ngIf="rep607Error || actionMessage" class="message">
@@ -529,6 +529,7 @@
             </div>
             <section class="proforma-period-modal__simulation">
               <h3>Simular conversión</h3><p>Elige una forma de introducir el monto. Esta pantalla calcula el resultado, pero no modifica los documentos.</p>
+              <p *ngIf="isProformaNumberFilter" class="proforma-period-modal__rule proforma-period-modal__rule--number">Buscando la factura {{ pendingFilters.invoice }}: solo se cambia esa factura. "Valor a convertir en conduce" la pasa a conduce; "Valor a facturar" la pasa a factura E32 en cola para la DGII, sin convertir nada en conduce.</p>
               <p *ngIf="!isProformaNumberFilter" class="proforma-period-modal__rule">Importante: ninguna proforma del período queda como proforma. Lo que no pase a conduce se convierte en factura E32 y queda en cola para enviarse a la DGII.</p>
               <div class="proforma-period-modal__options">
                 <label [class.is-active]="dialog.option === 'convert'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'convert'" (change)="setProformaPeriodDialogOption('convert')"> Valor a convertir en conduce</label>
@@ -565,16 +566,22 @@
                 <button *ngIf="!dialog.deliveryNotes.confirming" type="button" class="delivery-convert__accept" [disabled]="dialog.deliveryNotes.loading || dialog.deliveryNotes.applying || !selectedDeliveryNotes.length" (click)="requestDeliveryNoteConversion()">{{ dialog.deliveryNotes.applying ? 'Convirtiendo…' : 'Convertir conduce en factura' }}</button>
               </div>
             </section>
-            <footer><button type="button" class="proforma-period-modal__convert" [disabled]="dialog.loading || dialog.applying || !simulatedConvertedCount" (click)="convertProformaPeriod()">{{ dialog.applying ? 'Convirtiendo…' : 'Convertir a conduce' }}</button><button type="button" class="proforma-period-modal__close" (click)="closeProformaPeriodDialog()">Cerrar</button></footer>
+            <footer><button type="button" class="proforma-period-modal__convert" [disabled]="dialog.loading || dialog.applying || (isDirectInvoiceMode ? !directInvoiceCandidates.length : !simulatedConvertedCount)" (click)="convertProformaPeriod()">{{ dialog.applying ? 'Convirtiendo…' : (isDirectInvoiceMode ? 'Facturar (E32 a la DGII)' : 'Convertir a conduce') }}</button><button type="button" class="proforma-period-modal__close" (click)="closeProformaPeriodDialog()">Cerrar</button></footer>
           </section>
         </div>
         <div *ngIf="proformaConversionConfirmation as confirmation" class="proforma-conversion-confirmation-backdrop" role="presentation">
           <section class="proforma-conversion-confirmation" role="dialog" aria-modal="true" aria-label="Confirmar conversión a conduce">
             <div class="proforma-conversion-confirmation__icon">!</div>
             <h2>Confirmar conversión</h2>
+            <ng-container *ngIf="confirmation.direct; else conduceConfirmation">
+              <p>La{{ confirmation.queuedCount === 1 ? '' : 's' }} <strong>{{ confirmation.queuedCount }} proforma{{ confirmation.queuedCount === 1 ? '' : 's' }}</strong> buscada{{ confirmation.queuedCount === 1 ? '' : 's' }} por <strong>RD$ {{ confirmation.queuedAmount | number:'1.2-2' }}</strong> pasará{{ confirmation.queuedCount === 1 ? '' : 'n' }} a <strong>factura E32</strong> y quedará{{ confirmation.queuedCount === 1 ? '' : 'n' }} en cola para enviarse a la DGII.</p>
+              <p class="proforma-conversion-confirmation__note">No se convierte nada en conduce ni se modifica ninguna otra factura.</p>
+            </ng-container>
+            <ng-template #conduceConfirmation>
             <p>Se convertirá{{ confirmation.count === 1 ? '' : 'n' }} {{ confirmation.count }} proforma{{ confirmation.count === 1 ? '' : 's' }} seleccionada{{ confirmation.count === 1 ? '' : 's' }} por <strong>RD$ {{ confirmation.amount | number:'1.2-2' }}</strong> a conduce.</p>
             <p *ngIf="confirmation.queuedCount > 0" class="proforma-conversion-confirmation__queued">Las demás <strong>{{ confirmation.queuedCount }} proforma{{ confirmation.queuedCount === 1 ? '' : 's' }}</strong> del período por <strong>RD$ {{ confirmation.queuedAmount | number:'1.2-2' }}</strong> pasarán a <strong>factura E32</strong> y quedarán en cola para enviarse a la DGII.</p>
             <p class="proforma-conversion-confirmation__note">{{ confirmation.queuedCount > 0 ? 'Al confirmar no quedará ninguna proforma en este período.' : 'Solo se modificarán las facturas seleccionadas.' }}</p>
+            </ng-template>
             <footer>
               <button type="button" class="proforma-conversion-confirmation__cancel" (click)="proformaConversionConfirmation = null">Cancelar</button>
               <button type="button" class="proforma-conversion-confirmation__accept" (click)="confirmProformaPeriodConversion()">Confirmar conversión</button>
@@ -680,7 +687,7 @@
       <section *ngIf="creditTab === 'consult'" class="credit-consult">
         
         <p *ngIf="creditNotesError" class="credit-page-message">{{ creditNotesError }}</p>
-        <div class="credit-consult__filters"><label>Buscar nota<input [(ngModel)]="creditSearch" placeholder="Factura, e-NCF o cliente" /></label><label>Estado<select><option>Todos</option><option>Sin enviar</option><option>Enviada</option><option>Rechazada</option></select></label><button class="blue" type="button">⌕ Buscar</button></div>
+        <div class="credit-consult__filters"><label>Buscar nota<input [(ngModel)]="creditSearch" placeholder="Factura, e-NCF o cliente" /></label><label>Estado<select [(ngModel)]="creditStatusFilter"><option value="Todos">Todos</option><option value="Sin enviar">Sin enviar</option><option value="Enviada">Enviada</option><option value="Aceptada">Aceptada</option><option value="Rechazada">Rechazada</option></select></label><button class="blue" type="button" (click)="loadCreditNotes()">⌕ Buscar</button></div>
         <div class="credit-consult__table"><div class="credit-consult__row credit-consult__row--head"><span>No. nota</span><span>Factura afectada</span><span>e-NCF afectado</span><span>e-NCF nota</span><span>Cliente</span><span>Fecha</span><span>Monto</span><span>Estado</span><span>Acciones</span></div><div class="credit-consult__row" *ngFor="let note of filteredCreditNotes"><strong>{{ note.number }}</strong><span>{{ note.invoice }}</span><span>{{ note.encf }}</span><strong style="color: #1d4ed8;">{{ note.noteEncf || 'Pendiente' }}</strong><span>{{ note.customer }}</span><span>{{ note.date | date:'dd/MM/yyyy' }}</span><strong>RD${{ note.amount | number:'1.2-2' }}</strong><span class="credit-status-pill">{{ note.status }}</span><span class="credit-consult-actions"><button class="credit-action-btn credit-action-btn--message" type="button" title="Ver mensaje DGII" aria-label="Ver mensaje DGII" (click)="showCreditDgiiMessage(note)">&#123; &#125;</button><button *ngIf="canSendCreditNote(note)" class="credit-action-btn credit-action-btn--send" type="button" title="Enviar a DGII" aria-label="Enviar a DGII" [disabled]="isSendingCreditNote" (click)="sendCreditNoteFromList(note)"><img src="assets/icons/invoice-send.svg" alt="" /></button><button class="credit-action-btn credit-action-btn--edit" type="button" title="Editar nota" aria-label="Editar nota" (click)="loadCreditNoteInForm(note, 'edit')"><img src="assets/icons/invoice-edit.svg" alt="" /></button><button *ngIf="isRejectedCreditNote(note)" class="credit-action-btn credit-action-btn--reset" type="button" title="Eliminar e-NCF rechazado" aria-label="Eliminar e-NCF rechazado" [disabled]="isSendingCreditNote" (click)="resetCreditNoteEcf(note)">↺</button><button class="credit-action-btn credit-action-btn--print" type="button" title="Imprimir en 80 mm" aria-label="Imprimir en 80 mm" (click)="printCreditNote(note)"><img src="assets/icons/invoice-print.svg" alt="" /></button><button class="credit-action-btn credit-action-btn--pdf" type="button" title="Descargar PDF carta" aria-label="Descargar PDF carta" (click)="downloadCreditNotePdf(note)"><img src="assets/icons/credit-pdf.svg" alt="" /></button><button class="credit-action-btn credit-action-btn--view" type="button" title="Visualizar nota" aria-label="Visualizar nota" (click)="loadCreditNoteInForm(note, 'view')"><img src="assets/icons/invoice-view.svg" alt="" /></button></span></div><p *ngIf="!filteredCreditNotes.length">No hay notas de crédito para los filtros indicados.</p></div>
       </section>
     </ng-container>
@@ -995,7 +1002,7 @@
           <div class="purchase606__report-filters">
             <label>Mes<select [(ngModel)]="purchaseReportMonth" name="purchaseReportMonth"><option *ngFor="let month of purchaseMonths; let index = index" [ngValue]="index + 1">{{ month }}</option></select></label>
             <label>Año<input type="number" min="2000" [(ngModel)]="purchaseReportYear" name="purchaseReportYear" /></label>
-            <button type="button" class="purchase606__export" (click)="save('Archivo CSV 606')">⇩&nbsp; Exportar CSV (606)</button>
+            <button type="button" class="purchase606__export" (click)="exportPurchase606Csv()">⇩&nbsp; Exportar CSV (606)</button>
           </div>
           <div class="purchase606__report-metrics">
             <article class="purchase606__metric"><span class="purchase606__metric-icon purchase606__metric-icon--blue">▥</span><div><small>Total Facturado</small><strong>RD$ {{ purchaseReportAmountTotal | number:'1.2-2' }}</strong></div></article>

@@ -356,14 +356,14 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }
   }
 
-  /** Mínimo = precio de venta − 10 %; Especial = el "precio mínimo" registrado en el producto. */
+  /** Mínimo = precio de venta − 10 %; Especial = el precio especial del producto (si no tiene, su precio mínimo). */
   get lineEditorPriceInfo(): { minimum: number; special: number } | null {
     const product = this.getProductById(this.lineEditorForm.productId);
     if (!product) return null;
     const round2 = (value: number) => Math.round(value * 100) / 100;
     return {
       minimum: round2(this.getInvoiceUnitPrice(product, product.salePrice) * 0.9),
-      special: round2(this.getInvoiceUnitPrice(product, product.minimumPrice))
+      special: round2(this.getInvoiceUnitPrice(product, Number(product.specialPrice) > 0 ? Number(product.specialPrice) : product.minimumPrice))
     };
   }
 
@@ -570,7 +570,21 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     this.lineEditorDiscount = !Number.isFinite(value) || value < 0 ? 0 : value > 99.99 ? 99.99 : value;
     this.lineEditorMessage = '';
     this.applyLineEditorDiscount();
+    this.limitLineEditorDiscount();
     this.recalcLineEditorTotal();
+  }
+
+  /** El descuento no puede dejar el precio por debajo del mínimo (E31) o del especial (E32 / proforma). */
+  private limitLineEditorDiscount(): void {
+    const product = this.getProductById(this.lineEditorForm.productId);
+    const base = this.lineEditorBasePrice || Number(this.lineEditorForm.unitPrice) || 0;
+    if (!this.saleOrder || !product || base <= 0 || !this.lineEditorDiscount) return;
+    const floor = this.linePriceFloor(product, Number(this.lineEditorForm.quantity) || 0);
+    if (Number(this.lineEditorForm.unitPrice) >= floor.price - 0.005) return;
+    const maxPercent = Math.max(0, Math.floor((1 - floor.price / base) * 10000) / 100);
+    this.lineEditorDiscount = maxPercent;
+    this.applyLineEditorDiscount();
+    this.lineEditorMessage = `Descuento máximo ${maxPercent.toFixed(2)} %: el precio no puede bajar del ${floor.label} (RD$${floor.price.toFixed(2)}).`;
   }
 
   /** Suma de los descuentos por artículo. */
@@ -835,6 +849,25 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     return this.isSpecialRegimeInvoice || product.exemptItbis ? 0 : product.taxValue;
   }
 
+  /** Comprobante de crédito fiscal (E31): el precio no puede bajar del precio mínimo. */
+  private get isFiscalCreditSale(): boolean {
+    return this.invoiceForm.ncfType.match(/(?:^|\D)(31|32|33|34|41|43|44|45|46)(?:\D|$)/)?.[1] === '31';
+  }
+
+  /**
+   * Precio más bajo permitido para una línea:
+   * - venta al por mayor (cantidad suficiente): precio por mayor;
+   * - E31 (crédito fiscal): precio mínimo;
+   * - E32 o proforma E332: precio especial (si el producto no tiene, su precio mínimo).
+   */
+  private linePriceFloor(product: ProductRecord, quantity: number): { price: number; label: string; wholesale: boolean } {
+    const wholesale = product.wholesaleEnabled && product.minimumWholesaleQuantity > 0 && product.wholesalePrice > 0 && quantity >= product.minimumWholesaleQuantity;
+    if (wholesale) return { price: this.getInvoiceUnitPrice(product, product.wholesalePrice), label: 'precio por mayor', wholesale };
+    if (this.isFiscalCreditSale) return { price: this.getInvoiceUnitPrice(product, Number(product.minimumPrice || 0)), label: 'precio mínimo (crédito fiscal E31)', wholesale };
+    const special = Number(product.specialPrice) > 0 ? Number(product.specialPrice) : Number(product.minimumPrice || 0);
+    return { price: this.getInvoiceUnitPrice(product, special), label: 'precio especial (consumo E32 / proforma)', wholesale };
+  }
+
   private getInvoiceUnitPrice(product: ProductRecord, price: number, currentTaxRate?: number): number {
     if (!this.isSpecialRegimeInvoice || product.exemptItbis) return price;
     const taxRate = currentTaxRate ?? product.taxValue;
@@ -965,16 +998,16 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       this.lineEditorMessage = `La cantidad minima de venta de ${product.description} es ${product.minimumSaleQuantity}.`;
       return false;
     }
-    const isWholesaleSale = product.wholesaleEnabled
-      && product.minimumWholesaleQuantity > 0
-      && product.wholesalePrice > 0
-      && qty >= product.minimumWholesaleQuantity;
-    const minimumAllowedPrice = this.getInvoiceUnitPrice(product, isWholesaleSale ? product.wholesalePrice : product.minimumPrice);
+    const floor = this.linePriceFloor(product, qty);
+    const isWholesaleSale = floor.wholesale;
+    const minimumAllowedPrice = floor.price;
     const minimumAllowedCost = this.getInvoiceUnitPrice(product, product.cost);
-    if (price <= minimumAllowedCost || price < minimumAllowedPrice) {
+    if (price <= minimumAllowedCost || price < minimumAllowedPrice - 0.005) {
       this.lineEditorMessage = isWholesaleSale
         ? `La venta al por mayor requiere un precio minimo de RD$${minimumAllowedPrice.toFixed(2)}.`
-        : `El precio${discountPercent ? ' con descuento' : ''} no puede ser menor a RD$${minimumAllowedPrice.toFixed(2)} ni igual o menor al costo.`;
+        : price <= minimumAllowedCost
+          ? `El precio${discountPercent ? ' con descuento' : ''} no puede ser igual o menor al costo.`
+          : `El precio${discountPercent ? ' con descuento' : ''} no puede ser menor al ${floor.label}: RD$${minimumAllowedPrice.toFixed(2)}.`;
       return false;
     }
     const discountFields = this.saleOrder
@@ -1059,7 +1092,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     try {
       const quotation = JSON.parse(rawDraft) as {
         number: string; date: string; customer: string; rnc: string; phone: string; email: string; address: string; notes: string;
-        lines: { code: string; description: string; quantity: number; price: number; itbis: number }[];
+        lines: { code: string; description: string; quantity: number; price: number; itbis: number; discountPercent?: number; discountAmount?: number; originalPrice?: number | null }[];
       };
       if (this.saleOrder) this.quotationNumber = quotation.number;
       const client = this.clients.find((item) => item.documentNumber.trim() === quotation.rnc.trim());
@@ -1080,7 +1113,11 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
         // El precio de la cotización ya incluye ITBIS (igual que la orden de venta).
         const unitPrice = Number(line.price);
         const lineTotal = Number(line.quantity) * unitPrice;
-        return { id: index + 1, productId: product?.id ?? null, description: line.description, quantity: Number(line.quantity), unitPrice, taxRate, taxAmount: taxRate ? lineTotal - (lineTotal / (1 + taxRate / 100)) : 0, lineTotal };
+        // El descuento por línea de la cotización pasa igual a la orden de venta.
+        const discount = this.saleOrder && Number(line.discountPercent) > 0
+          ? { discountPercent: Number(line.discountPercent), discountAmount: Number(line.discountAmount || 0), originalPrice: Number(line.originalPrice || unitPrice) }
+          : {};
+        return { id: index + 1, productId: product?.id ?? null, description: line.description, quantity: Number(line.quantity), unitPrice, taxRate, taxAmount: taxRate ? lineTotal - (lineTotal / (1 + taxRate / 100)) : 0, lineTotal, ...discount };
       });
       this.nextInvoiceLineId = this.invoiceLines.length + 1;
       this.invoiceMessage = `Factura preparada desde la cotización ${quotation.number}.`;
@@ -1464,6 +1501,20 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }
 
     this.invoiceForm.customerName = customerName;
+
+    // Si se digitó el RNC al final, el comprobante pudo cambiar (E32 → E31): se revisan otra vez
+    // los precios de todas las líneas contra el mínimo (E31) o el especial (E32 / proforma).
+    const belowFloor = this.invoiceLines.map((line) => {
+      const product = this.getProductById(line.productId);
+      if (!product) return null;
+      const floor = this.linePriceFloor(product, Number(line.quantity) || 0);
+      return Number(line.unitPrice) < floor.price - 0.005 ? { line, floor } : null;
+    }).filter((item): item is { line: InvoiceLine; floor: { price: number; label: string; wholesale: boolean } } => !!item);
+    if (belowFloor.length) {
+      const detail = belowFloor.slice(0, 3).map(({ line, floor }) => `#${line.id} ${line.description} (RD$${Number(line.unitPrice).toFixed(2)}; ${floor.label}: RD$${floor.price.toFixed(2)})`).join('; ');
+      this.invoiceMessage = `No se puede guardar: ${belowFloor.length} línea(s) con precio por debajo del permitido para este comprobante. ${detail}${belowFloor.length > 3 ? '…' : ''}. Corrige el precio o el descuento.`;
+      return;
+    }
 
     // Una orden de venta es un documento comercial, no un cobro. Se guarda
     // directamente y la impresión queda disponible como acción posterior.

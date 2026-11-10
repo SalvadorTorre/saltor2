@@ -28,6 +28,8 @@ export interface MenuLink {
   directModeOnly?: boolean;
   /** Módulo que la empresa debe tener contratado. */
   module?: CompanyModule;
+  /** Se oculta si la empresa tiene este módulo (p. ej. Cobro de facturas cuando trabaja con orden de venta). */
+  withoutModule?: CompanyModule;
 }
 
 export interface MenuGroup {
@@ -135,7 +137,7 @@ export class AppComponent implements OnInit {
       key: 'caja', label: 'Caja', icon: 'wallet', module: 'caja', groups: [
         {
           title: 'Operación de caja', icon: 'cash', color: '#10b981', links: [
-            { label: 'Cobro de facturas', path: '/caja/cobro', cashierModeOnly: true },
+            { label: 'Cobro de facturas', path: '/caja/cobro', cashierModeOnly: true, withoutModule: 'transacciones' },
             { label: 'Facturar órdenes', path: '/caja/facturar-ordenes', cashierModeOnly: true, module: 'transacciones' },
             { label: 'Apertura', path: '/caja/apertura' },
             { label: 'Cierre', path: '/caja/cierre' },
@@ -341,6 +343,7 @@ export class AppComponent implements OnInit {
       && (!link.cashierModeOnly || this.isCashierMode)
       && (!link.directModeOnly || !this.isCashierMode)
       && (!link.module || this.activeModules.includes(link.module))
+      && (!link.withoutModule || !this.activeModules.includes(link.withoutModule))
       && this.permissions.canOpen(link.path)
     );
   }

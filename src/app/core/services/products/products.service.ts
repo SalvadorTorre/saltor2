@@ -18,6 +18,7 @@ interface ProductRow {
   costo: number | string | null;
   precio_venta: number | string | null;
   precio_minimo: number | string | null;
+  precioespecial?: number | string | null;
   ventaxmayor: 'S' | 'N' | null;
   precio_mayor: number | string | null;
   cantidadminventa: number | string | null;
@@ -267,6 +268,7 @@ export class ProductsService {
       cost: Number(row.costo ?? 0),
       salePrice: Number(row.precio_venta ?? 0),
       minimumPrice: Number(row.precio_minimo ?? 0),
+      specialPrice: Number(row.precioespecial ?? 0),
       wholesaleEnabled: row.ventaxmayor === 'S',
       wholesalePrice: Number(row.precio_mayor ?? 0),
       minimumSaleQuantity: Number(row.cantidadminventa ?? 1),
@@ -305,6 +307,7 @@ export class ProductsService {
       costo: Number(form.cost || 0),
       precio_venta: Number(form.salePrice || 0),
       precio_minimo: Number(form.minimumPrice || 0),
+      precioespecial: Number(form.specialPrice || 0),
       ventaxmayor: form.wholesaleEnabled ? 'S' : 'N',
       precio_mayor: form.wholesaleEnabled ? Number(form.wholesalePrice || 0) : 0,
       cantidadminventa: Math.max(1, Number(form.minimumSaleQuantity || 1)),

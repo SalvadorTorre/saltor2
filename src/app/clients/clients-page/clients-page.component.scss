@@ -1,3 +1,14 @@
 
 .req { color: #d92d20; font-weight: 800; }
 .auto-code { background: #f1f5f9 !important; color: #475467; cursor: default; }
+
+/* Columna Opciones: botones Editar y Eliminar con icono */
+.client-table__actions { display: flex; align-items: center; gap: 6px; }
+.client-action { display: inline-grid; place-items: center; width: 34px; height: 32px; padding: 0; border-radius: 8px; cursor: pointer; transition: transform .12s, box-shadow .12s, background .12s; }
+.client-action img { display: block; width: 18px; height: 18px; }
+.client-action--edit { border: 1px solid #147ff1; background: #147ff1; }
+.client-action--edit img { filter: brightness(0) invert(1); }
+.client-action--edit:hover { background: #0b6bd6; box-shadow: 0 4px 10px rgba(20, 127, 241, .3); transform: translateY(-1px); }
+.client-action--delete { border: 1px solid #fecaca; background: #fef2f2; }
+.client-action--delete:hover:not(:disabled) { background: #fee2e2; border-color: #dc2626; box-shadow: 0 4px 10px rgba(220, 38, 38, .2); transform: translateY(-1px); }
+.client-action:disabled { opacity: .4; cursor: not-allowed; }

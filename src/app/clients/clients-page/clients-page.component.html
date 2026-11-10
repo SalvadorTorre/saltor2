@@ -94,18 +94,12 @@
         <span [class.client-balance--open]="client.balance > 0">RD${{ client.balance | number:'1.2-2' }}</span>
         <span class="company-status-pill" [class.company-status-pill--inactive]="client.status !== 'Activo'">{{ client.status }}</span>
         <div class="client-table__actions" (click)="$event.stopPropagation()">
-          <button class="client-options__trigger" type="button" (click)="openClientOptions(client.id, $event)">
-            Opciones
+          <button class="client-action client-action--edit" type="button" title="Editar cliente" aria-label="Editar cliente" (click)="editClientFromOptions(client, $event)">
+            <img src="assets/icons/invoice-edit.svg" alt="" aria-hidden="true" />
           </button>
-
-          <div class="client-options__menu" *ngIf="openClientOptionsId === client.id">
-            <button class="client-options__item" type="button" (click)="editClientFromOptions(client, $event)">
-              Editar
-            </button>
-            <button class="client-options__item client-options__item--danger" type="button" [disabled]="!canDeleteClient(client)" (click)="deleteClient(client)">
-              Eliminar
-            </button>
-          </div>
+          <button class="client-action client-action--delete" type="button" [title]="canDeleteClient(client) ? 'Eliminar cliente' : 'No se puede eliminar: tiene balance pendiente'" aria-label="Eliminar cliente" [disabled]="!canDeleteClient(client)" (click)="deleteClient(client)">
+            <img src="assets/icons/line-trash-red.svg" alt="" aria-hidden="true" />
+          </button>
         </div>
       </div>
     </div>

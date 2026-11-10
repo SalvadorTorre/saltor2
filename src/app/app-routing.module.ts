@@ -29,6 +29,20 @@ export const platformOwnerOnly: CanMatchFn = async () => {
 };
 
 /** Restringe las pantallas contratadas por la empresa activa, incluso si se escribe la URL. */
+/** La pantalla solo existe si la empresa NO tiene el módulo; si lo tiene, se va a `redirectTo`. */
+export const companyWithoutModule = (module: CompanyModule, redirectTo: string): CanMatchFn => async () => {
+  const auth = inject(AuthService);
+  const modules = inject(CompanyModulesService);
+  const router = inject(Router);
+  const session = await auth.restoreSession();
+  if (!session) return router.createUrlTree(['/inicio']);
+  try {
+    return !(await modules.getActiveModules(session.companyId)).includes(module) || router.createUrlTree([redirectTo]);
+  } catch {
+    return true;
+  }
+};
+
 export const companyModuleOnly = (module: CompanyModule): CanMatchFn => async () => {
   const auth = inject(AuthService);
   const modules = inject(CompanyModulesService);
@@ -76,7 +90,8 @@ export const routes: Routes = [
     canMatch: [companyModuleOnly('caja')], canActivate: [screenAllowed], canActivateChild: [screenAllowed],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'apertura' },
-      { path: 'cobro', title: 'Cobro de facturas', loadComponent: () => import('./cash/collection-page/cash-collection-page.component').then((m) => m.CashCollectionPageComponent) },
+      // Empresas que trabajan con orden de venta cobran en "Facturar órdenes".
+      { path: 'cobro', title: 'Cobro de facturas', canMatch: [companyWithoutModule('transacciones', '/caja/facturar-ordenes')], loadComponent: () => import('./cash/collection-page/cash-collection-page.component').then((m) => m.CashCollectionPageComponent) },
       { path: 'facturar-ordenes', title: 'Facturar órdenes', canMatch: [companyModuleOnly('transacciones')], loadComponent: () => import('./cash/orders-page/cash-orders-page.component').then((m) => m.CashOrdersPageComponent) },
       { path: 'apertura', title: 'Apertura de caja', loadComponent: () => import('./cash/opening-page/cash-opening-page.component').then((m) => m.CashOpeningPageComponent) },
       { path: 'cierre', title: 'Cierre de caja', loadComponent: () => import('./cash/closing-page/cash-closing-page.component').then((m) => m.CashClosingPageComponent) },
