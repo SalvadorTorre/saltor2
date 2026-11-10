@@ -716,7 +716,7 @@
             <small>Pendientes de envío</small><strong>{{ minorPendingCount }}</strong><span>por reportar</span>
           </div>
           <div class="expclean__metric expclean__metric--accent">
-            <small>Total con ITBIS</small><strong>RD${{ minorTotalGrand | number:'1.2-2' }}</strong><span>acumulado</span>
+            <small>Total de gastos</small><strong>RD${{ minorTotalGrand | number:'1.2-2' }}</strong><span>acumulado</span>
           </div>
         </section>
         <section class="expclean__body">
@@ -753,8 +753,8 @@
                 <label><span>Monto (RD$)</span>
                   <input type="number" min="0" step="0.01" [(ngModel)]="expense.taxable" name="eqMonto" placeholder="0.00" />
                 </label>
-                <label><span>ITBIS estimado ({{ expense.itbisRate }}%)</span>
-                  <input type="text" [ngModel]="minorItbisAmount | number:'1.2-2'" disabled />
+                <label><span>ITBIS</span>
+                  <input type="text" value="No aplica (exento)" disabled />
                 </label>
               </div>
               <div class="expclean__actions">

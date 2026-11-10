@@ -109,8 +109,9 @@ export class AccountingPageComponent implements OnInit {
   readonly minorCenters = MINOR_CENTERS;
   readonly minorPayments = MINOR_PAYMENTS;
   minorQuickCategories = [...MINOR_QUICK_CATEGORIES];
-  get minorItbisAmount(): number { return this.round2(Math.max(0, this.expense.taxable) * Math.max(0, Math.min(100, this.expense.itbisRate)) / 100); }
-  get minorTotal(): number { return this.round2(Math.max(0, this.expense.taxable) + Math.max(0, this.expense.exempt) + this.minorItbisAmount); }
+  /** Los gastos menores (e-CF 43) no llevan ITBIS: el monto es exento. */
+  get minorItbisAmount(): number { return 0; }
+  get minorTotal(): number { return this.round2(Math.max(0, this.expense.taxable) + Math.max(0, this.expense.exempt)); }
   get minorCount(): number { return this.minorExpenses.length; }
   get minorTotalGrand(): number { return this.minorExpenses.reduce((sum, m) => sum + (m.total || 0), 0); }
   get minorItbisGrand(): number { return this.minorExpenses.reduce((sum, m) => sum + (m.itbisAmount || 0), 0); }
@@ -133,12 +134,14 @@ export class AccountingPageComponent implements OnInit {
   async addMinorFromQuick(): Promise<void> {
     if (!this.expense.supplier.trim()) { this.message = 'Completa el nombre del suplidor / beneficiario.'; return; }
     if (!this.expense.concept.trim()) { this.message = 'Agrega una descripción (concepto) del gasto.'; return; }
-    const taxable = Math.max(0, this.expense.taxable);
-    const exempt = Math.max(0, this.expense.exempt);
-    if (taxable <= 0 && exempt <= 0) { this.message = 'Ingresa el monto del gasto (RD$).'; return; }
-    const rate = Math.max(0, Math.min(100, this.expense.itbisRate));
-    const itbis = this.round2(taxable * rate / 100);
-    const total = this.round2(taxable + exempt + itbis);
+    // Gasto menor (e-CF 43): sin ITBIS. Todo el monto se guarda como exento.
+    const amount = this.round2(Math.max(0, this.expense.taxable) + Math.max(0, this.expense.exempt));
+    if (amount <= 0) { this.message = 'Ingresa el monto del gasto (RD$).'; return; }
+    const taxable = 0;
+    const exempt = amount;
+    const rate = 0;
+    const itbis = 0;
+    const total = amount;
     try {
       const data: MinorExpenseSaveData = {
         ...this.expense, date: this.expense.date, supplier: this.expense.supplier.trim(), rnc: this.expense.rnc.trim(),
@@ -162,13 +165,23 @@ export class AccountingPageComponent implements OnInit {
     this.expense = {
       voucher: m.voucher, date: m.date, supplier: m.supplier, rnc: m.rnc, supplierNcf: m.supplierNcf, document: m.document,
       category: this.minorQuickCategories.includes(m.category) ? m.category : this.minorQuickCategories[0] ?? 'Otros gastos',
-      center: m.center, person: m.person, taxable: m.taxable, exempt: m.exempt, itbisRate: m.itbisRate, payment: m.payment,
+      center: m.center, person: m.person, taxable: this.round2(Number(m.taxable || 0) + Number(m.exempt || 0)), exempt: 0, itbisRate: 0, payment: m.payment,
       concept: m.concept, notes: m.notes, status: m.status
     };
     this.editingMinorExpenseId = m.id;
     this.minorMode = 'edit';
     this.message = `Editando gasto ${m.voucher}. Actualiza los campos y pulsa Actualizar gasto.`;
   }
+  /** Confirmación en ventana del sistema (en vez de la alerta del navegador). */
+  private async confirmBox(title: string, html: string, confirmText: string, danger = false): Promise<boolean> {
+    const answer = await Swal.fire({
+      icon: danger ? 'warning' : 'question', title, html, showCancelButton: true,
+      confirmButtonText: confirmText, cancelButtonText: 'Cancelar',
+      confirmButtonColor: danger ? '#dc2626' : '#147ff1', reverseButtons: true
+    });
+    return answer.isConfirmed;
+  }
+
   isSendingMinor = false;
   async sendPendingMinorToDgii(): Promise<void> {
     if (this.isSendingMinor) return;
@@ -261,7 +274,7 @@ export class AccountingPageComponent implements OnInit {
   }
   async deleteE41(record: E41Record): Promise<void> {
     if (record.status === 'Aceptado') return;
-    if (!window.confirm(`¿Deseas eliminar el comprobante ${record.ncf}? Esta acción no se puede deshacer.`)) return;
+    if (!(await this.confirmBox('Eliminar comprobante', `¿Deseas eliminar el comprobante <b>${record.ncf}</b>?<br>Esta acción no se puede deshacer.`, 'Sí, eliminar', true))) return;
     try {
       await this.e41Service.delete(record.id);
       await this.loadE41Data();
@@ -739,7 +752,7 @@ export class AccountingPageComponent implements OnInit {
 
   async resetCreditNoteEcf(note: CreditNoteRecord): Promise<void> {
     if (!this.isRejectedCreditNote(note) || this.isSendingCreditNote) return;
-    if (!window.confirm(`¿Deseas eliminar el e-NCF de la nota ${note.number} para generar uno nuevo?`)) return;
+    if (!(await this.confirmBox('Eliminar e-NCF de la nota', `¿Deseas eliminar el e-NCF de la nota <b>${note.number}</b> para generar uno nuevo?`, 'Sí, eliminar', true))) return;
     this.isSendingCreditNote = true;
     try {
       await this.creditNotesService.resetCreditNoteEcf(note.id);
@@ -1095,7 +1108,7 @@ export class AccountingPageComponent implements OnInit {
   }
 
   async resetPendingInvoiceEcf(invoice: PendingInvoice): Promise<void> {
-    if (this.isProcessingPending || !window.confirm(`¿Deseas eliminar el e-CF de la factura ${invoice.number} para generar uno nuevo?`)) return;
+    if (this.isProcessingPending || !(await this.confirmBox('Eliminar e-CF de la factura', `¿Deseas eliminar el e-CF de la factura <b>${invoice.number}</b> para generar uno nuevo?`, 'Sí, eliminar', true))) return;
     this.isProcessingPending = true;
     this.pendingActionMessage = '';
     try {
@@ -1179,7 +1192,7 @@ export class AccountingPageComponent implements OnInit {
 
   async resetRep607InvoiceEcf(invoice: Rep607Invoice): Promise<void> {
     if (!this.isRejectedStatus(invoice.status) || this.isResending) return;
-    if (!window.confirm(`¿Deseas eliminar el e-CF de la factura ${invoice.number} para generar uno nuevo?`)) return;
+    if (!(await this.confirmBox('Eliminar e-CF de la factura', `¿Deseas eliminar el e-CF de la factura <b>${invoice.number}</b> para generar uno nuevo?`, 'Sí, eliminar', true))) return;
 
     this.isResending = true;
     this.actionMessage = '';
@@ -1299,12 +1312,12 @@ export class AccountingPageComponent implements OnInit {
     this.editingMinorExpenseId = null;
     this.minorMode = 'create';
   }
-  saveMinorExpense(): void {
+  async saveMinorExpense(): Promise<void> {
     if (!this.expense.supplier.trim()) { this.message = 'Completa el suplidor.'; return; }
     if (!this.expense.category || !this.minorCategories.includes(this.expense.category)) { this.message = 'Selecciona una categoría.'; return; }
     if (!this.expense.concept.trim()) { this.message = 'Completa el concepto o descripción del gasto.'; return; }
     if (this.minorTotal <= 0) { this.message = 'El gasto no tiene monto válido. Ingresa un monto gravable o exento.'; return; }
-    if (this.editingMinorExpenseId && !window.confirm('Se actualizará este gasto. ¿Deseas guardar los cambios?')) return;
+    if (this.editingMinorExpenseId && !(await this.confirmBox('Actualizar gasto', 'Se actualizará este gasto. ¿Deseas guardar los cambios?', 'Sí, guardar'))) return;
     const tax = this.minorItbisAmount;
     const total = this.minorTotal;
     if (this.editingMinorExpenseId) {
@@ -1337,7 +1350,7 @@ export class AccountingPageComponent implements OnInit {
     this.message = mode === 'view' ? `Visualizando gasto ${m.voucher}.` : `Editando gasto ${m.voucher}.`;
   }
   async deleteMinorExpense(m: MinorExpenseRecord): Promise<void> {
-    if (!window.confirm(`¿Estás seguro que deseas eliminar el gasto ${m.voucher} (${m.supplier})? Esta acción no se puede deshacer.`)) return;
+    if (!(await this.confirmBox('Eliminar gasto', `¿Estás seguro que deseas eliminar el gasto <b>${m.voucher}</b> (${m.supplier})?<br>Esta acción no se puede deshacer.`, 'Sí, eliminar', true))) return;
     try {
       await this.minorExpensesService.delete(m.id);
       if (this.editingMinorExpenseId === m.id) this.clearMinorExpense();
@@ -1416,7 +1429,7 @@ export class AccountingPageComponent implements OnInit {
           return { description: line.description.trim(), quantity: line.quantity, price: unitPrice, discount: line.discount, itbis: line.itbis, taxAmount: lineTax, lineTotal: lineTaxable };
         })
       };
-      if (this.editingCreditNoteId && !window.confirm('Se actualizarán los datos de la nota y se reemplazarán sus líneas de detalle actuales. ¿Deseas guardar los cambios?')) return null;
+      if (this.editingCreditNoteId && !(await this.confirmBox('Actualizar nota de crédito', 'Se actualizarán los datos de la nota y se reemplazarán sus líneas de detalle actuales. ¿Deseas guardar los cambios?', 'Sí, guardar'))) return null;
       const saved = this.editingCreditNoteId ? await this.creditNotesService.updateCreditNote(this.editingCreditNoteId, payload) : await this.creditNotesService.createCreditNote(payload);
       this.credit.noteNumber = saved.number;
       this.lastSavedCreditNoteId = saved.id;
