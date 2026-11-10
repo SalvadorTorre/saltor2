@@ -94,7 +94,7 @@ export class QuotationPageComponent implements OnInit {
     const code = this.lineEditor.code.trim().toLowerCase();
     return code ? this.products.find((item) => item.code.trim().toLowerCase() === code) : undefined;
   }
-  /** Mínimo = precio de venta − 10 %; Especial = el precio especial del producto, o su precio mínimo si no tiene (igual que la orden de venta). */
+  /** Mínimo = precio_minimo del producto; Especial = el precio especial del producto, o su precio mínimo si no tiene (igual que la orden de venta). */
   /** Con RNC (crédito fiscal E31) el piso es el precio mínimo; sin RNC (E32 / proforma), el precio especial. */
   private get isFiscalCreditQuote(): boolean { return !!this.quote.rnc.trim() && !this.isRncInvalid; }
   private priceFloor(product: ProductRecord, quantity: number): { price: number; label: string; wholesale: boolean } {
@@ -125,7 +125,7 @@ export class QuotationPageComponent implements OnInit {
   get lineEditorPriceInfo(): { minimum: number; special: number } | null {
     const product = this.lineEditorProduct;
     if (!product) return null;
-    return { minimum: this.round2(Number(product.salePrice || 0) * 0.9), special: this.round2(Number(product.specialPrice) > 0 ? Number(product.specialPrice) : Number(product.minimumPrice || 0)) };
+    return { minimum: this.round2(Number(product.minimumPrice || 0)), special: this.round2(Number(product.specialPrice) > 0 ? Number(product.specialPrice) : Number(product.minimumPrice || 0)) };
   }
   // Igual que la orden de venta: el precio incluye ITBIS, importe = cantidad × precio y el ITBIS se extrae.
   get lineEditorTotal(): number { return this.round2(Number(this.lineEditor.quantity || 0) * Number(this.lineEditor.price || 0)); }

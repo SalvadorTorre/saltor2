@@ -356,13 +356,13 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }
   }
 
-  /** Mínimo = precio de venta − 10 %; Especial = el precio especial del producto (si no tiene, su precio mínimo). */
+  /** Mínimo = precio_minimo del producto (piso con E31); Especial = precio especial (piso con E32 / proforma; si no tiene, el mínimo). */
   get lineEditorPriceInfo(): { minimum: number; special: number } | null {
     const product = this.getProductById(this.lineEditorForm.productId);
     if (!product) return null;
     const round2 = (value: number) => Math.round(value * 100) / 100;
     return {
-      minimum: round2(this.getInvoiceUnitPrice(product, product.salePrice) * 0.9),
+      minimum: round2(this.getInvoiceUnitPrice(product, Number(product.minimumPrice || 0))),
       special: round2(this.getInvoiceUnitPrice(product, Number(product.specialPrice) > 0 ? Number(product.specialPrice) : product.minimumPrice))
     };
   }
