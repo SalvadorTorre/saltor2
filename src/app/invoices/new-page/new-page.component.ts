@@ -1504,7 +1504,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
 
     // Si se digitó el RNC al final, el comprobante pudo cambiar (E32 → E31): se revisan otra vez
     // los precios de todas las líneas contra el mínimo (E31) o el especial (E32 / proforma).
-    const belowFloor = this.invoiceLines.map((line) => {
+    // La factura de una orden de venta no vuelve a validar precios (se validaron al crear la orden).
+    const belowFloor = (!this.saleOrder && this.sourceOrderId ? [] : this.invoiceLines).map((line) => {
       const product = this.getProductById(line.productId);
       if (!product) return null;
       const floor = this.linePriceFloor(product, Number(line.quantity) || 0);
@@ -1613,6 +1614,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     try {
       const invoiceData = {
         quotationNumber: this.saleOrder ? this.quotationNumber : undefined,
+        // Factura de una orden escaneada: los precios ya se validaron en la orden.
+        salesOrderId: !this.saleOrder && !this.editingExistingInvoiceId ? this.sourceOrderId : null,
         customerId: this.invoiceForm.customerId,
         customerName: this.invoiceForm.customerName.trim(),
         rnc: this.invoiceForm.rnc.trim(),

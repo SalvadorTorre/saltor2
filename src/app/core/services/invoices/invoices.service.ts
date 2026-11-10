@@ -3,6 +3,8 @@ import { InvoiceLine } from '../../../app.models';
 import { SupabaseService } from '../supabase/supabase.service';
 
 export interface InvoiceSaveData {
+  /** Factura de una orden de venta: el servidor no vuelve a exigir el precio mínimo/especial (ya se validó en la orden). */
+  salesOrderId?: number | null;
   customerId: number | null;
   customerName: string;
   rnc: string;

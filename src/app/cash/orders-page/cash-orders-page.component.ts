@@ -145,6 +145,7 @@ export class CashOrdersPageComponent implements OnInit {
 
     // 1) Factura con los datos de la orden, sin cambios.
     const invoiceData: InvoiceSaveData = {
+      salesOrderId: order.id,
       customerId: detail.customerId, customerName: detail.customerName, rnc: detail.rnc,
       customerPhone: detail.customerPhone, customerEmail: detail.customerEmail, customerAddress: detail.customerAddress, customerCity: detail.customerCity,
       invoiceDate: this.today(), ncfType: this.ncfType, ncf: '',

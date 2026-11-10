@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Component, DestroyRef, inject, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -173,7 +174,18 @@ export class AccountingPageComponent implements OnInit {
     if (this.isSendingMinor) return;
     const count = this.minorPendingCount;
     if (count <= 0) { this.message = 'No hay gastos pendientes para enviar a la DGII.'; return; }
-    if (!window.confirm(`Se intentará enviar ${count} gasto(s) (Borrador / Rechazado / Error) como e-CF 43. ¿Continuar?`)) return;
+    const answer = await Swal.fire({
+      icon: 'question',
+      title: 'Enviar gastos menores a la DGII',
+      html: `Se intentará enviar <b>${count} gasto(s)</b> (Borrador / Rechazado / Error) como <b>e-CF 43</b>.<br>¿Deseas continuar?`,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, enviar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#147ff1',
+      reverseButtons: true,
+      focusCancel: false
+    });
+    if (!answer.isConfirmed) return;
     this.isSendingMinor = true;
     try {
       const pending = this.minorExpenses.filter((expense) => expense.status === 'Borrador' || expense.status === 'Rechazado' || expense.status === 'Error');

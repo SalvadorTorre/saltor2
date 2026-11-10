@@ -1,4 +1,5 @@
 import { reserveOperation, submitOperation, operationResult } from '../_shared/ecf-operation.ts';
+import { isSimulation, simulateOperation } from '../_shared/ecf-simulation.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Content-Type': 'application/json' };
@@ -80,13 +81,14 @@ Deno.serve(async (request) => {
     if (!lines?.length) return json({ error: 'La nota de crédito no tiene detalles para transmitir.' }, 400);
     if (!company?.rnc || !company.razon_social) return json({ error: 'Completa el RNC y la razón social de la empresa.' }, 400);
     if (!config) return json({ error: 'Falta la configuración e-CF de la empresa.' }, 400);
-    if (!certificate?.archivo || !certificate.clave_cifrada) return json({ error: 'Carga el certificado digital y su clave antes de enviar.' }, 400);
+    const simulation = isSimulation(config);
+    if (!simulation && (!certificate?.archivo || !certificate.clave_cifrada)) return json({ error: 'Carga el certificado digital y su clave antes de enviar.' }, 400);
 
     const taxLines: TaxLine[] = lines.map((line: Record<string, unknown>) => {
       const tax = Number(line.monto_itbis ?? 0);
       return { base: Number(line.total_linea ?? 0), tax, rate: effectiveRate(Number(line.tasa_itbis ?? 0), tax) };
     });
-    const certificatePassword = await decryptPassword(certificate.clave_cifrada);
+    const certificatePassword = simulation ? '' : await decryptPassword(certificate!.clave_cifrada);
     const operation = await reserveOperation(admin, 'NOTA_CREDITO', note.id, user, '34', config);
     if (!operation.claimed) return json(operationResult(operation));
     const encf = operation.encf;
@@ -123,8 +125,9 @@ Deno.serve(async (request) => {
       if (discount > 0) scenario[`DescuentoMonto[${lineNumber}]`] = decimal(Number(line.cantidad ?? 0) * Number(line.precio_unitario ?? 0) * discount / 100);
     });
 
+    if (simulation) return json(await simulateOperation(admin, operation, scenario));
     const result = await submitOperation(admin, operation, scenario, {
-      'Content-Type': 'application/json', 'x-cert-p12-b64': byteaToBase64(certificate.archivo),
+      'Content-Type': 'application/json', 'x-cert-p12-b64': byteaToBase64(certificate!.archivo),
       'x-cert-password': certificatePassword, 'x-cert-rnc': company.rnc
     });
     return json(result);
