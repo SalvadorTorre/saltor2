@@ -9,7 +9,7 @@ describe('Impresión de proforma firmada', () => {
     const codes = spyOn<any>(service, 'createFiscalCodes').and.resolveTo({ qr: 'data:image/png;base64,QR', barcode: 'data:image/png;base64,BAR' });
     await service.print(5, 'Vendedor');
     const html = printer.printHtml.calls.mostRecent().args[0] as string;
-    for (const value of ['Factura PROFORMA','E320000000123','SEC123','2026-10-19T16:30:00Z','Producto','Cliente &lt;ejemplo&gt;','Vendedor','118.00','Nota especial','Contado','data:image/png;base64,QR']) expect(html).toContain(value);
+    for (const value of ['Factura de Consumo Electrónica','E320000000123','SEC123','2026-10-19T16:30:00Z','Producto','Cliente &lt;ejemplo&gt;','Vendedor','118.00','Nota especial','Contado','data:image/png;base64,QR']) expect(html).toContain(value);
     expect(html).not.toContain('HORA-DE-SOLICITUD');
     expect(codes).toHaveBeenCalledWith('https://qr.example/123','F005');
     expect(invoices.markInvoicePrinted).toHaveBeenCalledOnceWith(5);

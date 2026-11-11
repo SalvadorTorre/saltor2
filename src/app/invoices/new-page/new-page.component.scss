@@ -129,3 +129,11 @@
   .invoice-lines__table-wrap--discount .line-editor-field--total { grid-column: 3; grid-row: 2; }
   .invoice-lines__table-wrap--discount .line-editor-field--prices { grid-column: 2 / -1; grid-row: 3; }
 }
+
+/* Cliente: misma búsqueda y lista que productos y Cotización */
+.customer-field { position: relative; }
+.customer-suggestions { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; }
+.customer-suggestion-row.product-suggestion-head, .customer-suggestion-row.product-suggestion--row { grid-template-columns: 90px minmax(240px, 1fr) 140px 120px 100px 110px; }
+@media (max-width: 720px) {
+  .customer-suggestion-row.product-suggestion-head, .customer-suggestion-row.product-suggestion--row { grid-template-columns: 80px minmax(120px, 1fr) 90px; }
+}

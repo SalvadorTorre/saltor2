@@ -106,16 +106,13 @@
                   </ng-container>
                 </datalist>
               </label>
-              <label class="field invoice-customer-field field--inline">
+              <label class="field invoice-customer-field field--inline customer-field">
                 <span>Cliente</span>
-                <input type="text" name="invoiceCustomer" [(ngModel)]="invoiceForm.customerName" (ngModelChange)="onInvoiceCustomerNameChange()" (blur)="onInvoiceCustomerBlur()" (keydown.enter)="onInvoiceCustomerEnter($event)" list="invoiceCustomerDatalist" autocomplete="off" />
-                <datalist id="invoiceCustomerDatalist">
-                  <ng-container *ngFor="let client of filteredCustomerClients">
-                    <option [value]="client.fullName">{{ client.documentNumber }}</option>
-                    <option [value]="client.documentNumber">{{ client.fullName }}</option>
-                    <option *ngIf="client.companyName" [value]="client.companyName">{{ client.documentNumber }}</option>
-                  </ng-container>
-                </datalist>
+                <input type="text" name="invoiceCustomer" [(ngModel)]="invoiceForm.customerName" (ngModelChange)="onInvoiceCustomerNameChange()" (focus)="onInvoiceCustomerFocus()" (blur)="onInvoiceCustomerBlur()" (keydown)="onInvoiceCustomerKeydown($event)" (keydown.enter)="onInvoiceCustomerEnter($event)" placeholder="Nombre, RNC o código (Enter vacío = CLIENTE CONTADO)" autocomplete="off" />
+                <div class="product-suggestions product-suggestions--rows customer-suggestions" *ngIf="customerSuggestOpen && filteredCustomerClients.length" role="listbox">
+                  <div class="product-suggestion-head customer-suggestion-row" aria-hidden="true"><span>Código</span><span>Nombre</span><span>RNC / Cédula</span><span>Teléfono</span><span>Categoría</span><span class="num">Balance</span></div>
+                  <button type="button" class="product-suggestion product-suggestion--row customer-suggestion-row" *ngFor="let client of filteredCustomerClients; let index = index" [class.product-suggestion--active]="index === activeCustomerIndex" [class.customer-suggestion--active]="index === activeCustomerIndex" (mousedown)="$event.preventDefault()" (click)="selectCustomerSuggestion(client)"><span class="ps-code">{{ client.code }}</span><span class="ps-desc">{{ client.fullName }}</span><span>{{ client.documentNumber }}</span><span>{{ client.phone }}</span><span>{{ client.category }}</span><span class="num">{{ client.balance | number:'1.2-2' }}</span></button>
+                </div>
               </label>
             </div>
 

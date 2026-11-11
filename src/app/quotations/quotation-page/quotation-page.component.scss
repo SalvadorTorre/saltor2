@@ -105,3 +105,15 @@ h1, h2, p { margin: 0; }h1 { font-size: 23px; line-height: 1.2; letter-spacing: 
 .quote-line__discount { color: #b45309; font-weight: 700; }
 .quotation-summary .totals .totals__discount { color: #b45309; }
 .quotation-summary .totals .totals__discount strong { color: #b45309; }
+
+/* Cliente: misma lista que la de productos (una fila por cliente, con encabezado) */
+.customer-field { position: relative; }
+.customer-suggestions { position: absolute; top: calc(100% + 5px); left: 0; z-index: 25; }
+.customer-suggestion-row.product-suggestion-head, .customer-suggestion-row.product-suggestion--row { grid-template-columns: 90px minmax(240px, 1fr) 140px 120px 100px 110px; }
+@media (max-width: 720px) {
+  .customer-suggestion-row.product-suggestion-head, .customer-suggestion-row.product-suggestion--row { grid-template-columns: 80px minmax(120px, 1fr) 90px; }
+}
+
+/* Cotización anulada: fila en rojo y valor en 0 */
+tr.doc-annulled td { background: #fef2f2 !important; color: #b91c1c !important; }
+tr.doc-annulled td:first-child { box-shadow: inset 4px 0 0 #dc2626; }

@@ -43,13 +43,13 @@
       <div class="invoice-consultation-table__row invoice-consultation-table__row--head">
         <span>Fecha</span><span>Factura</span><span>Cliente</span><span>NCF</span><span>Tipo NCF</span><span>Total</span><span>Forma de pago</span><span>Opciones</span>
       </div>
-      <div *ngFor="let invoice of filteredInvoices" class="invoice-consultation-table__row invoice-consultation-table__row--data">
+      <div *ngFor="let invoice of filteredInvoices" class="invoice-consultation-table__row invoice-consultation-table__row--data" [class.doc-annulled]="invoice.status === 'Anulada'" [title]="invoice.status === 'Anulada' ? 'Factura anulada' : ''">
         <span>{{ invoice.date | date:'dd/MM/yyyy' }}</span>
         <strong>{{ invoice.number }}</strong>
         <span>{{ invoice.customer }}<small *ngIf="invoice.seller" class="invoice-consultation-seller">Vendió: {{ invoice.seller }}</small></span>
         <span>{{ invoice.ncf || 'N/A' }}</span>
         <span class="invoice-ncf-type" [ngClass]="ncfTypeClass(invoice.ncfType)">{{ receiptDocumentType(invoice.ncfType) }}</span>
-        <strong>RD${{ invoice.total | number:'1.2-2' }}</strong>
+        <strong>RD${{ (invoice.status === 'Anulada' ? 0 : invoice.total) | number:'1.2-2' }}<small *ngIf="invoice.status === 'Anulada'" class="doc-annulled__tag">ANULADA</small></strong>
         <span>{{ invoice.paymentMethod }}</span>
         <span class="invoice-consultation-actions">
           <button class="invoice-consultation-view invoice-consultation-view--view" type="button" title="Ver factura" aria-label="Ver factura" (click)="selectInvoice(invoice)"><img src="assets/icons/invoice-view.svg" alt="" /></button>

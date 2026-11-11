@@ -382,7 +382,8 @@ body{width:100%!important;margin:0!important;padding:.8cm 1cm .25cm!important;co
 
   private receiptDocumentType(value: string): string {
     const type = (value || '').toLowerCase();
-    if (/(?:^|\D)332(?:\D|$)/.test(type) || type.includes('proforma')) return 'Factura PROFORMA';
+    // La proforma (E332) se imprime como factura de consumo: el cliente no ve la palabra "proforma".
+    if (/(?:^|\D)332(?:\D|$)/.test(type) || type.includes('proforma')) return 'Factura de Consumo Electrónica';
     if (type.includes('31') || type.includes('credito fiscal') || type.includes('crédito fiscal')) return 'Factura de Crédito Fiscal';
     if (type.includes('32') || type.includes('consumo')) return 'Factura de Consumo Electrónica';
     return (value || '').replace(/^\s*\d{2}\s*-\s*/, '').trim() || 'Factura';

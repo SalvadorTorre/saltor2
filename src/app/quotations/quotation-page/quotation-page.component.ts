@@ -71,7 +71,39 @@ export class QuotationPageComponent implements OnInit {
   get users(): UserRecord[] { return this.data.users; }
   get filteredRncClients(): ClientRecord[] { const value = this.quote.rnc.trim().toLowerCase(); return this.clients.filter((client) => !value || client.documentNumber.toLowerCase().includes(value)).slice(0, 50); }
   get filteredRncRecords(): RncRecord[] { const value = this.quote.rnc.trim().toLowerCase(); return value ? this.data.rncRecords.filter((record) => record.rnc.toLowerCase().includes(value)).slice(0, 50) : []; }
-  get filteredCustomerClients(): ClientRecord[] { const value = this.quote.customer.trim().toLowerCase(); return this.clients.filter((client) => !value || [client.fullName, client.documentNumber, client.companyName ?? ''].some((item) => item.toLowerCase().includes(value))).slice(0, 50); }
+  /**
+   * Búsqueda de clientes igual que la de productos: primero los que EMPIEZAN con lo digitado
+   * (nombre, RNC/cédula o código); si no hay, los que lo CONTIENEN. Orden alfabético por nombre.
+   */
+  get filteredCustomerClients(): ClientRecord[] {
+    const value = this.quote.customer.trim().toLocaleLowerCase();
+    if (!value) return [];
+    const fields = (client: ClientRecord) => [client.fullName, client.documentNumber, client.code, client.companyName ?? ''].map((item) => String(item ?? '').trim().toLocaleLowerCase());
+    const sortName = (client: ClientRecord) => String(client.fullName ?? '').trim().replace(/^[^\p{L}\p{N}]+/u, '');
+    const byName = (list: ClientRecord[]) => list.sort((a, b) => sortName(a).localeCompare(sortName(b), 'es', { sensitivity: 'base', numeric: true })).slice(0, 100);
+    const startsWith = this.clients.filter((client) => fields(client).some((item) => item.startsWith(value)));
+    return byName(startsWith.length ? startsWith : this.clients.filter((client) => fields(client).some((item) => item.includes(value))));
+  }
+  customerSuggestOpen = false;
+  activeCustomerIndex = 0;
+  onQuoteCustomerFocus(): void { this.customerSuggestOpen = true; this.activeCustomerIndex = 0; }
+  onQuoteCustomerBlur(): void { setTimeout(() => this.customerSuggestOpen = false, 150); }
+  onQuoteCustomerKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') return;
+    if (event.key === 'Escape') { this.customerSuggestOpen = false; return; }
+    const list = this.filteredCustomerClients;
+    if (!list.length || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+    event.preventDefault();
+    this.customerSuggestOpen = true;
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    this.activeCustomerIndex = (this.activeCustomerIndex + direction + list.length) % list.length;
+    this.scrollActiveCustomer();
+  }
+  selectCustomerSuggestion(client: ClientRecord): void {
+    this.populateClient(client); this.isRncInvalid = false; this.customerSuggestOpen = false;
+    this.focusEditorField('quotationAddress');
+  }
+  private scrollActiveCustomer(): void { setTimeout(() => document.querySelector('.customer-suggestion--active')?.scrollIntoView({ block: 'nearest' })); }
   get productSuggestions(): ProductRecord[] {
     const value = (this.productSuggestionField === 'code' ? this.lineEditor.code : this.lineEditor.description).trim().toLocaleLowerCase();
     if (!value) return [];
@@ -145,6 +177,8 @@ export class QuotationPageComponent implements OnInit {
       return matchesSearch && (this.statusFilter === 'Todas' || this.displayStatus(quote.status) === this.statusFilter);
     });
   }
+  /** Cotización anulada: fila en rojo y valor en 0. */
+  isAnnulled(status: string | null | undefined): boolean { return /anulad/i.test(String(status ?? '')); }
   displayStatus(status: string): string { return status?.toLowerCase() === 'activa' ? 'Borrador' : (status || 'Borrador'); }
   statusClass(status: string): string {
     const value = this.displayStatus(status).toLowerCase();
@@ -199,11 +233,24 @@ export class QuotationPageComponent implements OnInit {
     this.focusEditorField('quotationCustomer');
   }
   onQuoteCustomerChange(): void {
+    this.customerSuggestOpen = true; this.activeCustomerIndex = 0;
     const value = this.quote.customer.trim().toLowerCase();
-    const client = this.clients.find((item) => [item.fullName, item.documentNumber, item.companyName ?? ''].some((text) => text.trim().toLowerCase() === value));
+    // Campo vacío (p. ej. al borrar con Retroceso): no se busca ningún cliente; se limpian sus datos.
+    // Antes, un cliente sin empresa o sin documento "coincidía" con el texto vacío y se cargaba solo.
+    if (!value) { this.quote.rnc = ''; this.clearCustomerContact(); this.isRncInvalid = false; return; }
+    const client = this.clients.find((item) => [item.fullName, item.documentNumber, item.companyName ?? ''].some((text) => { const field = String(text ?? '').trim().toLowerCase(); return !!field && field === value; }));
     if (client) { this.populateClient(client); this.isRncInvalid = false; }
   }
-  onQuoteCustomerEnter(event: Event): void { event.preventDefault(); const client = this.filteredCustomerClients[0]; if (client) { this.populateClient(client); this.isRncInvalid = false; } this.focusEditorField('quotationAddress'); }
+  onQuoteCustomerEnter(event: Event): void {
+    event.preventDefault();
+    // Enter sin escribir nada: cliente de contado.
+    if (!this.quote.customer.trim()) { this.quote.customer = 'CLIENTE CONTADO'; this.customerSuggestOpen = false; this.focusEditorField('quotationAddress'); return; }
+    const list = this.filteredCustomerClients;
+    const client = this.customerSuggestOpen ? list[this.activeCustomerIndex] ?? list[0] : undefined;
+    if (client) { this.selectCustomerSuggestion(client); return; }
+    this.customerSuggestOpen = false;
+    this.focusEditorField('quotationAddress');
+  }
   getProductFullDescription(product: ProductRecord): string { return [product.description, product.brand, product.type, product.size].filter(Boolean).join(' - '); }
   isActiveProductSuggestion(index: number): boolean { return index === this.activeProductSuggestionIndex; }
   onQuoteProductCodeChange(): void {
@@ -320,7 +367,13 @@ export class QuotationPageComponent implements OnInit {
   private resetLineEditor(): void { this.editingLineIndex = null; this.lineEditor = { code: '', description: '', quantity: 1, price: 0, discount: 0, basePrice: 0 }; this.lineEditorMessage = ''; this.closeProductSuggestions(); }
   private selectProduct(product: ProductRecord, closeSuggestions = true): void { this.lineEditor = { ...this.lineEditor, code: product.code, description: this.getProductFullDescription(product), price: Number(product.salePrice ?? 0), discount: 0, basePrice: Number(product.salePrice ?? 0) }; this.lineEditorMessage = ''; if (closeSuggestions) this.closeProductSuggestions(); }
   private closeProductSuggestions(): void { this.productSuggestionField = null; this.activeProductSuggestionIndex = 0; }
-  private populateClient(client: ClientRecord): void { this.quote.customer = client.fullName; this.quote.rnc = client.documentType === 'RNC' ? client.documentNumber : this.quote.rnc; this.quote.phone = client.phone ?? ''; this.quote.email = client.email ?? ''; this.quote.address = client.address ?? ''; }
+  private populateClient(client: ClientRecord): void { this.quote.customer = client.fullName; this.quote.rnc = this.clientFiscalDocument(client); this.quote.phone = client.phone ?? ''; this.quote.email = client.email ?? ''; this.quote.address = client.address ?? ''; }
+  /** RNC (9 dígitos) o cédula (11 dígitos) del cliente, sea cual sea su tipo de documento; un código interno no se usa como RNC. */
+  private clientFiscalDocument(client: ClientRecord): string {
+    const document = String(client.documentNumber ?? '').trim();
+    const digits = document.replace(/\D/g, '');
+    return digits.length === 9 || digits.length === 11 ? document : '';
+  }
   private clearCustomerContact(): void { this.quote.customer = ''; this.quote.phone = ''; this.quote.email = ''; this.quote.address = ''; }
   private round2(value: number): number { return Math.round((Number(value) || 0) * 100) / 100; }
   private async loadClients(): Promise<void> { try { const clients = await this.clientsService.getClients(); if (clients.length) this.data.clients = clients; } catch {} }

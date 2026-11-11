@@ -110,17 +110,52 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     return [...fromClients, ...fromRncRecords].slice(0, 50);
   }
 
+  /**
+   * Búsqueda de clientes igual que la de productos (y que Cotización): primero los que EMPIEZAN con lo
+   * digitado (nombre, RNC/cédula, código o empresa); si no hay, los que lo CONTIENEN. Orden alfabético.
+   */
   get filteredCustomerClients(): ClientRecord[] {
-    const q = this.invoiceForm.customerName.trim().toLowerCase();
-    if (!q) return this.clients.slice(0, 50);
-    return this.clients
-      .filter((c) => {
-        const byName = c.fullName.toLowerCase().includes(q);
-        const byDoc = c.documentNumber.toLowerCase().includes(q);
-        const byCompany = (c.companyName ?? '').toLowerCase().includes(q);
-        return byName || byDoc || byCompany;
-      })
-      .slice(0, 50);
+    const value = this.invoiceForm.customerName.trim().toLocaleLowerCase();
+    if (!value || value === 'cliente contado') return [];
+    const fields = (client: ClientRecord) => [client.fullName, client.documentNumber, client.code, client.companyName ?? ''].map((item) => String(item ?? '').trim().toLocaleLowerCase());
+    const sortName = (client: ClientRecord) => String(client.fullName ?? '').trim().replace(/^[^\p{L}\p{N}]+/u, '');
+    const byName = (list: ClientRecord[]) => list.sort((a, b) => sortName(a).localeCompare(sortName(b), 'es', { sensitivity: 'base', numeric: true })).slice(0, 100);
+    const startsWith = this.clients.filter((client) => fields(client).some((item) => item.startsWith(value)));
+    return byName(startsWith.length ? startsWith : this.clients.filter((client) => fields(client).some((item) => item.includes(value))));
+  }
+  customerSuggestOpen = false;
+  activeCustomerIndex = 0;
+  onInvoiceCustomerFocus(): void { this.customerSuggestOpen = true; this.activeCustomerIndex = 0; }
+  onInvoiceCustomerKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') return;
+    if (event.key === 'Escape') { this.customerSuggestOpen = false; return; }
+    const list = this.filteredCustomerClients;
+    if (!list.length || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+    event.preventDefault();
+    this.customerSuggestOpen = true;
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    this.activeCustomerIndex = (this.activeCustomerIndex + direction + list.length) % list.length;
+    window.setTimeout(() => document.querySelector('.customer-suggestion--active')?.scrollIntoView({ block: 'nearest' }));
+  }
+  /** Clic en un cliente de la lista: se cargan sus datos y el cursor pasa al siguiente campo. */
+  selectCustomerSuggestion(client: ClientRecord): void {
+    this.chooseCustomer(client);
+    const input = this.el.nativeElement.querySelector('input[name="invoiceCustomer"]') as HTMLInputElement | null;
+    if (input) this.focusNextField({ target: input, preventDefault: () => undefined } as unknown as Event);
+  }
+  private chooseCustomer(client: ClientRecord): void {
+    this.customerSuggestOpen = false;
+    this.populateCustomerFields(client);
+    this.invoiceForm.customerName = client.fullName;
+    this.isRncInvalid = false;
+    this.applyNcfTypeByRnc(client);
+    this.invoiceMessage = `Cliente seleccionado: ${client.fullName}.`;
+  }
+  /** RNC (9 dígitos) o cédula (11) del cliente, sea cual sea su tipo de documento; un código interno no se usa. */
+  private clientFiscalDocument(client: ClientRecord): string {
+    const document = String(client.documentNumber ?? '').trim();
+    const digits = document.replace(/\D/g, '');
+    return digits.length === 9 || digits.length === 11 ? document : '';
   }
 
   ncfSequences: NcfSequence[] = [
@@ -1189,7 +1224,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   private populateCustomerFields(client: ClientRecord): void {
     this.invoiceForm.customerId = client.id;
     this.invoiceForm.customerName = client.fullName;
-    this.invoiceForm.rnc = client.documentType === 'RNC' ? client.documentNumber : this.invoiceForm.rnc;
+    this.invoiceForm.rnc = this.clientFiscalDocument(client) || (this.invoiceForm.rnc.trim() === String(client.documentNumber ?? '').trim() ? this.invoiceForm.rnc : '');
     this.invoiceForm.customerPhone = client.phone ?? '';
     this.invoiceForm.customerEmail = client.email ?? '';
     this.invoiceForm.customerAddress = client.address ?? '';
@@ -1245,6 +1280,8 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   onInvoiceCustomerNameChange(): void {
+    this.customerSuggestOpen = true;
+    this.activeCustomerIndex = 0;
     const input = this.invoiceForm.customerName.trim();
     if (!input) {
       this.clearCustomerFields();
@@ -1307,6 +1344,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   onInvoiceCustomerBlur(): void {
+    window.setTimeout(() => this.customerSuggestOpen = false, 150);
     if (this.invoiceForm.customerName.trim()) return;
     this.invoiceForm.customerId = null;
     this.invoiceForm.customerName = 'CLIENTE CONTADO';
@@ -1318,6 +1356,22 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   onInvoiceCustomerEnter(event: Event): void {
     event.preventDefault();
     const input = this.invoiceForm.customerName.trim();
+    // Enter sin escribir nada: cliente de contado (igual que Cotización).
+    if (!input) {
+      this.customerSuggestOpen = false;
+      this.onInvoiceCustomerBlur();
+      this.focusNextField(event);
+      return;
+    }
+    // Lista abierta: se toma el cliente marcado con las flechas (o el primero).
+    const list = this.customerSuggestOpen ? this.filteredCustomerClients : [];
+    const highlighted = list[this.activeCustomerIndex] ?? list[0];
+    if (highlighted) {
+      this.chooseCustomer(highlighted);
+      this.focusNextField(event);
+      return;
+    }
+    this.customerSuggestOpen = false;
     if (input) {
       const exact = this.clients.find((c) => {
         const byName = c.fullName.trim().toLowerCase() === input.toLowerCase();

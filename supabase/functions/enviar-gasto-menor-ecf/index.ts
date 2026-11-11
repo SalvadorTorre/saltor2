@@ -89,26 +89,20 @@ Deno.serve(async (request) => {
     const encf = operation.encf;
     const sequenceExpiry = operation.fecha_vencimiento;
 
-    // E43 (Gastos Menores) siempre se transmite como una línea exenta.
+    // E43 (Gastos Menores) siempre se transmite como una línea exenta (sin ITBIS).
     const scenario: Record<string, string> = {
       Version: '1.0',
       TipoeCF: '43',
       ENCF: encf,
       FechaVencimientoSecuencia: issueDate(sequenceExpiry!),
-      IndicadorMontoGravado: '0',
+      // Formato e-CF 43: IdDoc sin IndicadorMontoGravado, sin sección Comprador y sin montos/ITBIS
+      // gravados (la DGII rechaza esos elementos con error de esquema). Todo el monto es exento.
       TipoPago: paymentCode(expense.forma_pago),
       RNCEmisor: company.rnc,
       RazonSocialEmisor: company.razon_social,
       DireccionEmisor: company.direccion ?? '',
       FechaEmision: issueDate(expense.fecha),
-      RNCComprador: company.rnc,
-      RazonSocialComprador: company.razon_social,
       MontoExento: decimal(expense.total),
-      MontoGravadoTotal: '0.00',
-      MontoGravadoI1: '0.00',
-      ITBIS1: '18',
-      TotalITBIS: '0.00',
-      TotalITBIS1: '0.00',
       MontoTotal: decimal(expense.total),
       'NumeroLinea[1]': '1',
       'IndicadorFacturacion[1]': '4',

@@ -165,3 +165,8 @@
   stroke-width: 1.8;
   stroke-linejoin: round;
 }
+
+/* Documento anulado: fila en rojo y valor en 0 */
+.doc-annulled, .doc-annulled > * { color: #b91c1c !important; }
+.doc-annulled { background: #fef2f2 !important; box-shadow: inset 4px 0 0 #dc2626; }
+.doc-annulled__tag { display: block; margin-top: 2px; font-size: 10px; font-weight: 800; letter-spacing: .06em; color: #dc2626; }

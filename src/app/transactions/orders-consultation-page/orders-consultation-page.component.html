@@ -9,8 +9,8 @@
     <table>
       <thead><tr><th>No. orden</th><th>Cotización</th><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Condición</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody>
-        <tr *ngFor="let order of filteredOrders">
-          <td><strong>{{ order.numero_orden }}</strong></td><td>{{ order.numero_cotizacion || '-' }}</td><td>{{ order.numero_factura || '-' }}</td><td>{{ date(order.fecha_orden) }}</td><td>{{ order.cliente_nombre }}</td><td>{{ order.condicion_pago }}</td><td>{{ money(order.total) }}</td><td><span class="orders-consultation__status">{{ order.estado }}</span></td>
+        <tr *ngFor="let order of filteredOrders" [class.doc-annulled]="order.estado === 'Anulada'">
+          <td><strong>{{ order.numero_orden }}</strong></td><td>{{ order.numero_cotizacion || '-' }}</td><td>{{ order.numero_factura || '-' }}</td><td>{{ date(order.fecha_orden) }}</td><td>{{ order.cliente_nombre }}</td><td>{{ order.condicion_pago }}</td><td>{{ money(order.estado === 'Anulada' ? 0 : order.total) }}</td><td><span class="orders-consultation__status">{{ order.estado }}</span></td>
           <td class="orders-consultation__actions">
             <button type="button" class="orders-consultation__icon is-view" title="Ver orden" aria-label="Ver orden" (click)="view(order)"><img src="assets/icons/invoice-view.svg" alt=""></button>
             <button type="button" class="orders-consultation__icon is-edit" [title]="order.numero_factura ? 'Ya facturada: solo consulta' : 'Editar orden'" aria-label="Editar orden" [disabled]="!!order.numero_factura" (click)="edit(order)"><img src="assets/icons/invoice-edit.svg" alt=""></button>
