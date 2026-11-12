@@ -283,7 +283,8 @@ export class QuotationPageComponent implements OnInit {
       if (!(activeElement instanceof HTMLInputElement) || !['quotationLineCode', 'quotationLineDescription'].includes(activeElement.id)) this.closeProductSuggestions();
     }, 120);
   }
-  selectProductSuggestion(product: ProductRecord): void { this.selectProduct(product); }
+  /** Clic en un producto de la lista: se carga y el cursor pasa a Cantidad (igual que con Enter). */
+  selectProductSuggestion(product: ProductRecord): void { this.selectProduct(product); this.focusEditorField('quotationLineQuantity'); }
   private selectActiveProductSuggestion(): boolean { const product = this.productSuggestions[this.activeProductSuggestionIndex]; if (!product) return false; this.selectProduct(product); return true; }
   onQuotationUserCodeChange(): void {
     this.quotationUserName = '';

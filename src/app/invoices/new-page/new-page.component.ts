@@ -796,8 +796,9 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     }, 120);
   }
 
+  /** Clic en un producto de la lista: se carga y el cursor pasa a Cantidad (igual que con Enter). */
   selectProductSuggestion(product: ProductRecord): void {
-    this.applyProductSelection(product);
+    if (this.applyProductSelection(product)) this.focusLineEditorQuantity();
   }
 
   private selectActiveProductSuggestion(): 'selected' | 'inactive' | null {
@@ -926,9 +927,13 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
   }
 
   private focusLineEditorQuantity(): void {
-    const quantityInput = this.el.nativeElement.querySelector<HTMLInputElement>('input[name="lineEditorQuantity"]');
-    quantityInput?.focus();
-    quantityInput?.select();
+    // Después de que la pantalla se actualiza (cierra la lista), para que el foco no se quede en el campo de búsqueda.
+    window.setTimeout(() => {
+      this.closeProductSuggestions();
+      const quantityInput = this.el.nativeElement.querySelector<HTMLInputElement>('input[name="lineEditorQuantity"]');
+      quantityInput?.focus();
+      quantityInput?.select();
+    });
   }
 
   onLineEditorQtyChange(): void {
