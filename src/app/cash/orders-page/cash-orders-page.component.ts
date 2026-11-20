@@ -100,7 +100,8 @@ export class CashOrdersPageComponent implements OnInit {
     this.isLoadingDetail = true;
     try {
       this.detail = await this.salesOrders.getOrderForEditing(order.id);
-      this.ncfType = this.rncDigits.length === 9 ? 'E31' : 'E32';
+      // Con RNC (9 dígitos) o cédula (11) la factura es de crédito fiscal (E31); sin documento, consumo (E32).
+      this.ncfType = this.canFiscalCredit ? 'E31' : 'E32';
       this.paymentCode = this.detail.paymentMethodCode || 1;
       this.received = this.total;
       setTimeout(() => document.querySelector<HTMLInputElement>('#coReceived')?.select(), 50);

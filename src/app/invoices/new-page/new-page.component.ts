@@ -1894,6 +1894,12 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       const order = await this.salesOrdersService.getOrderForEditing(orderId);
       this.loadInvoiceForEditing(order);
       this.sourceOrderId = orderId;
+      // Orden con RNC (9 dígitos) o cédula (11): la factura sale como crédito fiscal (E31).
+      const documentDigits = String(order.rnc ?? '').replace(/\D/g, '');
+      if (documentDigits.length === 9 || documentDigits.length === 11) {
+        const fiscalType = this.availableNcfTypes.find((type) => this.isNcfCode(type, '31')) ?? this.getNcfOptionBySeriesOrCode('31');
+        if (fiscalType) this.invoiceForm.ncfType = fiscalType;
+      }
       this.editingExistingInvoiceId = null;
       this.savedInvoice = null;
       this.invoiceForm.invoiceNumber = '';
@@ -2227,10 +2233,20 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
       : value;
   }
 
+  /**
+   * Cliente por su RNC o cédula (cualquier tipo de documento registrado). Se comparan solo los dígitos,
+   * así "001-0079691-1" y "00100796911" son el mismo. Con RNC o cédula la factura es E31.
+   */
   private findClientByRnc(rnc: string): ClientRecord | undefined {
-    return this.clients.find((client) =>
-      client.documentType === 'RNC' && client.documentNumber.trim().toLowerCase() === rnc.trim().toLowerCase()
-    );
+    const value = rnc.trim().toLowerCase();
+    const digits = value.replace(/\D/g, '');
+    const fiscal = digits.length === 9 || digits.length === 11;
+    return this.clients.find((client) => {
+      const document = String(client.documentNumber ?? '').trim().toLowerCase();
+      if (!document) return false;
+      if (client.documentType === 'RNC' && document === value) return true;
+      return fiscal && document.replace(/\D/g, '') === digits;
+    });
   }
 
   private findRncRecord(rnc: string): RncRecord | undefined {

@@ -656,3 +656,5 @@
 .subscription-notice--warn { color: #92400e; background: #fff7e6; border-color: #fde3b0; }
 .subscription-notice--danger { color: #9f1239; background: #ffeef1; border-color: #fbc7d0; }
 .subscription-notice__detail { display: block; margin-top: 2px; font-weight: 400; font-size: 14px; }
+
+.subscription-notice .ncf-alert__open { flex: none; font-size: 13px; font-weight: 800; padding: 6px 12px; border: 1px solid currentColor; border-radius: 8px; }

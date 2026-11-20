@@ -62,6 +62,33 @@ export class NcfService {
     return (data ?? []).map((row: NcfCompanyRow) => this.companyFromRow(row));
   }
 
+  /**
+   * Secuencias e-NCF que llegaron al % de alerta de consumo. Se agrupan por serie: si la serie tiene otra
+   * secuencia activa con números suficientes, no hay alerta. Las proformas (E332) no cuentan.
+   * La alerta se mantiene hasta que se registre una secuencia nueva o se amplíe la actual.
+   */
+  async getConsumptionAlerts(companyId: number): Promise<Array<{ serie: string; used: number; total: number; percent: number; alertPercent: number }>> {
+    const { data, error } = await this.supabase.client.from(this.sequencesTable)
+      .select('serie, usados, total, porcentaje_alerta, estado').eq('empresa_id', companyId);
+    if (error) throw error;
+    const bySerie = new Map<string, { used: number; total: number; alertPercent: number }>();
+    for (const row of (data ?? []) as Array<{ serie: string; usados: number | string | null; total: number | string | null; porcentaje_alerta: number | string | null; estado: string }>) {
+      const serie = String(row.serie ?? '').trim().toUpperCase();
+      if (!serie || /332/.test(serie) || row.estado !== 'Activa') continue;
+      const total = Number(row.total ?? 0);
+      if (total <= 0) continue;
+      const current = bySerie.get(serie) ?? { used: 0, total: 0, alertPercent: 0 };
+      current.used += Number(row.usados ?? 0);
+      current.total += total;
+      current.alertPercent = Math.max(current.alertPercent, Number(row.porcentaje_alerta ?? 80) || 80);
+      bySerie.set(serie, current);
+    }
+    return [...bySerie.entries()]
+      .map(([serie, value]) => ({ serie, ...value, percent: Math.floor((value.used / value.total) * 1000) / 10 }))
+      .filter((item) => item.percent >= item.alertPercent)
+      .sort((a, b) => b.percent - a.percent);
+  }
+
   async getSequences(companyId: number): Promise<NcfSequence[]> {
     // Paginación por ID: incluye el historial completo aunque supere el límite de PostgREST.
     const rows: NcfSequenceRow[] = [];

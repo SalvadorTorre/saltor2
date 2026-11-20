@@ -274,19 +274,7 @@
                 cursor: pointer;
               "
             >
-              <img
-                src="assets/icons/invoice-send.svg"
-                alt=""
-                aria-hidden="true"
-                style="
-                  display: block;
-                  width: 19px;
-                  height: 19px;
-                  margin: auto;
-                  filter: invert(46%) sepia(97%) saturate(2021%) hue-rotate(185deg)
-                    brightness(101%) contrast(95%);
-                "
-              /></button
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display: block; margin: auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M21 3 10.5 13.5" /><path d="M21 3l-6.7 18-3.8-7.5L3 9.7 21 3Z" /></svg></button
             ><button
               *ngIf="isRejectedStatus(invoice.status)"
               type="button"
@@ -530,6 +518,7 @@
             <section class="proforma-period-modal__simulation">
               <h3>Simular conversión</h3><p>Elige una forma de introducir el monto. Esta pantalla calcula el resultado, pero no modifica los documentos.</p>
               <p *ngIf="isProformaNumberFilter" class="proforma-period-modal__rule proforma-period-modal__rule--number">Buscando la factura {{ pendingFilters.invoice }}: solo se cambia esa factura. "Valor a convertir en conduce" la pasa a conduce; "Valor a facturar" la pasa a factura E32 en cola para la DGII, sin convertir nada en conduce.</p>
+              <p *ngIf="!isProformaNumberFilter && dialog.conduceFrom" class="proforma-period-modal__rule proforma-period-modal__rule--number">Las proformas de RD$ {{ dialog.conduceFrom | number:'1.2-2' }} o más siempre pasan a <strong>conduce</strong>, nunca a E32{{ forcedConduceCandidates.length ? ': en este período son ' + forcedConduceCandidates.length + ' por RD$ ' + (forcedConduceTotal | number:'1.2-2') : '' }}. Para pasar una de ellas a E32, búscala por su número.</p>
               <p *ngIf="!isProformaNumberFilter" class="proforma-period-modal__rule">Importante: ninguna proforma del período queda como proforma. Lo que no pase a conduce se convierte en factura E32 y queda en cola para enviarse a la DGII.</p>
               <div class="proforma-period-modal__options">
                 <label [class.is-active]="dialog.option === 'convert'"><input type="radio" name="conversionOption" [checked]="dialog.option === 'convert'" (change)="setProformaPeriodDialogOption('convert')"> Valor a convertir en conduce</label>

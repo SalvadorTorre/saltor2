@@ -14,6 +14,7 @@ import Swal from 'sweetalert2';
 import { PlatformNotice, PlatformService, SubscriptionNotice } from './core/services/platform/platform.service';
 import { CompanyModule, CompanyModulesService } from './core/services/company-modules/company-modules.service';
 import { PermissionsService } from './core/services/permissions/permissions.service';
+import { NcfService } from './core/services/ncf/ncf.service';
 
 const HIDDEN_NOTICES_KEY = 'saltor-avisos-ocultos';
 
@@ -72,6 +73,18 @@ const SECTION_BY_SEGMENT: Record<string, string> = {
 export class AppComponent implements OnInit {
   private readonly ecf = inject(EcfService);
   private readonly router = inject(Router);
+  private readonly ncfService = inject(NcfService);
+  /** Secuencias e-NCF que llegaron al % de alerta: el aviso no se puede cerrar; se quita al cambiar la secuencia. */
+  ncfAlerts: Array<{ serie: string; used: number; total: number; percent: number; alertPercent: number }> = [];
+  private ncfAlertsCheckedAt = 0;
+  private async refreshNcfAlerts(force = false): Promise<void> {
+    if (!this.activeUser) { this.ncfAlerts = []; return; }
+    if (!force && Date.now() - this.ncfAlertsCheckedAt < 60_000) return;
+    this.ncfAlertsCheckedAt = Date.now();
+    try { this.ncfAlerts = await this.ncfService.getConsumptionAlerts(this.activeUser.companyId); }
+    catch { /* sin conexión: se conserva el último aviso */ }
+  }
+  openNcfSequences(): void { void this.router.navigateByUrl('/contabilidad/e-ncf'); }
   private readonly destroyRef = inject(DestroyRef);
 
   isCheckingSession = true;
@@ -275,7 +288,7 @@ export class AppComponent implements OnInit {
   }
 
   private async loadSessionExtras(): Promise<void> {
-    if (!this.activeUser) { this.isPlatformOwner = false; this.activeModules = []; this.subscriptionNotice = null; this.platformNotices = []; return; }
+    if (!this.activeUser) { this.isPlatformOwner = false; this.activeModules = []; this.subscriptionNotice = null; this.platformNotices = []; this.ncfAlerts = []; return; }
     void this.permissions.reload();
     const [owner, notice, notices, mode, modules] = await Promise.all([this.companies.isPlatformOwner(), this.platform.getNotice(), this.platform.getActiveNotices(), this.billingMode.getMode(), this.companyModules.getActiveModules(this.activeUser.companyId)]);
     this.isCashierMode = mode === 'Caja';
@@ -285,6 +298,7 @@ export class AppComponent implements OnInit {
     this.platformNotices = notices.filter((n) => !hidden.includes(this.noticeKey(n)));
     this.subscriptionNotice = notice?.mensaje ? notice : null;
     this.isNoticeDismissed = false;
+    void this.refreshNcfAlerts(true);
   }
 
   /** Logo de la empresa activa; si no tiene, se usa el del sistema. */
@@ -304,7 +318,7 @@ export class AppComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd), takeUntilDestroyed(this.destroyRef))
-      .subscribe((event) => this.syncMenuWithUrl(event.urlAfterRedirects));
+      .subscribe((event) => { this.syncMenuWithUrl(event.urlAfterRedirects); void this.refreshNcfAlerts(); });
 
     this.displayPreferences.apply(this.displayPreferences.getProfile());
     this.displayPreferences.applyTheme(this.displayPreferences.getTheme());

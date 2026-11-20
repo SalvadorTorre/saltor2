@@ -37,6 +37,8 @@ export interface Rep607Invoice {
 
 interface PaymentColumns { condicion_pago?: string | null; forma_pago_codigo?: number | string | null; }
 
+const PENDING_DGII_STATUSES = ['No enviado', 'Pendiente de configuración', 'Error', 'Rechazado', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'];
+
 export interface PendingInvoice {
   id: number;
   number: string;
@@ -187,10 +189,25 @@ export class Rep607Service {
     if (filters.to) query = query.lte('fecha_factura', filters.to);
     if (view === 'proforma') {
       query = query.or('tipo_ncf.ilike.E332%,tipo_ncf.ilike.332%');
+    } else {
+      // Filtrar en la base de datos: Supabase devuelve como máximo 1000 filas por consulta.
+      const pending = PENDING_DGII_STATUSES.map((status) => `"${status}"`).join(',');
+      query = query
+        .not('tipo_ncf', 'ilike', '%332%')
+        .or(`estado_dgii.in.(${pending}),and(estado_dgii.is.null,dgii_estado.in.(${pending})),and(estado_dgii.is.null,dgii_estado.is.null)`);
     }
 
-    const [{ data, error }, paymentNames] = await Promise.all([query, this.paymentMethodNames()]);
-    if (error) throw error;
+    const rows: Array<Rep607DatabaseRow & PaymentColumns> = [];
+    const pageSize = 1000;
+    const paymentNamesPromise = this.paymentMethodNames();
+    for (let from = 0; ; from += pageSize) {
+      const { data: page, error } = await query.range(from, from + pageSize - 1);
+      if (error) throw error;
+      rows.push(...((page ?? []) as Array<Rep607DatabaseRow & PaymentColumns>));
+      if (!page || page.length < pageSize) break;
+    }
+    const data = rows;
+    const paymentNames = await paymentNamesPromise;
 
     return ((data ?? []) as Array<Rep607DatabaseRow & PaymentColumns>)
       .map((row) => ({
@@ -208,7 +225,7 @@ export class Rep607Service {
       .filter((invoice) => {
         const isProforma = /(?:^|\D)332(?:\D|$)/.test(invoice.type);
         if (view === 'proforma') return isProforma;
-        return !isProforma && ['No enviado', 'Pendiente de configuración', 'Error', 'Rechazado', 'Preparando envío', 'En cola', 'Enviando DGII', 'En proceso DGII', 'Envío por confirmar'].includes(invoice.status);
+        return !isProforma && PENDING_DGII_STATUSES.includes(invoice.status);
       });
   }
 
@@ -267,6 +284,13 @@ export class Rep607Service {
       groups.set(key, summary);
     }
     return [...groups.values()];
+  }
+
+  /** Monto desde el cual una proforma siempre pasa a conduce en la conversión por período (null = sin regla). */
+  async getProformaConduceThreshold(companyId: number): Promise<number | null> {
+    const { data } = await this.supabase.client.from('empresas').select('proforma_conduce_desde').eq('id', companyId).maybeSingle();
+    const value = Number((data as { proforma_conduce_desde?: number | string | null } | null)?.proforma_conduce_desde ?? 0);
+    return value > 0 ? value : null;
   }
 
   /** Conduces (facturas en estado CONDUCE) del período, para pasarlos a factura E32. */

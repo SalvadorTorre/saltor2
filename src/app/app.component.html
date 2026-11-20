@@ -128,6 +128,11 @@
       <span>{{ subscriptionNotice.mensaje }}</span>
       <button type="button" (click)="isNoticeDismissed = true" aria-label="Ocultar aviso">×</button>
     </div>
+    <div *ngFor="let a of ncfAlerts" class="subscription-notice ncf-alert" [ngClass]="a.percent >= 100 ? 'subscription-notice--danger' : 'subscription-notice--warn'" role="alert">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2zm12-3h-2v-2h2zm0-4h-2v-4h2z" /></svg>
+      <span>Secuencia {{ a.serie }} al {{ a.percent | number:'1.0-1' }} % ({{ a.used | number }} de {{ a.total | number }} usados{{ a.percent >= 100 ? ' · AGOTADA' : '' }}). Solicita una nueva secuencia a la DGII y regístrala.<small class="subscription-notice__detail">El aviso se mantiene hasta que se registre la secuencia nueva (alerta al {{ a.alertPercent }} %).</small></span>
+      <button type="button" class="ncf-alert__open" (click)="openNcfSequences()">Ver secuencias</button>
+    </div>
     <div *ngFor="let n of platformNotices" class="subscription-notice" [ngClass]="'subscription-notice--' + noticeClass(n)" role="status">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h3l5 4V6L6 10zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4M14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6" /></svg>
       <span>{{ n.titulo }}<small *ngIf="n.mensaje" class="subscription-notice__detail">{{ n.mensaje }}</small></span>

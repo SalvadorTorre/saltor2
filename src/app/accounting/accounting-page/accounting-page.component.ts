@@ -21,7 +21,7 @@ import { QzPrintService } from '../../core/services/printing/qz-print.service';
 type FiscalView = 'pending' | 'rep607' | 'encf' | 'credit' | 'expenses' | 'receivables' | 'rep606' | 'e41';
 type DgiiSendDialog = { phase: 'confirm' | 'processing' | 'success' | 'error'; invoiceNumber: string; message: string };
 type DgiiSendTarget = { source: 'pending' | 'rep607'; invoice: PendingInvoice | Rep607Invoice };
-type ProformaPeriodDialog = { row: ProformaPeriodSummary; option: 'convert' | 'keep'; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; deliveryNotes: DeliveryNoteConversion };
+type ProformaPeriodDialog = { row: ProformaPeriodSummary; option: 'convert' | 'keep'; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; deliveryNotes: DeliveryNoteConversion; conduceFrom: number | null };
 /** Conduces → factura E32 (sección dentro del detalle del período). */
 type DeliveryNoteConversion = { open: boolean; amount: number; candidates: ProformaPeriodCandidate[]; loading: boolean; applying: boolean; confirming: boolean };
 type ProformaConversionConfirmation = { count: number; amount: number; queuedCount: number; queuedAmount: number; direct: boolean; ids: number[] };
@@ -820,13 +820,25 @@ export class AccountingPageComponent implements OnInit {
     if (!dialog || this.isDirectInvoiceMode) return [];
     const typed = Math.max(0, Math.min(Number(dialog.amount) || 0, dialog.row.proformaTotal));
     const limit = dialog.option === 'convert' ? typed : Math.max(0, dialog.row.proformaTotal - typed);
-    let total = 0;
-    return dialog.candidates.filter((invoice) => {
+    // Regla de la empresa (Bella Real): por período, las proformas grandes siempre pasan a conduce.
+    const forced = this.forcedConduceCandidates;
+    let total = forced.reduce((sum, invoice) => sum + invoice.total, 0);
+    const rest = dialog.candidates.filter((invoice) => {
+      if (forced.includes(invoice)) return false;
       if (total + invoice.total > limit + 0.005) return false;
       total += invoice.total;
       return true;
     });
+    return [...forced, ...rest];
   }
+  /** Proformas del período que, por la regla de la empresa, siempre pasan a conduce (no aplica buscando por número). */
+  get forcedConduceCandidates(): ProformaPeriodCandidate[] {
+    const dialog = this.proformaPeriodDialog;
+    if (!dialog?.conduceFrom || this.isProformaNumberFilter) return [];
+    return dialog.candidates.filter((invoice) => invoice.total >= dialog.conduceFrom! - 0.005);
+  }
+  get forcedConduceTotal(): number { return this.forcedConduceCandidates.reduce((sum, invoice) => sum + invoice.total, 0); }
+
   get simulatedConvertedCount(): number { return this.selectedProformaCandidates.length; }
   get simulatedProformaTotal(): number {
     const dialog = this.proformaPeriodDialog;
@@ -859,7 +871,7 @@ export class AccountingPageComponent implements OnInit {
   }
 
   async openProformaPeriodDialog(row: ProformaPeriodSummary): Promise<void> {
-    this.proformaPeriodDialog = { row, option: 'convert', amount: row.proformaTotal, candidates: [], loading: true, applying: false, deliveryNotes: { open: false, amount: 0, candidates: [], loading: false, applying: false, confirming: false } };
+    this.proformaPeriodDialog = { row, option: 'convert', amount: row.proformaTotal, candidates: [], loading: true, applying: false, deliveryNotes: { open: false, amount: 0, candidates: [], loading: false, applying: false, confirming: false }, conduceFrom: null };
     try {
       const user = await this.auth.restoreSession();
       if (!user) throw new Error('No hay una sesión activa.');
@@ -871,6 +883,8 @@ export class AccountingPageComponent implements OnInit {
         this.pendingFilters.invoice
       );
       if (this.proformaPeriodDialog?.row === row) this.proformaPeriodDialog.candidates = candidates;
+      const conduceFrom = await this.rep607Service.getProformaConduceThreshold(user.companyId).catch(() => null);
+      if (this.proformaPeriodDialog?.row === row) this.proformaPeriodDialog.conduceFrom = conduceFrom;
     } catch (error) {
       this.proformaPeriodError = error instanceof Error ? error.message : 'No se pudieron consultar las proformas del período.';
     } finally {
