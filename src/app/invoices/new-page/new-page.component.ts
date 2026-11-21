@@ -120,8 +120,10 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
     const fields = (client: ClientRecord) => [client.fullName, client.documentNumber, client.code, client.companyName ?? ''].map((item) => String(item ?? '').trim().toLocaleLowerCase());
     const sortName = (client: ClientRecord) => String(client.fullName ?? '').trim().replace(/^[^\p{L}\p{N}]+/u, '');
     const byName = (list: ClientRecord[]) => list.sort((a, b) => sortName(a).localeCompare(sortName(b), 'es', { sensitivity: 'base', numeric: true })).slice(0, 100);
-    const startsWith = this.clients.filter((client) => fields(client).some((item) => item.startsWith(value)));
-    return byName(startsWith.length ? startsWith : this.clients.filter((client) => fields(client).some((item) => item.includes(value))));
+    const digits = /[a-z]/i.test(value) ? '' : value.replace(/\D/g, '');
+    const docDigits = (client: ClientRecord) => String(client.documentNumber ?? '').replace(/\D/g, '');
+    const startsWith = this.clients.filter((client) => fields(client).some((item) => item.startsWith(value)) || (digits.length >= 3 && docDigits(client).startsWith(digits)));
+    return byName(startsWith.length ? startsWith : this.clients.filter((client) => fields(client).some((item) => item.includes(value)) || (digits.length >= 3 && docDigits(client).includes(digits))));
   }
   customerSuggestOpen = false;
   activeCustomerIndex = 0;
@@ -1238,7 +1240,7 @@ export class InvoiceNewPageComponent implements OnInit, OnChanges {
 
   private populateCustomerFromRncRecord(record: RncRecord): void {
     this.invoiceForm.customerId = null;
-    this.invoiceForm.customerName = record.tradeName?.trim() ? record.tradeName : record.legalName;
+    this.invoiceForm.customerName = record.legalName?.trim() ? record.legalName : record.tradeName; // Razón social
     this.invoiceForm.rnc = record.rnc;
     this.invoiceForm.customerPhone = record.phone ?? '';
     this.invoiceForm.customerEmail = record.email ?? '';

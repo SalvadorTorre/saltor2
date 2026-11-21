@@ -81,8 +81,10 @@ export class QuotationPageComponent implements OnInit {
     const fields = (client: ClientRecord) => [client.fullName, client.documentNumber, client.code, client.companyName ?? ''].map((item) => String(item ?? '').trim().toLocaleLowerCase());
     const sortName = (client: ClientRecord) => String(client.fullName ?? '').trim().replace(/^[^\p{L}\p{N}]+/u, '');
     const byName = (list: ClientRecord[]) => list.sort((a, b) => sortName(a).localeCompare(sortName(b), 'es', { sensitivity: 'base', numeric: true })).slice(0, 100);
-    const startsWith = this.clients.filter((client) => fields(client).some((item) => item.startsWith(value)));
-    return byName(startsWith.length ? startsWith : this.clients.filter((client) => fields(client).some((item) => item.includes(value))));
+    const digits = /[a-z]/i.test(value) ? '' : value.replace(/\D/g, '');
+    const docDigits = (client: ClientRecord) => String(client.documentNumber ?? '').replace(/\D/g, '');
+    const startsWith = this.clients.filter((client) => fields(client).some((item) => item.startsWith(value)) || (digits.length >= 3 && docDigits(client).startsWith(digits)));
+    return byName(startsWith.length ? startsWith : this.clients.filter((client) => fields(client).some((item) => item.includes(value)) || (digits.length >= 3 && docDigits(client).includes(digits))));
   }
   customerSuggestOpen = false;
   activeCustomerIndex = 0;
@@ -200,10 +202,11 @@ export class QuotationPageComponent implements OnInit {
   onQuoteRncChange(showMessage = false): void {
     const rnc = this.quote.rnc.trim();
     if (!rnc) { this.isRncInvalid = false; this.clearCustomerContact(); return; }
-    const client = this.clients.find((item) => item.documentNumber.trim().toLowerCase() === rnc.toLowerCase());
+    const client = this.findClientByRnc(rnc);
     if (client) { this.populateClient(client); this.isRncInvalid = false; if (showMessage) this.message = `Cliente registrado: ${client.fullName} (RNC ${client.documentNumber}).`; return; }
-    const record = this.data.rncRecords.find((item) => item.rnc.trim().toLowerCase() === rnc.toLowerCase());
-    if (record) { this.quote.customer = record.tradeName?.trim() || record.legalName; this.quote.rnc = record.rnc; this.quote.phone = record.phone ?? ''; this.quote.email = record.email ?? ''; this.quote.address = record.address ?? ''; this.isRncInvalid = false; if (showMessage) this.message = `RNC registrado: ${record.legalName} (${record.rnc}).`; return; }
+    const rncDigits = rnc.replace(/\D/g, '');
+    const record = this.data.rncRecords.find((item) => item.rnc.trim().toLowerCase() === rnc.toLowerCase() || (!!rncDigits && item.rnc.replace(/\D/g, '') === rncDigits));
+    if (record) { this.quote.customer = record.legalName?.trim() || record.tradeName; this.quote.rnc = record.rnc; this.quote.phone = record.phone ?? ''; this.quote.email = record.email ?? ''; this.quote.address = record.address ?? ''; this.isRncInvalid = false; if (showMessage) this.message = `RNC registrado: ${record.legalName} (${record.rnc}).`; return; }
     this.clearCustomerContact(); this.isRncInvalid = true; if (showMessage) this.message = 'RNC inválido. Debe estar registrado en Clientes o en el catálogo RNC.';
   }
   async onQuoteRncEnter(event: Event): Promise<void> {
@@ -218,7 +221,7 @@ export class QuotationPageComponent implements OnInit {
           dgiiStatus: result.dgiiStatus, syncStatus: 'Sincronizado', lastCheck: new Date().toISOString()
         };
         this.data.rncRecords = [record, ...this.data.rncRecords.filter((item) => item.rnc !== record.rnc)];
-        this.quote.customer = record.tradeName || record.legalName;
+        this.quote.customer = record.legalName || record.tradeName;
         this.quote.rnc = record.rnc;
         this.quote.phone = record.phone;
         this.quote.email = record.email;
@@ -238,8 +241,39 @@ export class QuotationPageComponent implements OnInit {
     // Campo vacío (p. ej. al borrar con Retroceso): no se busca ningún cliente; se limpian sus datos.
     // Antes, un cliente sin empresa o sin documento "coincidía" con el texto vacío y se cargaba solo.
     if (!value) { this.quote.rnc = ''; this.clearCustomerContact(); this.isRncInvalid = false; return; }
-    const client = this.clients.find((item) => [item.fullName, item.documentNumber, item.companyName ?? ''].some((text) => { const field = String(text ?? '').trim().toLowerCase(); return !!field && field === value; }));
+    // Igual que Facturación: coincidencia exacta por nombre o por RNC/cédula (con o sin guiones).
+    const client = this.findExactCustomer(value);
+    // Sin mensajes mientras se escribe: en Cotización los mensajes salen en ventana y cortaban la digitación.
     if (client) { this.populateClient(client); this.isRncInvalid = false; }
+  }
+  onQuoteCustomerFieldBlur(): void {
+    this.onQuoteCustomerBlur();
+    if (this.quote.customer.trim()) return;
+    this.quote.customer = 'CLIENTE CONTADO'; this.quote.rnc = ''; this.clearCustomerContact(); this.isRncInvalid = false;
+  }
+  private findExactCustomer(input: string): ClientRecord | undefined {
+    const value = input.trim().toLowerCase();
+    if (!value) return undefined;
+    const digits = value.replace(/\D/g, '');
+    const fiscal = (digits.length === 9 || digits.length === 11) && !/[a-z]/i.test(value);
+    return this.clients.find((item) => {
+      if (String(item.fullName ?? '').trim().toLowerCase() === value) return true;
+      const document = String(item.documentNumber ?? '').trim().toLowerCase();
+      if (!document) return false;
+      return document === value || (fiscal && document.replace(/\D/g, '') === digits);
+    });
+  }
+  /** Busca el cliente por RNC (9 dígitos) o cédula (11), con o sin guiones; igual que Facturación. */
+  private findClientByRnc(rnc: string): ClientRecord | undefined {
+    const value = rnc.trim().toLowerCase();
+    const digits = value.replace(/\D/g, '');
+    const fiscal = digits.length === 9 || digits.length === 11;
+    return this.clients.find((client) => {
+      const document = String(client.documentNumber ?? '').trim().toLowerCase();
+      if (!document) return false;
+      if (document === value) return true;
+      return fiscal && document.replace(/\D/g, '') === digits;
+    });
   }
   onQuoteCustomerEnter(event: Event): void {
     event.preventDefault();
@@ -249,6 +283,9 @@ export class QuotationPageComponent implements OnInit {
     const client = this.customerSuggestOpen ? list[this.activeCustomerIndex] ?? list[0] : undefined;
     if (client) { this.selectCustomerSuggestion(client); return; }
     this.customerSuggestOpen = false;
+    // Lista cerrada: coincidencia exacta (nombre o RNC/cédula) o el primer cliente de la búsqueda.
+    const match = this.findExactCustomer(this.quote.customer) ?? list[0];
+    if (match) { this.selectCustomerSuggestion(match); return; }
     this.focusEditorField('quotationAddress');
   }
   getProductFullDescription(product: ProductRecord): string { return [product.description, product.brand, product.type, product.size].filter(Boolean).join(' - '); }
